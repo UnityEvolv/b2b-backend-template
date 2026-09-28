@@ -1,0 +1,6 @@
+# One line ending everywhere, whatever the checkout platform: gofmt, goose and
+# the shell scripts in images all expect LF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary

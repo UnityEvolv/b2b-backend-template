@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in the template does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Security problems go through the Security tab, not here. See SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest set of steps that shows the problem.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Go or Node version, and whether you ran it locally or deployed.

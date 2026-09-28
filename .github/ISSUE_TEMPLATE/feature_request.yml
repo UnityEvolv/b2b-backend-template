@@ -1,0 +1,18 @@
+name: Feature request
+description: Something a B2B product would need from the template.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that the template does not support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you would expect it to work. Say if it could live in a product instead of the template.
+    validations:
+      required: true

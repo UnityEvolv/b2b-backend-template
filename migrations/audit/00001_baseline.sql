@@ -26,11 +26,22 @@ CREATE INDEX audit_events_by_target ON audit_events (org_id, target_type, target
 CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON audit_events
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
--- Append-only: the database refuses to change or remove an entry, whoever asks.
+-- Append-only: the database refuses to change or remove an entry, whoever
+-- asks, with one exception. Retention and an org's purge are the only
+-- deletions allowed. Both are driven by the organization service, which owns
+-- the per-org audit retention and closes orgs; the audit service carries
+-- them out through its internal endpoints, in a transaction that has first
+-- said so with SET LOCAL audit.retention = 'on'. Nothing else sets it, so a
+-- stray DELETE is still refused, and an UPDATE or TRUNCATE is refused
+-- whoever asks: an entry is never changed, and the table is never emptied
+-- wholesale.
 -- +goose StatementBegin
 CREATE FUNCTION audit_events_are_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
 BEGIN
+    IF TG_OP = 'DELETE' AND current_setting('audit.retention', true) = 'on' THEN
+        RETURN NULL;
+    END IF;
     RAISE EXCEPTION 'audit_events are append-only (% refused)', TG_OP
         USING ERRCODE = 'insufficient_privilege';
 END

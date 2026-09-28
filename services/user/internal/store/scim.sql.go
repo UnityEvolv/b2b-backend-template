@@ -510,7 +510,7 @@ func (q *Queries) ListScimLog(ctx context.Context, arg ListScimLogParams) ([]Sci
 }
 
 const listScimMemberships = `-- name: ListScimMemberships :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.kind = 'member' AND m.status <> 'left'
   AND coalesce((m.scim ->> '_deleted')::boolean, false) = false
@@ -576,22 +576,18 @@ func (q *Queries) ListScimMemberships(ctx context.Context, arg ListScimMembershi
 			&i.Membership.Attributes,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
-			&i.Membership.CreatedBy,
-			&i.Membership.CreatedAt,
-			&i.Membership.LastModifiedBy,
-			&i.Membership.LastModifiedAt,
 			&i.Membership.ExternalID,
 			&i.Membership.Scim,
 			&i.Membership.ScimActive,
 			&i.Membership.AnonymisedAt,
+			&i.Membership.CreatedBy,
+			&i.Membership.CreatedAt,
+			&i.Membership.LastModifiedBy,
+			&i.Membership.LastModifiedAt,
 			&i.User.ID,
 			&i.User.Email,
 			&i.User.Name,
 			&i.User.DeletedAt,
-			&i.User.CreatedBy,
-			&i.User.CreatedAt,
-			&i.User.LastModifiedBy,
-			&i.User.LastModifiedAt,
 			&i.User.DisplayName,
 			&i.User.TimeZone,
 			&i.User.WorkingHours,
@@ -600,6 +596,10 @@ func (q *Queries) ListScimMemberships(ctx context.Context, arg ListScimMembershi
 			&i.User.Language,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
+			&i.User.CreatedBy,
+			&i.User.CreatedAt,
+			&i.User.LastModifiedBy,
+			&i.User.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -650,7 +650,7 @@ func (q *Queries) ListScimTokens(ctx context.Context, orgID uuid.UUID) ([]ScimTo
 }
 
 const membershipByExternalID = `-- name: MembershipByExternalID :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.external_id = $2
 `
@@ -688,22 +688,18 @@ func (q *Queries) MembershipByExternalID(ctx context.Context, arg MembershipByEx
 		&i.Membership.Attributes,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
-		&i.Membership.CreatedBy,
-		&i.Membership.CreatedAt,
-		&i.Membership.LastModifiedBy,
-		&i.Membership.LastModifiedAt,
 		&i.Membership.ExternalID,
 		&i.Membership.Scim,
 		&i.Membership.ScimActive,
 		&i.Membership.AnonymisedAt,
+		&i.Membership.CreatedBy,
+		&i.Membership.CreatedAt,
+		&i.Membership.LastModifiedBy,
+		&i.Membership.LastModifiedAt,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,
 		&i.User.DeletedAt,
-		&i.User.CreatedBy,
-		&i.User.CreatedAt,
-		&i.User.LastModifiedBy,
-		&i.User.LastModifiedAt,
 		&i.User.DisplayName,
 		&i.User.TimeZone,
 		&i.User.WorkingHours,
@@ -712,6 +708,10 @@ func (q *Queries) MembershipByExternalID(ctx context.Context, arg MembershipByEx
 		&i.User.Language,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
+		&i.User.CreatedBy,
+		&i.User.CreatedAt,
+		&i.User.LastModifiedBy,
+		&i.User.LastModifiedAt,
 	)
 	return i, err
 }
@@ -786,7 +786,7 @@ func (q *Queries) RevokeScimToken(ctx context.Context, arg RevokeScimTokenParams
 }
 
 const scimDrift = `-- name: ScimDrift :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.external_id IS NOT NULL AND m.scim_active IS NOT NULL
   AND ((m.scim_active AND m.status = 'deactivated') OR (NOT m.scim_active AND m.status = 'active'))
@@ -828,22 +828,18 @@ func (q *Queries) ScimDrift(ctx context.Context, orgID uuid.UUID) ([]ScimDriftRo
 			&i.Membership.Attributes,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
-			&i.Membership.CreatedBy,
-			&i.Membership.CreatedAt,
-			&i.Membership.LastModifiedBy,
-			&i.Membership.LastModifiedAt,
 			&i.Membership.ExternalID,
 			&i.Membership.Scim,
 			&i.Membership.ScimActive,
 			&i.Membership.AnonymisedAt,
+			&i.Membership.CreatedBy,
+			&i.Membership.CreatedAt,
+			&i.Membership.LastModifiedBy,
+			&i.Membership.LastModifiedAt,
 			&i.User.ID,
 			&i.User.Email,
 			&i.User.Name,
 			&i.User.DeletedAt,
-			&i.User.CreatedBy,
-			&i.User.CreatedAt,
-			&i.User.LastModifiedBy,
-			&i.User.LastModifiedAt,
 			&i.User.DisplayName,
 			&i.User.TimeZone,
 			&i.User.WorkingHours,
@@ -852,6 +848,10 @@ func (q *Queries) ScimDrift(ctx context.Context, orgID uuid.UUID) ([]ScimDriftRo
 			&i.User.Language,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
+			&i.User.CreatedBy,
+			&i.User.CreatedAt,
+			&i.User.LastModifiedBy,
+			&i.User.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -942,7 +942,7 @@ func (q *Queries) ScimGroupSummaries(ctx context.Context, orgID uuid.UUID) ([]Sc
 }
 
 const scimMembership = `-- name: ScimMembership :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.id = $2 AND m.kind = 'member' AND m.status <> 'left'
   AND coalesce((m.scim ->> '_deleted')::boolean, false) = false
@@ -982,22 +982,18 @@ func (q *Queries) ScimMembership(ctx context.Context, arg ScimMembershipParams) 
 		&i.Membership.Attributes,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
-		&i.Membership.CreatedBy,
-		&i.Membership.CreatedAt,
-		&i.Membership.LastModifiedBy,
-		&i.Membership.LastModifiedAt,
 		&i.Membership.ExternalID,
 		&i.Membership.Scim,
 		&i.Membership.ScimActive,
 		&i.Membership.AnonymisedAt,
+		&i.Membership.CreatedBy,
+		&i.Membership.CreatedAt,
+		&i.Membership.LastModifiedBy,
+		&i.Membership.LastModifiedAt,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,
 		&i.User.DeletedAt,
-		&i.User.CreatedBy,
-		&i.User.CreatedAt,
-		&i.User.LastModifiedBy,
-		&i.User.LastModifiedAt,
 		&i.User.DisplayName,
 		&i.User.TimeZone,
 		&i.User.WorkingHours,
@@ -1006,6 +1002,10 @@ func (q *Queries) ScimMembership(ctx context.Context, arg ScimMembershipParams) 
 		&i.User.Language,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
+		&i.User.CreatedBy,
+		&i.User.CreatedAt,
+		&i.User.LastModifiedBy,
+		&i.User.LastModifiedAt,
 	)
 	return i, err
 }
@@ -1055,7 +1055,7 @@ SET external_id   = $1,
     city          = $11,
     attributes    = $12
 WHERE org_id = $13 AND id = $14
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetMembershipScimParams struct {
@@ -1115,14 +1115,14 @@ func (q *Queries) SetMembershipScim(ctx context.Context, arg SetMembershipScimPa
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }

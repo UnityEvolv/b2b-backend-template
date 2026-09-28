@@ -39,12 +39,12 @@ type EmailVerification struct {
 	TokenHash      []byte
 	ExpiresAt      time.Time
 	UsedAt         pgtype.Timestamptz
+	Purpose        string
+	Address        pgtype.Text
 	CreatedBy      string
 	CreatedAt      time.Time
 	LastModifiedBy string
 	LastModifiedAt time.Time
-	Purpose        string
-	Address        pgtype.Text
 }
 
 type IdentityProvider struct {
@@ -87,12 +87,12 @@ type LocalAccount struct {
 	UserID          uuid.UUID
 	Email           string
 	EmailVerifiedAt pgtype.Timestamptz
+	PasswordHash    pgtype.Text
+	PasswordSetAt   pgtype.Timestamptz
 	CreatedBy       string
 	CreatedAt       time.Time
 	LastModifiedBy  string
 	LastModifiedAt  time.Time
-	PasswordHash    pgtype.Text
-	PasswordSetAt   pgtype.Timestamptz
 }
 
 // global: a challenge is a person's sign-in in flight, keyed by its token
@@ -148,24 +148,24 @@ type Session struct {
 	ExpiresAt          time.Time
 	LastSeenAt         time.Time
 	RevokedAt          pgtype.Timestamptz
+	IdleTimeoutSeconds int32
+	UserAgent          pgtype.Text
+	RevokedReason      pgtype.Text
 	CreatedBy          string
 	CreatedAt          time.Time
 	LastModifiedBy     string
 	LastModifiedAt     time.Time
-	IdleTimeoutSeconds int32
-	UserAgent          pgtype.Text
-	RevokedReason      pgtype.Text
 }
 
 type SessionPolicy struct {
 	OrgID              uuid.UUID
 	LifetimeSeconds    int32
 	IdleTimeoutSeconds int32
+	MfaRequired        bool
 	CreatedBy          string
 	CreatedAt          time.Time
 	LastModifiedBy     string
 	LastModifiedAt     time.Time
-	MfaRequired        bool
 }
 
 type SignInAttempt struct {
@@ -177,12 +177,12 @@ type SignInAttempt struct {
 	App            string
 	ExpiresAt      time.Time
 	UsedAt         pgtype.Timestamptz
+	Client         string
+	AppChallenge   pgtype.Text
 	CreatedBy      string
 	CreatedAt      time.Time
 	LastModifiedBy string
 	LastModifiedAt time.Time
-	Client         string
-	AppChallenge   pgtype.Text
 }
 
 // global: the platform's token signing keys, not an org's

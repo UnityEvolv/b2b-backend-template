@@ -357,7 +357,7 @@ func (q *Queries) DeleteTotp(ctx context.Context, userID uuid.UUID) (int64, erro
 }
 
 const getEmailVerification = `-- name: GetEmailVerification :one
-SELECT id, user_id, org_id, org_name, token_hash, expires_at, used_at, created_by, created_at, last_modified_by, last_modified_at, purpose, address FROM email_verifications WHERE token_hash = $1
+SELECT id, user_id, org_id, org_name, token_hash, expires_at, used_at, purpose, address, created_by, created_at, last_modified_by, last_modified_at FROM email_verifications WHERE token_hash = $1
 `
 
 // global: a link, by its token, without spending it.
@@ -372,12 +372,12 @@ func (q *Queries) GetEmailVerification(ctx context.Context, tokenHash []byte) (E
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.UsedAt,
+		&i.Purpose,
+		&i.Address,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.Purpose,
-		&i.Address,
 	)
 	return i, err
 }
@@ -470,7 +470,7 @@ func (q *Queries) GetInviteByToken(ctx context.Context, tokenHash []byte) (Invit
 }
 
 const getLocalAccount = `-- name: GetLocalAccount :one
-SELECT user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at FROM local_accounts WHERE user_id = $1
+SELECT user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at FROM local_accounts WHERE user_id = $1
 `
 
 // global: an account is a person's.
@@ -481,18 +481,18 @@ func (q *Queries) GetLocalAccount(ctx context.Context, userID uuid.UUID) (LocalA
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
 
 const getLocalAccountByEmail = `-- name: GetLocalAccountByEmail :one
-SELECT user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at FROM local_accounts WHERE email = $1
+SELECT user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at FROM local_accounts WHERE email = $1
 `
 
 // global: an account is a person's; the email is how they sign in.
@@ -503,12 +503,12 @@ func (q *Queries) GetLocalAccountByEmail(ctx context.Context, email string) (Loc
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
@@ -541,7 +541,7 @@ func (q *Queries) GetMfaChallenge(ctx context.Context, tokenHash []byte) (MfaCha
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason FROM sessions WHERE id = $1
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE id = $1
 `
 
 // global: a session is a person's.
@@ -558,19 +558,19 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
 
 const getSessionByRefreshToken = `-- name: GetSessionByRefreshToken :one
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason FROM sessions WHERE refresh_token_hash = $1
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE refresh_token_hash = $1
 `
 
 // global: a session is a person's.
@@ -587,19 +587,19 @@ func (q *Queries) GetSessionByRefreshToken(ctx context.Context, refreshTokenHash
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
 
 const getSessionPolicy = `-- name: GetSessionPolicy :one
-SELECT org_id, lifetime_seconds, idle_timeout_seconds, created_by, created_at, last_modified_by, last_modified_at, mfa_required FROM session_policies WHERE org_id = $1
+SELECT org_id, lifetime_seconds, idle_timeout_seconds, mfa_required, created_by, created_at, last_modified_by, last_modified_at FROM session_policies WHERE org_id = $1
 `
 
 func (q *Queries) GetSessionPolicy(ctx context.Context, orgID uuid.UUID) (SessionPolicy, error) {
@@ -609,11 +609,11 @@ func (q *Queries) GetSessionPolicy(ctx context.Context, orgID uuid.UUID) (Sessio
 		&i.OrgID,
 		&i.LifetimeSeconds,
 		&i.IdleTimeoutSeconds,
+		&i.MfaRequired,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.MfaRequired,
 	)
 	return i, err
 }
@@ -823,7 +823,7 @@ func (q *Queries) InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCode
 const insertSession = `-- name: InsertSession :one
 INSERT INTO sessions (id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type InsertSessionParams struct {
@@ -858,13 +858,13 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (S
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -872,7 +872,7 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (S
 const insertSessionWithPolicy = `-- name: InsertSessionWithPolicy :one
 INSERT INTO sessions (id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, idle_timeout_seconds, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9)
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type InsertSessionWithPolicyParams struct {
@@ -912,13 +912,13 @@ func (q *Queries) InsertSessionWithPolicy(ctx context.Context, arg InsertSession
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -998,7 +998,7 @@ func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyPara
 }
 
 const latestEmailVerification = `-- name: LatestEmailVerification :one
-SELECT id, user_id, org_id, org_name, token_hash, expires_at, used_at, created_by, created_at, last_modified_by, last_modified_at, purpose, address FROM email_verifications WHERE user_id = $1 AND purpose = 'verify' ORDER BY created_at DESC LIMIT 1
+SELECT id, user_id, org_id, org_name, token_hash, expires_at, used_at, purpose, address, created_by, created_at, last_modified_by, last_modified_at FROM email_verifications WHERE user_id = $1 AND purpose = 'verify' ORDER BY created_at DESC LIMIT 1
 `
 
 // global: the org that last asked for this person, for a resend.
@@ -1013,12 +1013,12 @@ func (q *Queries) LatestEmailVerification(ctx context.Context, userID uuid.UUID)
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.UsedAt,
+		&i.Purpose,
+		&i.Address,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.Purpose,
-		&i.Address,
 	)
 	return i, err
 }
@@ -1136,7 +1136,7 @@ func (q *Queries) ListInvitesOfOrg(ctx context.Context, orgID uuid.UUID) ([]Invi
 }
 
 const listLiveSessionsOfUser = `-- name: ListLiveSessionsOfUser :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason FROM sessions
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions
 WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 ORDER BY last_seen_at DESC
 `
@@ -1162,13 +1162,13 @@ func (q *Queries) ListLiveSessionsOfUser(ctx context.Context, userID uuid.UUID) 
 			&i.ExpiresAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdleTimeoutSeconds,
+			&i.UserAgent,
+			&i.RevokedReason,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
-			&i.IdleTimeoutSeconds,
-			&i.UserAgent,
-			&i.RevokedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1181,7 +1181,7 @@ func (q *Queries) ListLiveSessionsOfUser(ctx context.Context, userID uuid.UUID) 
 }
 
 const listLiveSessionsWithMembership = `-- name: ListLiveSessionsWithMembership :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason FROM sessions
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions
 WHERE active_membership_id = $1 AND revoked_at IS NULL AND expires_at > now()
 `
 
@@ -1206,13 +1206,13 @@ func (q *Queries) ListLiveSessionsWithMembership(ctx context.Context, membership
 			&i.ExpiresAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdleTimeoutSeconds,
+			&i.UserAgent,
+			&i.RevokedReason,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
-			&i.IdleTimeoutSeconds,
-			&i.UserAgent,
-			&i.RevokedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1225,7 +1225,7 @@ func (q *Queries) ListLiveSessionsWithMembership(ctx context.Context, membership
 }
 
 const listSessionsOfUser = `-- name: ListSessionsOfUser :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason FROM sessions WHERE user_id = $1 ORDER BY created_at
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE user_id = $1 ORDER BY created_at
 `
 
 // global: a session is a person's; every one still on record, ended or
@@ -1249,13 +1249,13 @@ func (q *Queries) ListSessionsOfUser(ctx context.Context, userID uuid.UUID) ([]S
 			&i.ExpiresAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdleTimeoutSeconds,
+			&i.UserAgent,
+			&i.RevokedReason,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
-			&i.IdleTimeoutSeconds,
-			&i.UserAgent,
-			&i.RevokedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1317,7 +1317,7 @@ func (q *Queries) LockOrgInvites(ctx context.Context, orgID uuid.UUID) error {
 }
 
 const markEmailVerified = `-- name: MarkEmailVerified :one
-UPDATE local_accounts SET email_verified_at = now() WHERE user_id = $1 AND email_verified_at IS NULL RETURNING user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at
+UPDATE local_accounts SET email_verified_at = now() WHERE user_id = $1 AND email_verified_at IS NULL RETURNING user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 // global: an account is a person's.
@@ -1328,12 +1328,12 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, userID uuid.UUID) (Loca
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
@@ -1360,7 +1360,7 @@ const moveSession = `-- name: MoveSession :one
 UPDATE sessions
 SET active_org_id = $1, active_membership_id = $2
 WHERE id = $3 AND revoked_at IS NULL
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type MoveSessionParams struct {
@@ -1385,13 +1385,13 @@ func (q *Queries) MoveSession(ctx context.Context, arg MoveSessionParams) (Sessi
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -1547,7 +1547,7 @@ func (q *Queries) RevokeSession(ctx context.Context, id uuid.UUID) (int64, error
 const revokeSessionFor = `-- name: RevokeSessionFor :one
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE id = $2 AND revoked_at IS NULL
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RevokeSessionForParams struct {
@@ -1570,13 +1570,13 @@ func (q *Queries) RevokeSessionFor(ctx context.Context, arg RevokeSessionForPara
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -1584,7 +1584,7 @@ func (q *Queries) RevokeSessionFor(ctx context.Context, arg RevokeSessionForPara
 const revokeSessionsOfOrg = `-- name: RevokeSessionsOfOrg :many
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE active_org_id = $2 AND revoked_at IS NULL AND expires_at > now()
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RevokeSessionsOfOrgParams struct {
@@ -1613,13 +1613,13 @@ func (q *Queries) RevokeSessionsOfOrg(ctx context.Context, arg RevokeSessionsOfO
 			&i.ExpiresAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdleTimeoutSeconds,
+			&i.UserAgent,
+			&i.RevokedReason,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
-			&i.IdleTimeoutSeconds,
-			&i.UserAgent,
-			&i.RevokedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1648,7 +1648,7 @@ const revokeSessionsOfUserFor = `-- name: RevokeSessionsOfUserFor :many
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE user_id = $2 AND revoked_at IS NULL AND expires_at > now()
   AND ($3::uuid IS NULL OR id <> $3::uuid)
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RevokeSessionsOfUserForParams struct {
@@ -1678,13 +1678,13 @@ func (q *Queries) RevokeSessionsOfUserFor(ctx context.Context, arg RevokeSession
 			&i.ExpiresAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.IdleTimeoutSeconds,
+			&i.UserAgent,
+			&i.RevokedReason,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
-			&i.IdleTimeoutSeconds,
-			&i.UserAgent,
-			&i.RevokedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1702,7 +1702,7 @@ SET refresh_token_hash = $1,
     active_org_id = $2, active_membership_id = $3,
     last_seen_at = now()
 WHERE id = $4 AND revoked_at IS NULL AND expires_at > now()
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, created_by, created_at, last_modified_by, last_modified_at, idle_timeout_seconds, user_agent, revoked_reason
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RotateSessionParams struct {
@@ -1732,13 +1732,13 @@ func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) (S
 		&i.ExpiresAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.IdleTimeoutSeconds,
+		&i.UserAgent,
+		&i.RevokedReason,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.IdleTimeoutSeconds,
-		&i.UserAgent,
-		&i.RevokedReason,
 	)
 	return i, err
 }
@@ -1774,7 +1774,7 @@ func (q *Queries) SetIdentityProviderStatus(ctx context.Context, arg SetIdentity
 }
 
 const setLocalAccountEmail = `-- name: SetLocalAccountEmail :one
-UPDATE local_accounts SET email = $1, email_verified_at = now() WHERE user_id = $2 RETURNING user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at
+UPDATE local_accounts SET email = $1, email_verified_at = now() WHERE user_id = $2 RETURNING user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetLocalAccountEmailParams struct {
@@ -1791,18 +1791,18 @@ func (q *Queries) SetLocalAccountEmail(ctx context.Context, arg SetLocalAccountE
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
 
 const setPassword = `-- name: SetPassword :one
-UPDATE local_accounts SET password_hash = $1, password_set_at = now() WHERE user_id = $2 RETURNING user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at
+UPDATE local_accounts SET password_hash = $1, password_set_at = now() WHERE user_id = $2 RETURNING user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetPasswordParams struct {
@@ -1818,12 +1818,12 @@ func (q *Queries) SetPassword(ctx context.Context, arg SetPasswordParams) (Local
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
@@ -1881,7 +1881,7 @@ INSERT INTO local_accounts (user_id, email)
 VALUES ($1, $2)
 ON CONFLICT (user_id) DO UPDATE SET email = excluded.email,
     email_verified_at = CASE WHEN local_accounts.email = excluded.email THEN local_accounts.email_verified_at ELSE NULL END
-RETURNING user_id, email, email_verified_at, created_by, created_at, last_modified_by, last_modified_at, password_hash, password_set_at
+RETURNING user_id, email, email_verified_at, password_hash, password_set_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpsertLocalAccountParams struct {
@@ -1897,12 +1897,12 @@ func (q *Queries) UpsertLocalAccount(ctx context.Context, arg UpsertLocalAccount
 		&i.UserID,
 		&i.Email,
 		&i.EmailVerifiedAt,
+		&i.PasswordHash,
+		&i.PasswordSetAt,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.PasswordHash,
-		&i.PasswordSetAt,
 	)
 	return i, err
 }
@@ -1912,7 +1912,7 @@ INSERT INTO session_policies (org_id, lifetime_seconds, idle_timeout_seconds, mf
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (org_id) DO UPDATE
 SET lifetime_seconds = excluded.lifetime_seconds, idle_timeout_seconds = excluded.idle_timeout_seconds, mfa_required = excluded.mfa_required
-RETURNING org_id, lifetime_seconds, idle_timeout_seconds, created_by, created_at, last_modified_by, last_modified_at, mfa_required
+RETURNING org_id, lifetime_seconds, idle_timeout_seconds, mfa_required, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpsertSessionPolicyParams struct {
@@ -1934,11 +1934,11 @@ func (q *Queries) UpsertSessionPolicy(ctx context.Context, arg UpsertSessionPoli
 		&i.OrgID,
 		&i.LifetimeSeconds,
 		&i.IdleTimeoutSeconds,
+		&i.MfaRequired,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.MfaRequired,
 	)
 	return i, err
 }
@@ -2011,7 +2011,7 @@ func (q *Queries) UseDesktopSignInCode(ctx context.Context, codeHash []byte) (De
 const useEmailVerification = `-- name: UseEmailVerification :one
 UPDATE email_verifications SET used_at = now()
 WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
-RETURNING id, user_id, org_id, org_name, token_hash, expires_at, used_at, created_by, created_at, last_modified_by, last_modified_at, purpose, address
+RETURNING id, user_id, org_id, org_name, token_hash, expires_at, used_at, purpose, address, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UseEmailVerificationParams struct {
@@ -2032,12 +2032,12 @@ func (q *Queries) UseEmailVerification(ctx context.Context, arg UseEmailVerifica
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.UsedAt,
+		&i.Purpose,
+		&i.Address,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.Purpose,
-		&i.Address,
 	)
 	return i, err
 }
@@ -2101,7 +2101,7 @@ func (q *Queries) UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams
 const useSignInAttempt = `-- name: UseSignInAttempt :one
 UPDATE sign_in_attempts SET used_at = now()
 WHERE org_id = $1 AND id = $2 AND used_at IS NULL AND expires_at > now()
-RETURNING org_id, id, code_verifier, nonce, next_path, app, expires_at, used_at, created_by, created_at, last_modified_by, last_modified_at, client, app_challenge
+RETURNING org_id, id, code_verifier, nonce, next_path, app, expires_at, used_at, client, app_challenge, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UseSignInAttemptParams struct {
@@ -2123,12 +2123,12 @@ func (q *Queries) UseSignInAttempt(ctx context.Context, arg UseSignInAttemptPara
 		&i.App,
 		&i.ExpiresAt,
 		&i.UsedAt,
+		&i.Client,
+		&i.AppChallenge,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
-		&i.Client,
-		&i.AppChallenge,
 	)
 	return i, err
 }

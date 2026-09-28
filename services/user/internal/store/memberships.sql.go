@@ -37,7 +37,7 @@ func (q *Queries) CountOwners(ctx context.Context, orgID uuid.UUID) (int64, erro
 }
 
 const getMembership = `-- name: GetMembership :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.id = $2
 `
@@ -75,22 +75,18 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (G
 		&i.Membership.Attributes,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
-		&i.Membership.CreatedBy,
-		&i.Membership.CreatedAt,
-		&i.Membership.LastModifiedBy,
-		&i.Membership.LastModifiedAt,
 		&i.Membership.ExternalID,
 		&i.Membership.Scim,
 		&i.Membership.ScimActive,
 		&i.Membership.AnonymisedAt,
+		&i.Membership.CreatedBy,
+		&i.Membership.CreatedAt,
+		&i.Membership.LastModifiedBy,
+		&i.Membership.LastModifiedAt,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,
 		&i.User.DeletedAt,
-		&i.User.CreatedBy,
-		&i.User.CreatedAt,
-		&i.User.LastModifiedBy,
-		&i.User.LastModifiedAt,
 		&i.User.DisplayName,
 		&i.User.TimeZone,
 		&i.User.WorkingHours,
@@ -99,12 +95,16 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (G
 		&i.User.Language,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
+		&i.User.CreatedBy,
+		&i.User.CreatedAt,
+		&i.User.LastModifiedBy,
+		&i.User.LastModifiedAt,
 	)
 	return i, err
 }
 
 const getMembershipByEmail = `-- name: GetMembershipByEmail :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND u.email = $2 AND u.deleted_at IS NULL
 `
@@ -144,22 +144,18 @@ func (q *Queries) GetMembershipByEmail(ctx context.Context, arg GetMembershipByE
 		&i.Membership.Attributes,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
-		&i.Membership.CreatedBy,
-		&i.Membership.CreatedAt,
-		&i.Membership.LastModifiedBy,
-		&i.Membership.LastModifiedAt,
 		&i.Membership.ExternalID,
 		&i.Membership.Scim,
 		&i.Membership.ScimActive,
 		&i.Membership.AnonymisedAt,
+		&i.Membership.CreatedBy,
+		&i.Membership.CreatedAt,
+		&i.Membership.LastModifiedBy,
+		&i.Membership.LastModifiedAt,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,
 		&i.User.DeletedAt,
-		&i.User.CreatedBy,
-		&i.User.CreatedAt,
-		&i.User.LastModifiedBy,
-		&i.User.LastModifiedAt,
 		&i.User.DisplayName,
 		&i.User.TimeZone,
 		&i.User.WorkingHours,
@@ -168,12 +164,16 @@ func (q *Queries) GetMembershipByEmail(ctx context.Context, arg GetMembershipByE
 		&i.User.Language,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
+		&i.User.CreatedBy,
+		&i.User.CreatedAt,
+		&i.User.LastModifiedBy,
+		&i.User.LastModifiedAt,
 	)
 	return i, err
 }
 
 const getMembershipByUser = `-- name: GetMembershipByUser :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.user_id = $2
 `
@@ -211,22 +211,18 @@ func (q *Queries) GetMembershipByUser(ctx context.Context, arg GetMembershipByUs
 		&i.Membership.Attributes,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
-		&i.Membership.CreatedBy,
-		&i.Membership.CreatedAt,
-		&i.Membership.LastModifiedBy,
-		&i.Membership.LastModifiedAt,
 		&i.Membership.ExternalID,
 		&i.Membership.Scim,
 		&i.Membership.ScimActive,
 		&i.Membership.AnonymisedAt,
+		&i.Membership.CreatedBy,
+		&i.Membership.CreatedAt,
+		&i.Membership.LastModifiedBy,
+		&i.Membership.LastModifiedAt,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,
 		&i.User.DeletedAt,
-		&i.User.CreatedBy,
-		&i.User.CreatedAt,
-		&i.User.LastModifiedBy,
-		&i.User.LastModifiedAt,
 		&i.User.DisplayName,
 		&i.User.TimeZone,
 		&i.User.WorkingHours,
@@ -235,6 +231,10 @@ func (q *Queries) GetMembershipByUser(ctx context.Context, arg GetMembershipByUs
 		&i.User.Language,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
+		&i.User.CreatedBy,
+		&i.User.CreatedAt,
+		&i.User.LastModifiedBy,
+		&i.User.LastModifiedAt,
 	)
 	return i, err
 }
@@ -246,7 +246,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11,
     $12, $13, $14, $15, $16)
 ON CONFLICT (org_id, user_id) DO NOTHING
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type InsertMembershipParams struct {
@@ -308,20 +308,20 @@ func (q *Queries) InsertMembership(ctx context.Context, arg InsertMembershipPara
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const listMembershipsByCreated = `-- name: ListMembershipsByCreated :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
   AND ($2::text IS NULL OR m.status = $2::text)
@@ -403,22 +403,18 @@ func (q *Queries) ListMembershipsByCreated(ctx context.Context, arg ListMembersh
 			&i.Membership.Attributes,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
-			&i.Membership.CreatedBy,
-			&i.Membership.CreatedAt,
-			&i.Membership.LastModifiedBy,
-			&i.Membership.LastModifiedAt,
 			&i.Membership.ExternalID,
 			&i.Membership.Scim,
 			&i.Membership.ScimActive,
 			&i.Membership.AnonymisedAt,
+			&i.Membership.CreatedBy,
+			&i.Membership.CreatedAt,
+			&i.Membership.LastModifiedBy,
+			&i.Membership.LastModifiedAt,
 			&i.User.ID,
 			&i.User.Email,
 			&i.User.Name,
 			&i.User.DeletedAt,
-			&i.User.CreatedBy,
-			&i.User.CreatedAt,
-			&i.User.LastModifiedBy,
-			&i.User.LastModifiedAt,
 			&i.User.DisplayName,
 			&i.User.TimeZone,
 			&i.User.WorkingHours,
@@ -427,6 +423,10 @@ func (q *Queries) ListMembershipsByCreated(ctx context.Context, arg ListMembersh
 			&i.User.Language,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
+			&i.User.CreatedBy,
+			&i.User.CreatedAt,
+			&i.User.LastModifiedBy,
+			&i.User.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -439,7 +439,7 @@ func (q *Queries) ListMembershipsByCreated(ctx context.Context, arg ListMembersh
 }
 
 const listMembershipsByName = `-- name: ListMembershipsByName :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
   AND ($2::text IS NULL OR m.status = $2::text)
@@ -521,22 +521,18 @@ func (q *Queries) ListMembershipsByName(ctx context.Context, arg ListMemberships
 			&i.Membership.Attributes,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
-			&i.Membership.CreatedBy,
-			&i.Membership.CreatedAt,
-			&i.Membership.LastModifiedBy,
-			&i.Membership.LastModifiedAt,
 			&i.Membership.ExternalID,
 			&i.Membership.Scim,
 			&i.Membership.ScimActive,
 			&i.Membership.AnonymisedAt,
+			&i.Membership.CreatedBy,
+			&i.Membership.CreatedAt,
+			&i.Membership.LastModifiedBy,
+			&i.Membership.LastModifiedAt,
 			&i.User.ID,
 			&i.User.Email,
 			&i.User.Name,
 			&i.User.DeletedAt,
-			&i.User.CreatedBy,
-			&i.User.CreatedAt,
-			&i.User.LastModifiedBy,
-			&i.User.LastModifiedAt,
 			&i.User.DisplayName,
 			&i.User.TimeZone,
 			&i.User.WorkingHours,
@@ -545,6 +541,10 @@ func (q *Queries) ListMembershipsByName(ctx context.Context, arg ListMemberships
 			&i.User.Language,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
+			&i.User.CreatedBy,
+			&i.User.CreatedAt,
+			&i.User.LastModifiedBy,
+			&i.User.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -557,7 +557,7 @@ func (q *Queries) ListMembershipsByName(ctx context.Context, arg ListMemberships
 }
 
 const listMembershipsOfUser = `-- name: ListMembershipsOfUser :many
-SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at FROM memberships
+SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at FROM memberships
 WHERE user_id = $1
 ORDER BY last_active_at DESC NULLS LAST, created_at DESC
 `
@@ -593,14 +593,14 @@ func (q *Queries) ListMembershipsOfUser(ctx context.Context, userID uuid.UUID) (
 			&i.Attributes,
 			&i.LastActiveAt,
 			&i.DeactivatedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
 			&i.ExternalID,
 			&i.Scim,
 			&i.ScimActive,
 			&i.AnonymisedAt,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastModifiedBy,
+			&i.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -616,7 +616,7 @@ const rejoinMembership = `-- name: RejoinMembership :one
 UPDATE memberships
 SET status = 'active', role = $1, kind = $2, source = $3, deactivated_at = NULL
 WHERE org_id = $4 AND id = $5 AND status = 'left'
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RejoinMembershipParams struct {
@@ -657,21 +657,21 @@ func (q *Queries) RejoinMembership(ctx context.Context, arg RejoinMembershipPara
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const setMembershipRole = `-- name: SetMembershipRole :one
 UPDATE memberships SET role = $1 WHERE org_id = $2 AND id = $3
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetMembershipRoleParams struct {
@@ -703,14 +703,14 @@ func (q *Queries) SetMembershipRole(ctx context.Context, arg SetMembershipRolePa
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -720,7 +720,7 @@ UPDATE memberships
 SET status = $1,
     deactivated_at = CASE WHEN $1::text = 'active' THEN NULL ELSE coalesce(deactivated_at, now()) END
 WHERE org_id = $2 AND id = $3
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetMembershipStatusParams struct {
@@ -752,20 +752,20 @@ func (q *Queries) SetMembershipStatus(ctx context.Context, arg SetMembershipStat
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const setPhotoKey = `-- name: SetPhotoKey :one
-UPDATE users SET photo_key = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
+UPDATE users SET photo_key = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetPhotoKeyParams struct {
@@ -782,10 +782,6 @@ func (q *Queries) SetPhotoKey(ctx context.Context, arg SetPhotoKeyParams) (User,
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -794,6 +790,10 @@ func (q *Queries) SetPhotoKey(ctx context.Context, arg SetPhotoKeyParams) (User,
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -829,7 +829,7 @@ SET idp_subject   = coalesce($1, idp_subject),
     attributes    = attributes || $10,
     last_active_at = now()
 WHERE org_id = $11 AND id = $12
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpdateMembershipDirectoryParams struct {
@@ -885,14 +885,14 @@ func (q *Queries) UpdateMembershipDirectory(ctx context.Context, arg UpdateMembe
 		&i.Attributes,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.ExternalID,
 		&i.Scim,
 		&i.ScimActive,
 		&i.AnonymisedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -902,7 +902,7 @@ UPDATE users
 SET display_name = $1, time_zone = $2, working_hours = $3,
     theme = $4, language = $5
 WHERE id = $6 AND deleted_at IS NULL
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpdateProfileParams struct {
@@ -930,10 +930,6 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -942,6 +938,10 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }

@@ -1,21 +1,72 @@
 -- +goose Up
--- Notifications (UO-175 to UO-179): the one place that decides who is told
--- about what, how, and whether at all.
+-- Every email the platform sends passes through here: queued by a service,
+-- delivered by this service's own retry loop. There is no scheduler; the loop
+-- lives in the process.
+CREATE TABLE email_outbox (
+    org_id              uuid        NOT NULL,
+    id                  uuid        NOT NULL,
+    -- The address is PII: it lives here because it must, and nowhere in a log.
+    to_address          text        NOT NULL,
+    template            text        NOT NULL,
+    subject             text        NOT NULL,
+    html_body           text        NOT NULL,
+    text_body           text        NOT NULL,
+    state               text        NOT NULL DEFAULT 'queued'
+                        CHECK (state IN ('queued', 'sending', 'sent', 'failed', 'suppressed', 'bounced')),
+    attempts            integer     NOT NULL DEFAULT 0,
+    next_attempt_at     timestamptz NOT NULL,
+    last_error          text,
+    provider_message_id text,
+    sent_at             timestamptz,
+    -- A notification email names its one-click unsubscribe, sent as a header.
+    unsubscribe_url     text,
+    created_by          text        NOT NULL,
+    created_at          timestamptz NOT NULL,
+    last_modified_by    text        NOT NULL,
+    last_modified_at    timestamptz NOT NULL,
+    PRIMARY KEY (org_id, id)
+);
+CREATE INDEX email_outbox_due ON email_outbox (org_id, state, next_attempt_at);
+CREATE INDEX email_outbox_by_provider_id ON email_outbox (org_id, provider_message_id);
+CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON email_outbox
+    FOR EACH ROW EXECUTE FUNCTION set_provenance();
+
+-- Addresses we stop sending to: a hard bounce or a complaint. An address is
+-- dead for every org, which is why this is the one table here without org_id.
+CREATE TABLE email_suppressions (
+    id                uuid        NOT NULL,
+    address           text        NOT NULL,
+    reason            text        NOT NULL CHECK (reason IN ('bounced', 'complained')),
+    provider_event_id text,
+    created_by        text        NOT NULL,
+    created_at        timestamptz NOT NULL,
+    last_modified_by  text        NOT NULL,
+    last_modified_at  timestamptz NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE (address)
+);
+COMMENT ON TABLE email_suppressions IS 'global: a bounced or complaining address is dead for every org';
+CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON email_suppressions
+    FOR EACH ROW EXECUTE FUNCTION set_provenance();
+
+-- Notifications: the one place that decides who is told about what, how,
+-- and whether at all.
 --
 -- What is stored, and nothing else: the feed a person catches up from, their
 -- preferences, their devices' push tokens, deliveries held for quiet hours,
 -- and daily counts per org and channel. There is no per-push log; dedupe and
 -- batching state lives in Redis with a TTL.
 
--- One line in a person's feed. A batch ("3 new messages in Design") is one
--- entry with a count, grown while its window is open. Kept 30 days.
+-- One line in a person's feed. A batch ("3 new comments") is one entry with
+-- a count, grown while its window is open. Kept 30 days. The category is
+-- every one the notification service knows.
 CREATE TABLE feed_entries (
     org_id           uuid        NOT NULL,
     id               uuid        NOT NULL,
     membership_id    uuid        NOT NULL,
     category         text        NOT NULL CHECK (category IN (
-                         'mention', 'direct_message', 'room_message', 'room_activity',
-                         'admin_providers', 'admin_billing', 'admin_templates', 'admin_marketplace')),
+                         'mention', 'direct_message', 'room_message', 'room_activity', 'knock', 'meeting',
+                         'admin_providers', 'admin_billing', 'admin_templates', 'admin_marketplace', 'admin_directory')),
     kind             text        NOT NULL CHECK (length(kind) BETWEEN 1 AND 60),
     -- What the entry says, as data the apps put into words: who, where, a preview.
     data             jsonb       NOT NULL DEFAULT '{}'::jsonb,
@@ -147,14 +198,12 @@ CREATE TABLE daily_counts (
 CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON daily_counts
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
--- A notification email names its one-click unsubscribe, sent as a header.
-ALTER TABLE email_outbox ADD COLUMN unsubscribe_url text;
-
 -- +goose Down
-ALTER TABLE email_outbox DROP COLUMN unsubscribe_url;
 DROP TABLE daily_counts;
 DROP TABLE held;
 DROP TABLE devices;
 DROP TABLE org_settings;
 DROP TABLE preferences;
 DROP TABLE feed_entries;
+DROP TABLE email_suppressions;
+DROP TABLE email_outbox;

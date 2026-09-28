@@ -31,14 +31,14 @@ type Membership struct {
 	Attributes     []byte
 	LastActiveAt   pgtype.Timestamptz
 	DeactivatedAt  pgtype.Timestamptz
-	CreatedBy      string
-	CreatedAt      time.Time
-	LastModifiedBy string
-	LastModifiedAt time.Time
 	ExternalID     pgtype.Text
 	Scim           []byte
 	ScimActive     pgtype.Bool
 	AnonymisedAt   pgtype.Timestamptz
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
 }
 
 type ScimGroup struct {
@@ -110,10 +110,6 @@ type User struct {
 	Email               string
 	Name                string
 	DeletedAt           pgtype.Timestamptz
-	CreatedBy           string
-	CreatedAt           time.Time
-	LastModifiedBy      string
-	LastModifiedAt      time.Time
 	DisplayName         pgtype.Text
 	TimeZone            pgtype.Text
 	WorkingHours        []byte
@@ -122,4 +118,8 @@ type User struct {
 	Language            pgtype.Text
 	DeletionRequestedAt pgtype.Timestamptz
 	DeletionAfter       pgtype.Timestamptz
+	CreatedBy           string
+	CreatedAt           time.Time
+	LastModifiedBy      string
+	LastModifiedAt      time.Time
 }

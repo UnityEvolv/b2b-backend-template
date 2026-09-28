@@ -6,10 +6,16 @@ One directory per service schema, named after the schema in
 
 ```
 migrations/
-  office/
-    00001_create_offices.sql
-    00002_add_office_time_zone.sql
+  billing/
+    00001_baseline.sql
+    00002_create_invoices.sql
 ```
+
+## The baseline
+
+Each directory starts at `00001_baseline.sql`: the whole schema the template
+ships with, in one file. A product adds its own migrations after it, numbered
+from `00002`; the baseline itself is never edited once a deployment has run it.
 
 ## Adding one
 
@@ -17,21 +23,21 @@ A new table, column or index is **one file** in the service's directory:
 
 ```sql
 -- +goose Up
-CREATE TABLE offices (
+CREATE TABLE invoices (
     org_id           uuid        NOT NULL,
     id               uuid        NOT NULL,
-    name             text        NOT NULL,
+    number           text        NOT NULL,
     created_by       text        NOT NULL,
     created_at       timestamptz NOT NULL,
     last_modified_by text        NOT NULL,
     last_modified_at timestamptz NOT NULL,
     PRIMARY KEY (org_id, id)
 );
-CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON offices
+CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON invoices
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
 -- +goose Down
-DROP TABLE offices;
+DROP TABLE invoices;
 ```
 
 Every table follows the [table conventions](../docs/tables.md): `org_id`
@@ -53,7 +59,7 @@ Run them locally with `docker compose -f deploy/docker-compose.yml up` (the
 DATABASE_URL="postgres://localhost:5432/unityofis?sslmode=disable" DB_LOCAL_PASSWORDS=true \
   go run ./cmd/migrate up
 go run ./cmd/migrate status
-go run ./cmd/migrate down -service office   # one service, one migration
+go run ./cmd/migrate down -service billing  # one service, one migration
 ```
 
 ## Expand, then contract

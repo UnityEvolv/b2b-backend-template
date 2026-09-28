@@ -1,5 +1,5 @@
 -- +goose Up
--- Billing (UO-168 to UO-171): one account per org, the payment provider's
+-- Billing: one account per org, the payment provider's
 -- references, and the subscription state everything else reads.
 --
 -- Money is integer minor units and a currency code, never a float. Card

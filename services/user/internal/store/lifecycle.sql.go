@@ -181,7 +181,7 @@ func (q *Queries) DeleteScimTokensOfOrg(ctx context.Context, orgID uuid.UUID) (i
 }
 
 const deletionsDue = `-- name: DeletionsDue :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE deletion_after IS NOT NULL AND deletion_after <= $1 AND deleted_at IS NULL
+SELECT id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at FROM users WHERE deletion_after IS NOT NULL AND deletion_after <= $1 AND deleted_at IS NULL
 ORDER BY deletion_after
 LIMIT 200
 `
@@ -201,10 +201,6 @@ func (q *Queries) DeletionsDue(ctx context.Context, at pgtype.Timestamptz) ([]Us
 			&i.Email,
 			&i.Name,
 			&i.DeletedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
 			&i.DisplayName,
 			&i.TimeZone,
 			&i.WorkingHours,
@@ -213,6 +209,10 @@ func (q *Queries) DeletionsDue(ctx context.Context, at pgtype.Timestamptz) ([]Us
 			&i.Language,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastModifiedBy,
+			&i.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -225,7 +225,7 @@ func (q *Queries) DeletionsDue(ctx context.Context, at pgtype.Timestamptz) ([]Us
 }
 
 const getUserAny = `-- name: GetUserAny :one
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE id = $1
+SELECT id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at FROM users WHERE id = $1
 `
 
 // global: a user, deleted or not.
@@ -237,10 +237,6 @@ func (q *Queries) GetUserAny(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -249,6 +245,10 @@ func (q *Queries) GetUserAny(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -269,7 +269,7 @@ func (q *Queries) HardDeleteUser(ctx context.Context, id uuid.UUID) (int64, erro
 
 const listMembershipsOfOrg = `-- name: ListMembershipsOfOrg :many
 
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, u.id, u.email, u.name, u.deleted_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
 ORDER BY m.created_at, m.id
@@ -311,22 +311,18 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 			&i.Membership.Attributes,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
-			&i.Membership.CreatedBy,
-			&i.Membership.CreatedAt,
-			&i.Membership.LastModifiedBy,
-			&i.Membership.LastModifiedAt,
 			&i.Membership.ExternalID,
 			&i.Membership.Scim,
 			&i.Membership.ScimActive,
 			&i.Membership.AnonymisedAt,
+			&i.Membership.CreatedBy,
+			&i.Membership.CreatedAt,
+			&i.Membership.LastModifiedBy,
+			&i.Membership.LastModifiedAt,
 			&i.User.ID,
 			&i.User.Email,
 			&i.User.Name,
 			&i.User.DeletedAt,
-			&i.User.CreatedBy,
-			&i.User.CreatedAt,
-			&i.User.LastModifiedBy,
-			&i.User.LastModifiedAt,
 			&i.User.DisplayName,
 			&i.User.TimeZone,
 			&i.User.WorkingHours,
@@ -335,6 +331,10 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 			&i.User.Language,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
+			&i.User.CreatedBy,
+			&i.User.CreatedAt,
+			&i.User.LastModifiedBy,
+			&i.User.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -347,7 +347,7 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 }
 
 const listOrphanUsers = `-- name: ListOrphanUsers :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users u
+SELECT id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at FROM users u
 WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id) AND u.created_at < $1
 ORDER BY u.id
 LIMIT 500
@@ -369,10 +369,6 @@ func (q *Queries) ListOrphanUsers(ctx context.Context, before time.Time) ([]User
 			&i.Email,
 			&i.Name,
 			&i.DeletedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
 			&i.DisplayName,
 			&i.TimeZone,
 			&i.WorkingHours,
@@ -381,6 +377,10 @@ func (q *Queries) ListOrphanUsers(ctx context.Context, before time.Time) ([]User
 			&i.Language,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastModifiedBy,
+			&i.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -458,7 +458,7 @@ func (q *Queries) ListScimGroupsOfOrg(ctx context.Context, orgID uuid.UUID) ([]S
 }
 
 const membershipsToAnonymise = `-- name: MembershipsToAnonymise :many
-SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at FROM memberships
+SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, external_id, scim, scim_active, anonymised_at, created_by, created_at, last_modified_by, last_modified_at FROM memberships
 WHERE org_id = $1 AND anonymised_at IS NULL AND status IN ('deactivated', 'left') AND deactivated_at < $2
 ORDER BY id
 LIMIT 500
@@ -498,14 +498,14 @@ func (q *Queries) MembershipsToAnonymise(ctx context.Context, arg MembershipsToA
 			&i.Attributes,
 			&i.LastActiveAt,
 			&i.DeactivatedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
 			&i.ExternalID,
 			&i.Scim,
 			&i.ScimActive,
 			&i.AnonymisedAt,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastModifiedBy,
+			&i.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +549,7 @@ const requestDeletion = `-- name: RequestDeletion :one
 UPDATE users
 SET deletion_requested_at = coalesce(deletion_requested_at, $1), deletion_after = coalesce(deletion_after, $2)
 WHERE id = $3 AND deleted_at IS NULL
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RequestDeletionParams struct {
@@ -567,10 +567,6 @@ func (q *Queries) RequestDeletion(ctx context.Context, arg RequestDeletionParams
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -579,12 +575,16 @@ func (q *Queries) RequestDeletion(ctx context.Context, arg RequestDeletionParams
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const setUserEmail = `-- name: SetUserEmail :one
-UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
+UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetUserEmailParams struct {
@@ -602,10 +602,6 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -614,6 +610,10 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -624,7 +624,7 @@ SET name = 'Former member', display_name = NULL, email = 'deleted+' || id::text 
     time_zone = NULL, working_hours = NULL, photo_key = NULL, language = NULL,
     deletion_requested_at = NULL, deletion_after = NULL, deleted_at = coalesce(deleted_at, $1)
 WHERE id = $2
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type TombstoneUserParams struct {
@@ -642,10 +642,6 @@ func (q *Queries) TombstoneUser(ctx context.Context, arg TombstoneUserParams) (U
 		&i.Email,
 		&i.Name,
 		&i.DeletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.TimeZone,
 		&i.WorkingHours,
@@ -654,12 +650,16 @@ func (q *Queries) TombstoneUser(ctx context.Context, arg TombstoneUserParams) (U
 		&i.Language,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const usersToTombstone = `-- name: UsersToTombstone :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users u
+SELECT id, email, name, deleted_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after, created_by, created_at, last_modified_by, last_modified_at FROM users u
 WHERE u.deleted_at IS NULL
   AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
   AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.anonymised_at IS NULL)
@@ -683,10 +683,6 @@ func (q *Queries) UsersToTombstone(ctx context.Context) ([]User, error) {
 			&i.Email,
 			&i.Name,
 			&i.DeletedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
 			&i.DisplayName,
 			&i.TimeZone,
 			&i.WorkingHours,
@@ -695,6 +691,10 @@ func (q *Queries) UsersToTombstone(ctx context.Context) ([]User, error) {
 			&i.Language,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastModifiedBy,
+			&i.LastModifiedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -45,10 +45,6 @@ type Organization struct {
 	OrgID                   uuid.UUID
 	Name                    string
 	TimeZone                string
-	CreatedBy               string
-	CreatedAt               time.Time
-	LastModifiedBy          string
-	LastModifiedAt          time.Time
 	DisplayName             pgtype.Text
 	Domain                  pgtype.Text
 	Plan                    string
@@ -66,6 +62,10 @@ type Organization struct {
 	ClosedByUserID          pgtype.UUID
 	ReopenTokenHash         []byte
 	AuditMonths             int32
+	CreatedBy               string
+	CreatedAt               time.Time
+	LastModifiedBy          string
+	LastModifiedAt          time.Time
 }
 
 type PurgedOrganization struct {

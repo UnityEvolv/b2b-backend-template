@@ -18,7 +18,7 @@ UPDATE organizations
 SET status = 'closing', closing_at = $1, purge_after = $2, close_reason = $3,
     closed_by_user_id = $4, reopen_token_hash = $5
 WHERE org_id = $6 AND status <> 'closing'
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
+RETURNING org_id, name, time_zone, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type CloseOrganizationParams struct {
@@ -45,10 +45,6 @@ func (q *Queries) CloseOrganization(ctx context.Context, arg CloseOrganizationPa
 		&i.OrgID,
 		&i.Name,
 		&i.TimeZone,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.Domain,
 		&i.Plan,
@@ -66,6 +62,10 @@ func (q *Queries) CloseOrganization(ctx context.Context, arg CloseOrganizationPa
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
@@ -502,7 +502,7 @@ const reopenOrganization = `-- name: ReopenOrganization :one
 UPDATE organizations
 SET status = 'active', closing_at = NULL, purge_after = NULL, close_reason = NULL, closed_by_user_id = NULL, reopen_token_hash = NULL
 WHERE org_id = $1 AND status = 'closing'
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
+RETURNING org_id, name, time_zone, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, created_by, created_at, last_modified_by, last_modified_at
 `
 
 func (q *Queries) ReopenOrganization(ctx context.Context, orgID uuid.UUID) (Organization, error) {
@@ -512,10 +512,6 @@ func (q *Queries) ReopenOrganization(ctx context.Context, orgID uuid.UUID) (Orga
 		&i.OrgID,
 		&i.Name,
 		&i.TimeZone,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.Domain,
 		&i.Plan,
@@ -533,12 +529,16 @@ func (q *Queries) ReopenOrganization(ctx context.Context, orgID uuid.UUID) (Orga
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }
 
 const setAuditMonths = `-- name: SetAuditMonths :one
-UPDATE organizations SET audit_months = $1 WHERE org_id = $2 RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
+UPDATE organizations SET audit_months = $1 WHERE org_id = $2 RETURNING org_id, name, time_zone, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetAuditMonthsParams struct {
@@ -553,10 +553,6 @@ func (q *Queries) SetAuditMonths(ctx context.Context, arg SetAuditMonthsParams) 
 		&i.OrgID,
 		&i.Name,
 		&i.TimeZone,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.LastModifiedBy,
-		&i.LastModifiedAt,
 		&i.DisplayName,
 		&i.Domain,
 		&i.Plan,
@@ -574,6 +570,10 @@ func (q *Queries) SetAuditMonths(ctx context.Context, arg SetAuditMonthsParams) 
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastModifiedBy,
+		&i.LastModifiedAt,
 	)
 	return i, err
 }

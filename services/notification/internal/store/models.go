@@ -54,11 +54,11 @@ type EmailOutbox struct {
 	LastError         pgtype.Text
 	ProviderMessageID pgtype.Text
 	SentAt            pgtype.Timestamptz
+	UnsubscribeUrl    pgtype.Text
 	CreatedBy         string
 	CreatedAt         time.Time
 	LastModifiedBy    string
 	LastModifiedAt    time.Time
-	UnsubscribeUrl    pgtype.Text
 }
 
 // global: a bounced or complaining address is dead for every org

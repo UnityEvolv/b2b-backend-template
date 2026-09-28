@@ -18,7 +18,7 @@ UPDATE memberships
 SET idp_subject = NULL, job_title = NULL, department = NULL, division = NULL, manager = NULL,
     employee_type = NULL, location = NULL, country = NULL, city = NULL, attributes = '{}'::jsonb,
     external_id = NULL, scim = CASE WHEN scim IS NULL THEN NULL ELSE '{"_deleted": true}'::jsonb END, scim_active = NULL,
-    last_office_id = NULL, last_room_id = NULL, anonymised_at = $1
+    anonymised_at = $1
 WHERE org_id = $2 AND id = $3 AND anonymised_at IS NULL
 `
 
@@ -82,7 +82,6 @@ SELECT ((SELECT count(*) FROM memberships m WHERE m.org_id = $1)
      + (SELECT count(*) FROM scim_tokens t WHERE t.org_id = $1)
      + (SELECT count(*) FROM scim_groups g WHERE g.org_id = $1)
      + (SELECT count(*) FROM scim_group_members gm WHERE gm.org_id = $1)
-     + (SELECT count(*) FROM scim_group_offices go WHERE go.org_id = $1)
      + (SELECT count(*) FROM scim_log l WHERE l.org_id = $1)
      + (SELECT count(*) FROM scim_state s WHERE s.org_id = $1))::bigint AS remaining
 `
@@ -127,18 +126,6 @@ DELETE FROM scim_group_members WHERE org_id = $1
 
 func (q *Queries) DeleteScimGroupMembersOfOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteScimGroupMembersOfOrg, orgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteScimGroupOfficesOfOrg = `-- name: DeleteScimGroupOfficesOfOrg :execrows
-DELETE FROM scim_group_offices WHERE org_id = $1
-`
-
-func (q *Queries) DeleteScimGroupOfficesOfOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteScimGroupOfficesOfOrg, orgID)
 	if err != nil {
 		return 0, err
 	}
@@ -194,7 +181,7 @@ func (q *Queries) DeleteScimTokensOfOrg(ctx context.Context, orgID uuid.UUID) (i
 }
 
 const deletionsDue = `-- name: DeletionsDue :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users WHERE deletion_after IS NOT NULL AND deletion_after <= $1 AND deleted_at IS NULL
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE deletion_after IS NOT NULL AND deletion_after <= $1 AND deleted_at IS NULL
 ORDER BY deletion_after
 LIMIT 200
 `
@@ -224,7 +211,6 @@ func (q *Queries) DeletionsDue(ctx context.Context, at pgtype.Timestamptz) ([]Us
 			&i.PhotoKey,
 			&i.Theme,
 			&i.Language,
-			&i.HideDecorations,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
 		); err != nil {
@@ -239,7 +225,7 @@ func (q *Queries) DeletionsDue(ctx context.Context, at pgtype.Timestamptz) ([]Us
 }
 
 const getUserAny = `-- name: GetUserAny :one
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users WHERE id = $1
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE id = $1
 `
 
 // global: a user, deleted or not.
@@ -261,7 +247,6 @@ func (q *Queries) GetUserAny(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -284,7 +269,7 @@ func (q *Queries) HardDeleteUser(ctx context.Context, id uuid.UUID) (int64, erro
 
 const listMembershipsOfOrg = `-- name: ListMembershipsOfOrg :many
 
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_office_id, m.last_room_id, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.hide_decorations, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
 ORDER BY m.created_at, m.id
@@ -324,8 +309,6 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 			&i.Membership.Country,
 			&i.Membership.City,
 			&i.Membership.Attributes,
-			&i.Membership.LastOfficeID,
-			&i.Membership.LastRoomID,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
 			&i.Membership.CreatedBy,
@@ -350,7 +333,6 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 			&i.User.PhotoKey,
 			&i.User.Theme,
 			&i.User.Language,
-			&i.User.HideDecorations,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
 		); err != nil {
@@ -365,7 +347,7 @@ func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]
 }
 
 const listOrphanUsers = `-- name: ListOrphanUsers :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users u
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users u
 WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id) AND u.created_at < $1
 ORDER BY u.id
 LIMIT 500
@@ -397,7 +379,6 @@ func (q *Queries) ListOrphanUsers(ctx context.Context, before time.Time) ([]User
 			&i.PhotoKey,
 			&i.Theme,
 			&i.Language,
-			&i.HideDecorations,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
 		); err != nil {
@@ -477,7 +458,7 @@ func (q *Queries) ListScimGroupsOfOrg(ctx context.Context, orgID uuid.UUID) ([]S
 }
 
 const membershipsToAnonymise = `-- name: MembershipsToAnonymise :many
-SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_office_id, last_room_id, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at FROM memberships
+SELECT org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at FROM memberships
 WHERE org_id = $1 AND anonymised_at IS NULL AND status IN ('deactivated', 'left') AND deactivated_at < $2
 ORDER BY id
 LIMIT 500
@@ -515,8 +496,6 @@ func (q *Queries) MembershipsToAnonymise(ctx context.Context, arg MembershipsToA
 			&i.Country,
 			&i.City,
 			&i.Attributes,
-			&i.LastOfficeID,
-			&i.LastRoomID,
 			&i.LastActiveAt,
 			&i.DeactivatedAt,
 			&i.CreatedBy,
@@ -570,7 +549,7 @@ const requestDeletion = `-- name: RequestDeletion :one
 UPDATE users
 SET deletion_requested_at = coalesce(deletion_requested_at, $1), deletion_after = coalesce(deletion_after, $2)
 WHERE id = $3 AND deleted_at IS NULL
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
 `
 
 type RequestDeletionParams struct {
@@ -598,7 +577,6 @@ func (q *Queries) RequestDeletion(ctx context.Context, arg RequestDeletionParams
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -606,7 +584,7 @@ func (q *Queries) RequestDeletion(ctx context.Context, arg RequestDeletionParams
 }
 
 const setUserEmail = `-- name: SetUserEmail :one
-UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after
+UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
 `
 
 type SetUserEmailParams struct {
@@ -634,7 +612,6 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -647,7 +624,7 @@ SET name = 'Former member', display_name = NULL, email = 'deleted+' || id::text 
     time_zone = NULL, working_hours = NULL, photo_key = NULL, language = NULL,
     deletion_requested_at = NULL, deletion_after = NULL, deleted_at = coalesce(deleted_at, $1)
 WHERE id = $2
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
 `
 
 type TombstoneUserParams struct {
@@ -675,7 +652,6 @@ func (q *Queries) TombstoneUser(ctx context.Context, arg TombstoneUserParams) (U
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -683,7 +659,7 @@ func (q *Queries) TombstoneUser(ctx context.Context, arg TombstoneUserParams) (U
 }
 
 const usersToTombstone = `-- name: UsersToTombstone :many
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users u
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users u
 WHERE u.deleted_at IS NULL
   AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
   AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.anonymised_at IS NULL)
@@ -717,7 +693,6 @@ func (q *Queries) UsersToTombstone(ctx context.Context) ([]User, error) {
 			&i.PhotoKey,
 			&i.Theme,
 			&i.Language,
-			&i.HideDecorations,
 			&i.DeletionRequestedAt,
 			&i.DeletionAfter,
 		); err != nil {

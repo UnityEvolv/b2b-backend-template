@@ -12,7 +12,7 @@ active membership and their org's configuration; nothing is cached.
 | Admin | the org's settings, plus the groups the Owner grants (default: users, offices, providers, audit) |
 | Billing Admin | the groups the Owner grants (default: billing) |
 | User | no admin permissions |
-| Guest | scoped to the rooms they were granted (the guest invites story) |
+| Guest | a limited collaborator from outside the org: no admin permissions, finds only themselves in the directory, and does not count toward the plan's user cap |
 | Super Admin (platform operator) | a person signed in to the platform org: everything, in every org |
 
 Configurable groups: `billing`, `users`, `offices`, `providers`, `audit`.

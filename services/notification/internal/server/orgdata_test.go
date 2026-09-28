@@ -27,7 +27,7 @@ func TestOrgData(t *testing.T) {
 		}
 		return token
 	}
-	organization, user, realtime := service("organization"), service("user"), service("realtime")
+	organization, user, billing := service("organization"), service("user"), service("billing")
 	acme := f.org
 
 	ana, anaToken := f.person(t, authz.User)
@@ -64,8 +64,8 @@ func TestOrgData(t *testing.T) {
 			t.Errorf("personal export by another caller: %d", code)
 		}
 	}
-	if code, _ := f.do(t, http.MethodDelete, forget, realtime, nil); code != http.StatusForbidden {
-		t.Errorf("forget by the realtime service: %d", code)
+	if code, _ := f.do(t, http.MethodDelete, forget, billing, nil); code != http.StatusForbidden {
+		t.Errorf("forget by the billing service: %d", code)
 	}
 
 	code, part := f.do(t, http.MethodGet, path, organization, nil)

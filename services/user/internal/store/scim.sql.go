@@ -129,21 +129,6 @@ func (q *Queries) CountScimMemberships(ctx context.Context, arg CountScimMembers
 	return count, err
 }
 
-const deleteGroupOffice = `-- name: DeleteGroupOffice :exec
-DELETE FROM scim_group_offices WHERE org_id = $1 AND group_id = $2 AND office_id = $3
-`
-
-type DeleteGroupOfficeParams struct {
-	OrgID    uuid.UUID
-	GroupID  uuid.UUID
-	OfficeID uuid.UUID
-}
-
-func (q *Queries) DeleteGroupOffice(ctx context.Context, arg DeleteGroupOfficeParams) error {
-	_, err := q.db.Exec(ctx, deleteGroupOffice, arg.OrgID, arg.GroupID, arg.OfficeID)
-	return err
-}
-
 const deleteScimGroup = `-- name: DeleteScimGroup :execrows
 DELETE FROM scim_groups WHERE org_id = $1 AND id = $2
 `
@@ -258,7 +243,7 @@ type GroupMembersForSyncRow struct {
 	UserID uuid.UUID
 }
 
-// Who a group grants its offices to: everyone in it still in the org. A
+// Who a group grants to: everyone in it still in the org. A
 // deactivated person keeps the grant, so a reactivation finds it intact.
 func (q *Queries) GroupMembersForSync(ctx context.Context, arg GroupMembersForSyncParams) ([]GroupMembersForSyncRow, error) {
 	rows, err := q.db.Query(ctx, groupMembersForSync, arg.OrgID, arg.GroupID)
@@ -398,77 +383,6 @@ func (q *Queries) InsertScimToken(ctx context.Context, arg InsertScimTokenParams
 	return i, err
 }
 
-const listGroupOffices = `-- name: ListGroupOffices :many
-SELECT org_id, group_id, office_id, paused, created_by, created_at, last_modified_by, last_modified_at FROM scim_group_offices WHERE org_id = $1 ORDER BY group_id, office_id
-`
-
-func (q *Queries) ListGroupOffices(ctx context.Context, orgID uuid.UUID) ([]ScimGroupOffice, error) {
-	rows, err := q.db.Query(ctx, listGroupOffices, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ScimGroupOffice{}
-	for rows.Next() {
-		var i ScimGroupOffice
-		if err := rows.Scan(
-			&i.OrgID,
-			&i.GroupID,
-			&i.OfficeID,
-			&i.Paused,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOfficesOfGroup = `-- name: ListOfficesOfGroup :many
-SELECT org_id, group_id, office_id, paused, created_by, created_at, last_modified_by, last_modified_at FROM scim_group_offices WHERE org_id = $1 AND group_id = $2 ORDER BY office_id
-`
-
-type ListOfficesOfGroupParams struct {
-	OrgID   uuid.UUID
-	GroupID uuid.UUID
-}
-
-func (q *Queries) ListOfficesOfGroup(ctx context.Context, arg ListOfficesOfGroupParams) ([]ScimGroupOffice, error) {
-	rows, err := q.db.Query(ctx, listOfficesOfGroup, arg.OrgID, arg.GroupID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ScimGroupOffice{}
-	for rows.Next() {
-		var i ScimGroupOffice
-		if err := rows.Scan(
-			&i.OrgID,
-			&i.GroupID,
-			&i.OfficeID,
-			&i.Paused,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.LastModifiedBy,
-			&i.LastModifiedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listScimGroupMembers = `-- name: ListScimGroupMembers :many
 SELECT membership_id FROM scim_group_members WHERE org_id = $1 AND group_id = $2 ORDER BY membership_id
 `
@@ -596,7 +510,7 @@ func (q *Queries) ListScimLog(ctx context.Context, arg ListScimLogParams) ([]Sci
 }
 
 const listScimMemberships = `-- name: ListScimMemberships :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_office_id, m.last_room_id, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.hide_decorations, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.kind = 'member' AND m.status <> 'left'
   AND coalesce((m.scim ->> '_deleted')::boolean, false) = false
@@ -660,8 +574,6 @@ func (q *Queries) ListScimMemberships(ctx context.Context, arg ListScimMembershi
 			&i.Membership.Country,
 			&i.Membership.City,
 			&i.Membership.Attributes,
-			&i.Membership.LastOfficeID,
-			&i.Membership.LastRoomID,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
 			&i.Membership.CreatedBy,
@@ -686,7 +598,6 @@ func (q *Queries) ListScimMemberships(ctx context.Context, arg ListScimMembershi
 			&i.User.PhotoKey,
 			&i.User.Theme,
 			&i.User.Language,
-			&i.User.HideDecorations,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
 		); err != nil {
@@ -739,7 +650,7 @@ func (q *Queries) ListScimTokens(ctx context.Context, orgID uuid.UUID) ([]ScimTo
 }
 
 const membershipByExternalID = `-- name: MembershipByExternalID :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_office_id, m.last_room_id, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.hide_decorations, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.external_id = $2
 `
@@ -775,8 +686,6 @@ func (q *Queries) MembershipByExternalID(ctx context.Context, arg MembershipByEx
 		&i.Membership.Country,
 		&i.Membership.City,
 		&i.Membership.Attributes,
-		&i.Membership.LastOfficeID,
-		&i.Membership.LastRoomID,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
 		&i.Membership.CreatedBy,
@@ -801,7 +710,6 @@ func (q *Queries) MembershipByExternalID(ctx context.Context, arg MembershipByEx
 		&i.User.PhotoKey,
 		&i.User.Theme,
 		&i.User.Language,
-		&i.User.HideDecorations,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
 	)
@@ -831,21 +739,6 @@ func (q *Queries) OrgsUsingScim(ctx context.Context) ([]uuid.UUID, error) {
 		return nil, err
 	}
 	return items, nil
-}
-
-const pauseGroupOffice = `-- name: PauseGroupOffice :exec
-UPDATE scim_group_offices SET paused = true WHERE org_id = $1 AND group_id = $2 AND office_id = $3
-`
-
-type PauseGroupOfficeParams struct {
-	OrgID    uuid.UUID
-	GroupID  uuid.UUID
-	OfficeID uuid.UUID
-}
-
-func (q *Queries) PauseGroupOffice(ctx context.Context, arg PauseGroupOfficeParams) error {
-	_, err := q.db.Exec(ctx, pauseGroupOffice, arg.OrgID, arg.GroupID, arg.OfficeID)
-	return err
 }
 
 const pruneScimLog = `-- name: PruneScimLog :exec
@@ -893,7 +786,7 @@ func (q *Queries) RevokeScimToken(ctx context.Context, arg RevokeScimTokenParams
 }
 
 const scimDrift = `-- name: ScimDrift :many
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_office_id, m.last_room_id, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.hide_decorations, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.external_id IS NOT NULL AND m.scim_active IS NOT NULL
   AND ((m.scim_active AND m.status = 'deactivated') OR (NOT m.scim_active AND m.status = 'active'))
@@ -933,8 +826,6 @@ func (q *Queries) ScimDrift(ctx context.Context, orgID uuid.UUID) ([]ScimDriftRo
 			&i.Membership.Country,
 			&i.Membership.City,
 			&i.Membership.Attributes,
-			&i.Membership.LastOfficeID,
-			&i.Membership.LastRoomID,
 			&i.Membership.LastActiveAt,
 			&i.Membership.DeactivatedAt,
 			&i.Membership.CreatedBy,
@@ -959,7 +850,6 @@ func (q *Queries) ScimDrift(ctx context.Context, orgID uuid.UUID) ([]ScimDriftRo
 			&i.User.PhotoKey,
 			&i.User.Theme,
 			&i.User.Language,
-			&i.User.HideDecorations,
 			&i.User.DeletionRequestedAt,
 			&i.User.DeletionAfter,
 		); err != nil {
@@ -1052,7 +942,7 @@ func (q *Queries) ScimGroupSummaries(ctx context.Context, orgID uuid.UUID) ([]Sc
 }
 
 const scimMembership = `-- name: ScimMembership :one
-SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_office_id, m.last_room_id, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.hide_decorations, u.deletion_requested_at, u.deletion_after
+SELECT m.org_id, m.id, m.user_id, m.kind, m.role, m.status, m.source, m.idp_subject, m.job_title, m.department, m.division, m.manager, m.employee_type, m.location, m.country, m.city, m.attributes, m.last_active_at, m.deactivated_at, m.created_by, m.created_at, m.last_modified_by, m.last_modified_at, m.external_id, m.scim, m.scim_active, m.anonymised_at, u.id, u.email, u.name, u.deleted_at, u.created_by, u.created_at, u.last_modified_by, u.last_modified_at, u.display_name, u.time_zone, u.working_hours, u.photo_key, u.theme, u.language, u.deletion_requested_at, u.deletion_after
 FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.id = $2 AND m.kind = 'member' AND m.status <> 'left'
   AND coalesce((m.scim ->> '_deleted')::boolean, false) = false
@@ -1090,8 +980,6 @@ func (q *Queries) ScimMembership(ctx context.Context, arg ScimMembershipParams) 
 		&i.Membership.Country,
 		&i.Membership.City,
 		&i.Membership.Attributes,
-		&i.Membership.LastOfficeID,
-		&i.Membership.LastRoomID,
 		&i.Membership.LastActiveAt,
 		&i.Membership.DeactivatedAt,
 		&i.Membership.CreatedBy,
@@ -1116,7 +1004,6 @@ func (q *Queries) ScimMembership(ctx context.Context, arg ScimMembershipParams) 
 		&i.User.PhotoKey,
 		&i.User.Theme,
 		&i.User.Language,
-		&i.User.HideDecorations,
 		&i.User.DeletionRequestedAt,
 		&i.User.DeletionAfter,
 	)
@@ -1153,22 +1040,6 @@ func (q *Queries) ScimTokenByHash(ctx context.Context, arg ScimTokenByHashParams
 	return i, err
 }
 
-const setGroupOffice = `-- name: SetGroupOffice :exec
-INSERT INTO scim_group_offices (org_id, group_id, office_id) VALUES ($1, $2, $3)
-ON CONFLICT (org_id, group_id, office_id) DO UPDATE SET paused = false
-`
-
-type SetGroupOfficeParams struct {
-	OrgID    uuid.UUID
-	GroupID  uuid.UUID
-	OfficeID uuid.UUID
-}
-
-func (q *Queries) SetGroupOffice(ctx context.Context, arg SetGroupOfficeParams) error {
-	_, err := q.db.Exec(ctx, setGroupOffice, arg.OrgID, arg.GroupID, arg.OfficeID)
-	return err
-}
-
 const setMembershipScim = `-- name: SetMembershipScim :one
 UPDATE memberships
 SET external_id   = $1,
@@ -1184,7 +1055,7 @@ SET external_id   = $1,
     city          = $11,
     attributes    = $12
 WHERE org_id = $13 AND id = $14
-RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_office_id, last_room_id, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
+RETURNING org_id, id, user_id, kind, role, status, source, idp_subject, job_title, department, division, manager, employee_type, location, country, city, attributes, last_active_at, deactivated_at, created_by, created_at, last_modified_by, last_modified_at, external_id, scim, scim_active, anonymised_at
 `
 
 type SetMembershipScimParams struct {
@@ -1242,8 +1113,6 @@ func (q *Queries) SetMembershipScim(ctx context.Context, arg SetMembershipScimPa
 		&i.Country,
 		&i.City,
 		&i.Attributes,
-		&i.LastOfficeID,
-		&i.LastRoomID,
 		&i.LastActiveAt,
 		&i.DeactivatedAt,
 		&i.CreatedBy,

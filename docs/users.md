@@ -12,7 +12,7 @@ the engine from; the open-source app has none of it.
 | --- | --- | --- |
 | Entra (or any IdP) org | anyone who authenticates through the org's provider, on first sign-in, as a User. The provider is the gate; nobody is asked for an invite | `POST /v1/internal/sign-ins` (identity service) |
 | local-account org | invite, bulk import, or the self-serve Owner who created the org | `POST /v1/internal/memberships` with `source` (services) |
-| guests, any org | a room invite only | `POST /v1/internal/memberships` with `kind: guest, source: room_invite` |
+| guests, any org | a product service, for a collaborator from outside the org | `POST /v1/internal/memberships` with `kind: guest` |
 
 Both endpoints find the user by email first, so a second org inviting a
 known address gets a second membership, never a second account. Both read
@@ -26,11 +26,8 @@ city, custom attributes) and the person's name; attributes it did not send
 are kept. A deactivated or suspended membership refuses the sign-in
 (`membership.inactive`) rather than making a new one.
 
-## Where they were
+## Most recently active
 
-The engine's identity adapter writes `last_office_id` and `last_room_id`
-as a person moves (`PUT /v1/internal/organizations/{org}/memberships/{id}/presence`,
-realtime only). The next sign-in or reload reads it and puts them back.
 `last_active_at` orders a person's memberships, which is how the identity
 service picks the org a sign-in lands in.
 
@@ -93,8 +90,6 @@ Otherwise the valid rows are sent invites through the identity service
 password like anyone invited) and a refusal from it is reported on the
 row. Partial success is the rule: valid rows go, invalid rows are
 reported, nothing is silently dropped. Audited as `users.imported`.
-
-Offices are not imported here; they do not exist until the office stories.
 
 ## Not in this schema
 

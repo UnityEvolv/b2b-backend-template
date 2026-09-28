@@ -638,7 +638,6 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 		DisplayName string      `json:"display_name"`
 		ExternalID  *string     `json:"external_id,omitempty"`
 		Members     []uuid.UUID `json:"membership_ids"`
-		Offices     []uuid.UUID `json:"office_ids"`
 	}
 	out := struct {
 		Memberships []exportedMembership `json:"memberships"`
@@ -661,7 +660,7 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 		}
 		byID := map[uuid.UUID]*group{}
 		for _, g := range groups {
-			item := &group{ID: g.ID, DisplayName: g.DisplayName, ExternalID: textOf(g.ExternalID), Members: []uuid.UUID{}, Offices: []uuid.UUID{}}
+			item := &group{ID: g.ID, DisplayName: g.DisplayName, ExternalID: textOf(g.ExternalID), Members: []uuid.UUID{}}
 			byID[g.ID] = item
 			out.Groups = append(out.Groups, item)
 		}
@@ -672,15 +671,6 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 		for _, m := range members {
 			if g := byID[m.GroupID]; g != nil {
 				g.Members = append(g.Members, m.MembershipID)
-			}
-		}
-		offices, err := q.ListGroupOffices(ctx, org)
-		if err != nil {
-			return err
-		}
-		for _, o := range offices {
-			if g := byID[o.GroupID]; g != nil {
-				g.Offices = append(g.Offices, o.OfficeID)
 			}
 		}
 		return nil
@@ -712,7 +702,7 @@ func (s *Server) PurgeOrgData(ctx context.Context, req api.PurgeOrgDataRequestOb
 	err := s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		for _, step := range []func(context.Context, uuid.UUID) (int64, error){
-			q.DeleteScimGroupMembersOfOrg, q.DeleteScimGroupOfficesOfOrg, q.DeleteScimGroupsOfOrg,
+			q.DeleteScimGroupMembersOfOrg, q.DeleteScimGroupsOfOrg,
 			q.DeleteScimLogOfOrg, q.DeleteScimStateOfOrg, q.DeleteScimTokensOfOrg,
 		} {
 			if _, err := step(ctx, org); err != nil {
@@ -771,7 +761,6 @@ func (s *Server) ExportUserData(ctx context.Context, req api.ExportUserDataReque
 		WorkingHours        json.RawMessage `json:"working_hours,omitempty"`
 		Theme               string          `json:"theme"`
 		Language            *string         `json:"language,omitempty"`
-		HideDecorations     bool            `json:"hide_decorations"`
 		CreatedAt           time.Time       `json:"created_at"`
 		DeletionRequestedAt *time.Time      `json:"deletion_requested_at,omitempty"`
 		DeletionAfter       *time.Time      `json:"deletion_after,omitempty"`
@@ -792,7 +781,7 @@ func (s *Server) ExportUserData(ctx context.Context, req api.ExportUserDataReque
 		}
 		out.User = &profile{
 			ID: u.ID, Email: u.Email, Name: u.Name, DisplayName: textOf(u.DisplayName), TimeZone: textOf(u.TimeZone),
-			Theme: u.Theme, Language: textOf(u.Language), HideDecorations: u.HideDecorations, CreatedAt: u.CreatedAt.UTC(),
+			Theme: u.Theme, Language: textOf(u.Language), CreatedAt: u.CreatedAt.UTC(),
 			DeletionRequestedAt: timeOf(u.DeletionRequestedAt), DeletionAfter: timeOf(u.DeletionAfter),
 		}
 		if len(u.WorkingHours) > 0 {

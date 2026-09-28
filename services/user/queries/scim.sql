@@ -169,7 +169,7 @@ DELETE FROM scim_group_members WHERE org_id = @org_id AND group_id = @group_id A
 DELETE FROM scim_group_members WHERE org_id = @org_id AND group_id = @group_id;
 
 -- name: GroupMembersForSync :many
--- Who a group grants its offices to: everyone in it still in the org. A
+-- Who a group grants to: everyone in it still in the org. A
 -- deactivated person keeps the grant, so a reactivation finds it intact.
 SELECT m.id, m.user_id
 FROM scim_group_members g JOIN memberships m ON m.org_id = g.org_id AND m.id = g.membership_id
@@ -183,22 +183,6 @@ SELECT g.id, g.display_name, g.external_id,
 FROM scim_groups g
 WHERE g.org_id = @org_id
 ORDER BY lower(g.display_name), g.id;
-
--- name: ListGroupOffices :many
-SELECT * FROM scim_group_offices WHERE org_id = @org_id ORDER BY group_id, office_id;
-
--- name: ListOfficesOfGroup :many
-SELECT * FROM scim_group_offices WHERE org_id = @org_id AND group_id = @group_id ORDER BY office_id;
-
--- name: SetGroupOffice :exec
-INSERT INTO scim_group_offices (org_id, group_id, office_id) VALUES (@org_id, @group_id, @office_id)
-ON CONFLICT (org_id, group_id, office_id) DO UPDATE SET paused = false;
-
--- name: DeleteGroupOffice :exec
-DELETE FROM scim_group_offices WHERE org_id = @org_id AND group_id = @group_id AND office_id = @office_id;
-
--- name: PauseGroupOffice :exec
-UPDATE scim_group_offices SET paused = true WHERE org_id = @org_id AND group_id = @group_id AND office_id = @office_id;
 
 -- name: InsertScimLog :exec
 INSERT INTO scim_log (org_id, id, operation, membership_id, group_id, outcome, error, details)

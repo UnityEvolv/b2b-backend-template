@@ -29,8 +29,6 @@ type Membership struct {
 	Country        pgtype.Text
 	City           pgtype.Text
 	Attributes     []byte
-	LastOfficeID   pgtype.UUID
-	LastRoomID     pgtype.Text
 	LastActiveAt   pgtype.Timestamptz
 	DeactivatedAt  pgtype.Timestamptz
 	CreatedBy      string
@@ -58,17 +56,6 @@ type ScimGroupMember struct {
 	OrgID          uuid.UUID
 	GroupID        uuid.UUID
 	MembershipID   uuid.UUID
-	CreatedBy      string
-	CreatedAt      time.Time
-	LastModifiedBy string
-	LastModifiedAt time.Time
-}
-
-type ScimGroupOffice struct {
-	OrgID          uuid.UUID
-	GroupID        uuid.UUID
-	OfficeID       uuid.UUID
-	Paused         bool
 	CreatedBy      string
 	CreatedAt      time.Time
 	LastModifiedBy string
@@ -133,7 +120,6 @@ type User struct {
 	PhotoKey            pgtype.Text
 	Theme               string
 	Language            pgtype.Text
-	HideDecorations     bool
 	DeletionRequestedAt pgtype.Timestamptz
 	DeletionAfter       pgtype.Timestamptz
 }

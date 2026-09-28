@@ -299,8 +299,8 @@ func RequireOrgOrPlatform(ctx context.Context, orgID string) error {
 
 // serviceOnly are the services that call others but own no database schema,
 // so they are not in pkg/db.Services: a product's own service written in
-// another language, say.
-var serviceOnly = []string{"realtime"}
+// another language, say. The template has none.
+var serviceOnly = []string{}
 
 // KnownService reports whether name is a service of the platform, and so may
 // hold a service token.

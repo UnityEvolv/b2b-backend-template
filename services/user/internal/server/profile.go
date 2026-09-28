@@ -73,7 +73,7 @@ func (s *Server) profile(ctx context.Context, u store.User) api.User {
 		}
 	}
 	out.PhotoUrl = s.photoURL(ctx, u.PhotoKey)
-	prefs := api.Preferences{Theme: api.PreferencesTheme(u.Theme), HideDecorations: u.HideDecorations}
+	prefs := api.Preferences{Theme: api.PreferencesTheme(u.Theme)}
 	if u.Language.Valid {
 		prefs.Language.Set(u.Language.String)
 	}
@@ -129,7 +129,7 @@ func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequest
 	fields := map[string]string{}
 	params := store.UpdateProfileParams{
 		ID: userID, DisplayName: current.DisplayName, TimeZone: current.TimeZone, WorkingHours: current.WorkingHours,
-		Theme: current.Theme, Language: current.Language, HideDecorations: current.HideDecorations,
+		Theme: current.Theme, Language: current.Language,
 	}
 	if body.Theme != nil {
 		switch *body.Theme {
@@ -138,9 +138,6 @@ func (s *Server) UpdateProfile(ctx context.Context, req api.UpdateProfileRequest
 		default:
 			fields["theme"] = "light, dark or system"
 		}
-	}
-	if body.HideDecorations != nil {
-		params.HideDecorations = *body.HideDecorations
 	}
 	if body.Language.IsSpecified() {
 		params.Language = pgtype.Text{}

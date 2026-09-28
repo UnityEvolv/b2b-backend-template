@@ -83,17 +83,9 @@ type fixture struct {
 	recorder *memoryRecorder
 	grants   authz.Static
 	sessions *memorySessions
-	mates    roomMates
 	srv      *server.Server
-	offices  *fakeOffices
+	groups   *fakeGroupSync
 	notices  *memoryNotices
-}
-
-// roomMates is the messaging service: who has been in a room with whom.
-type roomMates map[string][]uuid.UUID
-
-func (r roomMates) RoomMates(_ context.Context, _, membershipID uuid.UUID) ([]uuid.UUID, error) {
-	return r[membershipID.String()], nil
 }
 
 // memorySessions is the identity service, remembering which memberships it
@@ -172,14 +164,13 @@ func newAPI(t *testing.T) *fixture {
 			t.Fatal(err)
 		}
 	}
-	mates := roomMates{}
-	offices, notices := newFakeOffices(), &memoryNotices{}
-	srv := server.New(db.SingleShard(pool), logger, recorder, plans{}, grants, sessions, sessions, uploads).WithRoomMates(mates).
-		WithOffices(offices).WithNotifier(notices)
+	groups, notices := newFakeGroupSync(), &memoryNotices{}
+	srv := server.New(db.SingleShard(pool), logger, recorder, plans{}, grants, sessions, sessions, uploads).
+		WithGroupSync(groups).WithNotifier(notices)
 	root.Handle("/scim/", srv.SCIM(nil))
 	root.Handle("/", auth.Require(verifier, srv.Handler(httpx.NewMux())))
-	return &fixture{h: httpx.Logged(logger, root), issuer: issuer, recorder: recorder, grants: grants, sessions: sessions, mates: mates,
-		srv: srv, offices: offices, notices: notices}
+	return &fixture{h: httpx.Logged(logger, root), issuer: issuer, recorder: recorder, grants: grants, sessions: sessions,
+		srv: srv, groups: groups, notices: notices}
 }
 
 func (f *fixture) service(t *testing.T, name string) string {

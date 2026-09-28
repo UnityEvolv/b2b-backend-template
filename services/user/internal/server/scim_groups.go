@@ -15,9 +15,9 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// SCIM groups (UO-181): stored per org with their members, as the provider
-// sends them. A group is a fact about who is in what; what it does is feed
-// the offices an admin maps it to.
+// SCIM groups: stored per org with their members, as the provider sends
+// them. A group is a fact about who is in what; what it grants is the
+// product's, through GroupSync.
 
 var errNoGroup = &scimProblem{status: http.StatusNotFound, detail: "No such group."}
 
@@ -239,6 +239,12 @@ func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request, org uui
 		return err
 	}
 	s.scimLog(ctx, org, "create group", nil, &id, "ok", "", map[string]any{"group": g.DisplayName, "members": len(members)})
+	if len(members) > 0 {
+		if _, err := s.syncGroup(ctx, org, id, "scim"); err != nil {
+			// The group is stored; what it grants catches up at the next sync.
+			s.logger.Warn("group not carried to what it grants", "org_id", org, "group_id", id, "error", err)
+		}
+	}
 	w.Header().Set("Location", s.scimBase(org)+"/Groups/"+id.String())
 	writeSCIM(w, http.StatusCreated, s.groupResource(g, members, true))
 	return nil
@@ -277,8 +283,8 @@ func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request, org uuid
 	})
 }
 
-// scimUpdateGroup writes a group, then carries its members to the offices
-// it feeds. A PATCH answers 204, as Entra expects; a PUT the group.
+// scimUpdateGroup writes a group, then carries its members to what it
+// grants. A PATCH answers 204, as Entra expects; a PUT the group.
 func (s *Server) scimUpdateGroup(w http.ResponseWriter, r *http.Request, org uuid.UUID, operation string, respond bool, change func(groupState) (groupState, error)) error {
 	ctx := r.Context()
 	id, err := uuid.Parse(r.PathValue("id"))
@@ -337,8 +343,8 @@ func (s *Server) scimUpdateGroup(w http.ResponseWriter, r *http.Request, org uui
 	s.scimLog(ctx, org, operation, nil, &id, "ok", "", map[string]any{"group": g.DisplayName, "added": added, "removed": removed})
 	if added > 0 || removed > 0 {
 		if _, err := s.syncGroup(ctx, org, id, "scim"); err != nil {
-			// The group is stored; the offices catch up at the next sync.
-			s.logger.Warn("group not carried to its offices", "org_id", org, "group_id", id, "error", err)
+			// The group is stored; what it grants catches up at the next sync.
+			s.logger.Warn("group not carried to what it grants", "org_id", org, "group_id", id, "error", err)
 		}
 	}
 	if !respond {
@@ -349,8 +355,8 @@ func (s *Server) scimUpdateGroup(w http.ResponseWriter, r *http.Request, org uui
 	return nil
 }
 
-// scimDeleteGroup empties the group first, so the offices it fed lose what
-// it granted, and removes it once that is done. If emptying it would take
+// scimDeleteGroup empties the group first, so its members lose what it
+// granted, and removes it once that is done. If emptying it would take
 // too many people out at once, the sync halts and the group stays, empty,
 // until an admin decides.
 func (s *Server) scimDeleteGroup(w http.ResponseWriter, r *http.Request, org uuid.UUID) error {

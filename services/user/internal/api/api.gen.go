@@ -61,12 +61,11 @@ func (e MembershipKind) Valid() bool {
 
 // Defines values for MembershipSource.
 const (
-	Idp        MembershipSource = "idp"
-	Import     MembershipSource = "import"
-	Invite     MembershipSource = "invite"
-	Owner      MembershipSource = "owner"
-	RoomInvite MembershipSource = "room_invite"
-	Scim       MembershipSource = "scim"
+	Idp    MembershipSource = "idp"
+	Import MembershipSource = "import"
+	Invite MembershipSource = "invite"
+	Owner  MembershipSource = "owner"
+	Scim   MembershipSource = "scim"
 )
 
 // Valid indicates whether the value is a known member of the MembershipSource enum.
@@ -79,8 +78,6 @@ func (e MembershipSource) Valid() bool {
 	case Invite:
 		return true
 	case Owner:
-		return true
-	case RoomInvite:
 		return true
 	case Scim:
 		return true
@@ -388,14 +385,12 @@ type Membership struct {
 	Directory Directory          `json:"directory"`
 	Id        openapi_types.UUID `json:"id"`
 
-	// Kind member is an employee of the org; guest was invited into one room.
-	Kind           MembershipKind      `json:"kind"`
-	LastActiveAt   *time.Time          `json:"last_active_at,omitempty"`
-	LastModifiedAt time.Time           `json:"last_modified_at"`
-	LastOfficeId   *openapi_types.UUID `json:"last_office_id,omitempty"`
-	LastRoomId     *string             `json:"last_room_id,omitempty"`
-	OrgId          openapi_types.UUID  `json:"org_id"`
-	Role           string              `json:"role"`
+	// Kind member is an employee of the org; guest is a limited collaborator from outside it, who does not count toward the plan's user cap.
+	Kind           MembershipKind     `json:"kind"`
+	LastActiveAt   *time.Time         `json:"last_active_at,omitempty"`
+	LastModifiedAt time.Time          `json:"last_modified_at"`
+	OrgId          openapi_types.UUID `json:"org_id"`
+	Role           string             `json:"role"`
 
 	// Source How the membership came to exist.
 	Source MembershipSource `json:"source"`
@@ -405,20 +400,7 @@ type Membership struct {
 	User   User             `json:"user"`
 }
 
-// MembershipCard defines model for MembershipCard.
-type MembershipCard struct {
-	// DisplayName The name the person chose, else their account name.
-	DisplayName string `json:"display_name"`
-
-	// Guest Someone from outside the org, on a room invite.
-	Guest bool `json:"guest"`
-
-	// PhotoUrl A signed link that expires. Absent when there is no photo.
-	PhotoUrl *string            `json:"photo_url,omitempty"`
-	UserId   openapi_types.UUID `json:"user_id"`
-}
-
-// MembershipKind member is an employee of the org; guest was invited into one room.
+// MembershipKind member is an employee of the org; guest is a limited collaborator from outside it, who does not count toward the plan's user cap.
 type MembershipKind string
 
 // MembershipPage defines model for MembershipPage.
@@ -437,7 +419,7 @@ type MembershipStatus string
 type NewMembership struct {
 	Email string `json:"email"`
 
-	// Kind member is an employee of the org; guest was invited into one room.
+	// Kind member is an employee of the org; guest is a limited collaborator from outside it, who does not count toward the plan's user cap.
 	Kind *MembershipKind `json:"kind,omitempty"`
 
 	// Name Used when the user does not exist yet; the email's local part otherwise.
@@ -461,8 +443,6 @@ type NewScimToken struct {
 
 // Preferences Appearance, stored on the user so it follows the person to every device.
 type Preferences struct {
-	HideDecorations bool `json:"hide_decorations"`
-
 	// Language A BCP 47 tag, or null to follow the device.
 	Language nullable.Nullable[string] `json:"language,omitempty"`
 	Theme    PreferencesTheme          `json:"theme"`
@@ -471,22 +451,13 @@ type Preferences struct {
 // PreferencesTheme defines model for Preferences.Theme.
 type PreferencesTheme string
 
-// Presence defines model for Presence.
-type Presence struct {
-	OfficeId openapi_types.UUID `json:"office_id"`
-
-	// RoomId null when the person is in the office but no room.
-	RoomId nullable.Nullable[string] `json:"room_id,omitempty"`
-}
-
 // ProfileUpdate Only the fields sent change; null clears one.
 type ProfileUpdate struct {
-	DisplayName     nullable.Nullable[string]       `json:"display_name,omitempty"`
-	HideDecorations *bool                           `json:"hide_decorations,omitempty"`
-	Language        nullable.Nullable[string]       `json:"language,omitempty"`
-	Theme           *ProfileUpdateTheme             `json:"theme,omitempty"`
-	TimeZone        nullable.Nullable[string]       `json:"time_zone,omitempty"`
-	WorkingHours    nullable.Nullable[WorkingHours] `json:"working_hours,omitempty"`
+	DisplayName  nullable.Nullable[string]       `json:"display_name,omitempty"`
+	Language     nullable.Nullable[string]       `json:"language,omitempty"`
+	Theme        *ProfileUpdateTheme             `json:"theme,omitempty"`
+	TimeZone     nullable.Nullable[string]       `json:"time_zone,omitempty"`
+	WorkingHours nullable.Nullable[WorkingHours] `json:"working_hours,omitempty"`
 }
 
 // ProfileUpdateTheme defines model for ProfileUpdate.Theme.
@@ -497,20 +468,11 @@ type ScimGroupList struct {
 	Groups []ScimGroupSummary `json:"groups"`
 }
 
-// ScimGroupOffice defines model for ScimGroupOffice.
-type ScimGroupOffice struct {
-	OfficeId openapi_types.UUID `json:"office_id"`
-
-	// Paused Stopped by a dismissed halt until the mapping is saved again.
-	Paused bool `json:"paused"`
-}
-
 // ScimGroupSummary defines model for ScimGroupSummary.
 type ScimGroupSummary struct {
 	DisplayName string             `json:"display_name"`
 	Id          openapi_types.UUID `json:"id"`
 	Members     int                `json:"members"`
-	Offices     []ScimGroupOffice  `json:"offices"`
 }
 
 // ScimHalt defines model for ScimHalt.
@@ -526,9 +488,8 @@ type ScimHaltedChange struct {
 	GroupName *string              `json:"group_name,omitempty"`
 	Kind      ScimHaltedChangeKind `json:"kind"`
 
-	// Memberships Who would lose the offices, or be deactivated.
-	Memberships []openapi_types.UUID  `json:"memberships"`
-	OfficeIds   *[]openapi_types.UUID `json:"office_ids,omitempty"`
+	// Memberships Who would lose what the group grants, or be deactivated.
+	Memberships []openapi_types.UUID `json:"memberships"`
 }
 
 // ScimHaltedChangeKind defines model for ScimHaltedChange.Kind.
@@ -747,17 +708,6 @@ type SetMembershipStatusJSONBody struct {
 	Status MembershipStatus `json:"status"`
 }
 
-// ListScimGroupsParams defines parameters for ListScimGroups.
-type ListScimGroupsParams struct {
-	// OfficeId Only the groups that feed this office.
-	OfficeId *openapi_types.UUID `form:"office_id,omitempty" json:"office_id,omitempty"`
-}
-
-// SetScimGroupOfficesJSONBody defines parameters for SetScimGroupOffices.
-type SetScimGroupOfficesJSONBody struct {
-	OfficeIds []openapi_types.UUID `json:"office_ids"`
-}
-
 // ResolveScimHaltJSONBody defines parameters for ResolveScimHalt.
 type ResolveScimHaltJSONBody struct {
 	Action ResolveScimHaltJSONBodyAction `json:"action"`
@@ -773,9 +723,6 @@ type ScheduleUserDeletionJSONBody struct {
 
 // CreateMembershipJSONRequestBody defines body for CreateMembership for application/json ContentType.
 type CreateMembershipJSONRequestBody = NewMembership
-
-// SetMembershipPresenceJSONRequestBody defines body for SetMembershipPresence for application/json ContentType.
-type SetMembershipPresenceJSONRequestBody = Presence
 
 // SetMembershipRoleJSONRequestBody defines body for SetMembershipRole for application/json ContentType.
 type SetMembershipRoleJSONRequestBody SetMembershipRoleJSONBody
@@ -804,9 +751,6 @@ type ReadImportColumnsMultipartRequestBody ReadImportColumnsMultipartBody
 // SetMembershipStatusJSONRequestBody defines body for SetMembershipStatus for application/json ContentType.
 type SetMembershipStatusJSONRequestBody SetMembershipStatusJSONBody
 
-// SetScimGroupOfficesJSONRequestBody defines body for SetScimGroupOffices for application/json ContentType.
-type SetScimGroupOfficesJSONRequestBody SetScimGroupOfficesJSONBody
-
 // ResolveScimHaltJSONRequestBody defines body for ResolveScimHalt for application/json ContentType.
 type ResolveScimHaltJSONRequestBody ResolveScimHaltJSONBody
 
@@ -815,7 +759,7 @@ type ScheduleUserDeletionJSONRequestBody ScheduleUserDeletionJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// CreateMembership A membership from an invite, an import, the self-serve owner or a room invite (services only)
+	// CreateMembership A membership from an invite, an import or the self-serve owner (services only)
 	// (POST /v1/internal/memberships)
 	CreateMembership(w http.ResponseWriter, r *http.Request, params CreateMembershipParams)
 	// PurgeOrgData Delete everything this service keeps for an org, and count what is left (the organization service only)
@@ -833,12 +777,6 @@ type ServerInterface interface {
 	// RecordMembershipActivity The person is active in this org now (identity service only)
 	// (POST /v1/internal/organizations/{org_id}/memberships/{membership_id}/activity)
 	RecordMembershipActivity(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId)
-	// GetMembershipCard The name and photo presence shows for a membership (realtime only)
-	// (GET /v1/internal/organizations/{org_id}/memberships/{membership_id}/card)
-	GetMembershipCard(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId)
-	// SetMembershipPresence Where the person is now, from the engine's identity adapter (realtime only)
-	// (PUT /v1/internal/organizations/{org_id}/memberships/{membership_id}/presence)
-	SetMembershipPresence(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId)
 	// SetMembershipRole Give a membership another org role (authorization service only)
 	// (PUT /v1/internal/organizations/{org_id}/memberships/{membership_id}/role)
 	SetMembershipRole(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId)
@@ -899,12 +837,9 @@ type ServerInterface interface {
 	// GetScimSettings The org's SCIM setup, status and any halted change
 	// (GET /v1/organizations/{org_id}/scim)
 	GetScimSettings(w http.ResponseWriter, r *http.Request, orgId OrgId)
-	// ListScimGroups The groups the provider has pushed, with the offices each feeds
+	// ListScimGroups The groups the provider has pushed, with their member counts
 	// (GET /v1/organizations/{org_id}/scim/groups)
-	ListScimGroups(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListScimGroupsParams)
-	// SetScimGroupOffices The offices a group feeds, replacing the list
-	// (PUT /v1/organizations/{org_id}/scim/groups/{group_id}/offices)
-	SetScimGroupOffices(w http.ResponseWriter, r *http.Request, orgId OrgId, groupId openapi_types.UUID)
+	ListScimGroups(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// ResolveScimHalt Apply or dismiss the halted change
 	// (POST /v1/organizations/{org_id}/scim/halt)
 	ResolveScimHalt(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1122,76 +1057,6 @@ func (siw *ServerInterfaceWrapper) RecordMembershipActivity(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RecordMembershipActivity(w, r, orgId, membershipId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetMembershipCard operation middleware
-func (siw *ServerInterfaceWrapper) GetMembershipCard(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "membership_id" -------------
-	var membershipId MembershipId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "membership_id", r.PathValue("membership_id"), &membershipId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membership_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetMembershipCard(w, r, orgId, membershipId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetMembershipPresence operation middleware
-func (siw *ServerInterfaceWrapper) SetMembershipPresence(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "membership_id" -------------
-	var membershipId MembershipId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "membership_id", r.PathValue("membership_id"), &membershipId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membership_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetMembershipPresence(w, r, orgId, membershipId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1856,59 +1721,8 @@ func (siw *ServerInterfaceWrapper) ListScimGroups(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListScimGroupsParams
-
-	// ------------- Optional query parameter "office_id" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "office_id", r.URL.Query(), &params.OfficeId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "office_id"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "office_id", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListScimGroups(w, r, orgId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetScimGroupOffices operation middleware
-func (siw *ServerInterfaceWrapper) SetScimGroupOffices(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "group_id" -------------
-	var groupId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "group_id", r.PathValue("group_id"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetScimGroupOffices(w, r, orgId, groupId)
+		siw.Handler.ListScimGroups(w, r, orgId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2193,14 +2007,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/memberships/{membership_id}/activity", wrapper.RecordMembershipActivity)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/memberships/{membership_id}/role", wrapper.SetMembershipRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/users/{user_id}/memberships", wrapper.ListUserMemberships)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/memberships/{membership_id}/presence", wrapper.SetMembershipPresence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/member-count", wrapper.CountMembers)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/memberships/{membership_id}/card", wrapper.GetMembershipCard)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/scim", wrapper.GetScimSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/tokens", wrapper.CreateScimToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/tokens/{token_id}", wrapper.RevokeScimToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/groups", wrapper.ListScimGroups)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/groups/{group_id}/offices", wrapper.SetScimGroupOffices)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/log", wrapper.GetScimLog)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/scim/halt", wrapper.ResolveScimHalt)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/me/deletion", wrapper.CancelAccountDeletion)
@@ -2608,165 +2419,6 @@ type RecordMembershipActivitydefaultJSONResponse struct {
 }
 
 func (response RecordMembershipActivitydefaultJSONResponse) VisitRecordMembershipActivityResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetMembershipCardRequestObject struct {
-	OrgId        OrgId        `json:"org_id"`
-	MembershipId MembershipId `json:"membership_id"`
-}
-
-type GetMembershipCardResponseObject interface {
-	VisitGetMembershipCardResponse(w http.ResponseWriter) error
-}
-
-type GetMembershipCard200JSONResponse MembershipCard
-
-func (response GetMembershipCard200JSONResponse) VisitGetMembershipCardResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetMembershipCard401JSONResponse struct{ ErrorJSONResponse }
-
-func (response GetMembershipCard401JSONResponse) VisitGetMembershipCardResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetMembershipCard403JSONResponse Error
-
-func (response GetMembershipCard403JSONResponse) VisitGetMembershipCardResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetMembershipCard404JSONResponse Error
-
-func (response GetMembershipCard404JSONResponse) VisitGetMembershipCardResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetMembershipCarddefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response GetMembershipCarddefaultJSONResponse) VisitGetMembershipCardResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetMembershipPresenceRequestObject struct {
-	OrgId        OrgId        `json:"org_id"`
-	MembershipId MembershipId `json:"membership_id"`
-	Body         *SetMembershipPresenceJSONRequestBody
-}
-
-type SetMembershipPresenceResponseObject interface {
-	VisitSetMembershipPresenceResponse(w http.ResponseWriter) error
-}
-
-type SetMembershipPresence204Response struct {
-}
-
-func (response SetMembershipPresence204Response) VisitSetMembershipPresenceResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type SetMembershipPresence401JSONResponse struct{ ErrorJSONResponse }
-
-func (response SetMembershipPresence401JSONResponse) VisitSetMembershipPresenceResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetMembershipPresence403JSONResponse Error
-
-func (response SetMembershipPresence403JSONResponse) VisitSetMembershipPresenceResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetMembershipPresence404JSONResponse Error
-
-func (response SetMembershipPresence404JSONResponse) VisitSetMembershipPresenceResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetMembershipPresencedefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response SetMembershipPresencedefaultJSONResponse) VisitSetMembershipPresenceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4453,8 +4105,7 @@ func (response GetScimSettingsdefaultJSONResponse) VisitGetScimSettingsResponse(
 }
 
 type ListScimGroupsRequestObject struct {
-	OrgId  OrgId `json:"org_id"`
-	Params ListScimGroupsParams
+	OrgId OrgId `json:"org_id"`
 }
 
 type ListScimGroupsResponseObject interface {
@@ -4495,89 +4146,6 @@ type ListScimGroupsdefaultJSONResponse struct {
 }
 
 func (response ListScimGroupsdefaultJSONResponse) VisitListScimGroupsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetScimGroupOfficesRequestObject struct {
-	OrgId   OrgId              `json:"org_id"`
-	GroupId openapi_types.UUID `json:"group_id"`
-	Body    *SetScimGroupOfficesJSONRequestBody
-}
-
-type SetScimGroupOfficesResponseObject interface {
-	VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error
-}
-
-type SetScimGroupOffices200JSONResponse ScimGroupSummary
-
-func (response SetScimGroupOffices200JSONResponse) VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetScimGroupOffices400JSONResponse struct{ ErrorJSONResponse }
-
-func (response SetScimGroupOffices400JSONResponse) VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetScimGroupOffices403JSONResponse Error
-
-func (response SetScimGroupOffices403JSONResponse) VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetScimGroupOffices404JSONResponse Error
-
-func (response SetScimGroupOffices404JSONResponse) VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetScimGroupOfficesdefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response SetScimGroupOfficesdefaultJSONResponse) VisitSetScimGroupOfficesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4937,7 +4505,7 @@ func (response ScheduleUserDeletiondefaultJSONResponse) VisitScheduleUserDeletio
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// CreateMembership A membership from an invite, an import, the self-serve owner or a room invite (services only)
+	// CreateMembership A membership from an invite, an import or the self-serve owner (services only)
 	// (POST /v1/internal/memberships)
 	CreateMembership(ctx context.Context, request CreateMembershipRequestObject) (CreateMembershipResponseObject, error)
 	// PurgeOrgData Delete everything this service keeps for an org, and count what is left (the organization service only)
@@ -4955,12 +4523,6 @@ type StrictServerInterface interface {
 	// RecordMembershipActivity The person is active in this org now (identity service only)
 	// (POST /v1/internal/organizations/{org_id}/memberships/{membership_id}/activity)
 	RecordMembershipActivity(ctx context.Context, request RecordMembershipActivityRequestObject) (RecordMembershipActivityResponseObject, error)
-	// GetMembershipCard The name and photo presence shows for a membership (realtime only)
-	// (GET /v1/internal/organizations/{org_id}/memberships/{membership_id}/card)
-	GetMembershipCard(ctx context.Context, request GetMembershipCardRequestObject) (GetMembershipCardResponseObject, error)
-	// SetMembershipPresence Where the person is now, from the engine's identity adapter (realtime only)
-	// (PUT /v1/internal/organizations/{org_id}/memberships/{membership_id}/presence)
-	SetMembershipPresence(ctx context.Context, request SetMembershipPresenceRequestObject) (SetMembershipPresenceResponseObject, error)
 	// SetMembershipRole Give a membership another org role (authorization service only)
 	// (PUT /v1/internal/organizations/{org_id}/memberships/{membership_id}/role)
 	SetMembershipRole(ctx context.Context, request SetMembershipRoleRequestObject) (SetMembershipRoleResponseObject, error)
@@ -5021,12 +4583,9 @@ type StrictServerInterface interface {
 	// GetScimSettings The org's SCIM setup, status and any halted change
 	// (GET /v1/organizations/{org_id}/scim)
 	GetScimSettings(ctx context.Context, request GetScimSettingsRequestObject) (GetScimSettingsResponseObject, error)
-	// ListScimGroups The groups the provider has pushed, with the offices each feeds
+	// ListScimGroups The groups the provider has pushed, with their member counts
 	// (GET /v1/organizations/{org_id}/scim/groups)
 	ListScimGroups(ctx context.Context, request ListScimGroupsRequestObject) (ListScimGroupsResponseObject, error)
-	// SetScimGroupOffices The offices a group feeds, replacing the list
-	// (PUT /v1/organizations/{org_id}/scim/groups/{group_id}/offices)
-	SetScimGroupOffices(ctx context.Context, request SetScimGroupOfficesRequestObject) (SetScimGroupOfficesResponseObject, error)
 	// ResolveScimHalt Apply or dismiss the halted change
 	// (POST /v1/organizations/{org_id}/scim/halt)
 	ResolveScimHalt(ctx context.Context, request ResolveScimHaltRequestObject) (ResolveScimHaltResponseObject, error)
@@ -5241,67 +4800,6 @@ func (sh *strictHandler) RecordMembershipActivity(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RecordMembershipActivityResponseObject); ok {
 		if err := validResponse.VisitRecordMembershipActivityResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetMembershipCard operation middleware
-func (sh *strictHandler) GetMembershipCard(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId) {
-	var request GetMembershipCardRequestObject
-
-	request.OrgId = orgId
-	request.MembershipId = membershipId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetMembershipCard(ctx, request.(GetMembershipCardRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetMembershipCard")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetMembershipCardResponseObject); ok {
-		if err := validResponse.VisitGetMembershipCardResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SetMembershipPresence operation middleware
-func (sh *strictHandler) SetMembershipPresence(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId) {
-	var request SetMembershipPresenceRequestObject
-
-	request.OrgId = orgId
-	request.MembershipId = membershipId
-
-	var body SetMembershipPresenceJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetMembershipPresence(ctx, request.(SetMembershipPresenceRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetMembershipPresence")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetMembershipPresenceResponseObject); ok {
-		if err := validResponse.VisitSetMembershipPresenceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5887,11 +5385,10 @@ func (sh *strictHandler) GetScimSettings(w http.ResponseWriter, r *http.Request,
 }
 
 // ListScimGroups operation middleware
-func (sh *strictHandler) ListScimGroups(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListScimGroupsParams) {
+func (sh *strictHandler) ListScimGroups(w http.ResponseWriter, r *http.Request, orgId OrgId) {
 	var request ListScimGroupsRequestObject
 
 	request.OrgId = orgId
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListScimGroups(ctx, request.(ListScimGroupsRequestObject))
@@ -5906,40 +5403,6 @@ func (sh *strictHandler) ListScimGroups(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListScimGroupsResponseObject); ok {
 		if err := validResponse.VisitListScimGroupsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SetScimGroupOffices operation middleware
-func (sh *strictHandler) SetScimGroupOffices(w http.ResponseWriter, r *http.Request, orgId OrgId, groupId openapi_types.UUID) {
-	var request SetScimGroupOfficesRequestObject
-
-	request.OrgId = orgId
-	request.GroupId = groupId
-
-	var body SetScimGroupOfficesJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetScimGroupOffices(ctx, request.(SetScimGroupOfficesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetScimGroupOffices")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetScimGroupOfficesResponseObject); ok {
-		if err := validResponse.VisitSetScimGroupOfficesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -14,7 +14,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 )
 
-// What account deletion and org offboarding (UO-183, UO-184) need of other
+// What account deletion and org offboarding need of other
 // services, each over its API with this service's own token.
 
 // Accounts is the identity service's side of a person: deleting one ends
@@ -30,7 +30,7 @@ type OrgNames interface {
 }
 
 // Forgetter is a service that keeps something personal under a membership
-// (usage, calendar, notification) and deletes it for account deletion.
+// (notification, say) and deletes it for account deletion.
 type Forgetter interface {
 	Name() string
 	Forget(ctx context.Context, orgID, membershipID uuid.UUID) error

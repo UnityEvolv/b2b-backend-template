@@ -224,7 +224,7 @@ func (s *Server) recordCreated(ctx context.Context, m store.Membership) error {
 }
 
 // CreateMembership is the other ways in: an invite, a bulk import, the
-// self-serve owner, a room invite. Never a second account for a known email.
+// self-serve owner. Never a second account for a known email.
 func (s *Server) CreateMembership(ctx context.Context, req api.CreateMembershipRequestObject) (api.CreateMembershipResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.CreateMembership403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil
@@ -243,12 +243,9 @@ func (s *Server) CreateMembership(ctx context.Context, req api.CreateMembershipR
 		fields["kind"] = "member or guest"
 	}
 	switch body.Source {
-	case api.Invite, api.Import, api.Owner, api.RoomInvite:
+	case api.Invite, api.Import, api.Owner:
 	default:
-		fields["source"] = "invite, import, owner or room_invite"
-	}
-	if kind == string(api.Guest) && body.Source != api.RoomInvite {
-		fields["source"] = "a guest comes in only by room invite"
+		fields["source"] = "invite, import or owner"
 	}
 	// The role: from the caller, a fixed one; the self-serve owner is the
 	// Owner, a guest is a Guest.
@@ -377,34 +374,6 @@ func (s *Server) ListUserMemberships(ctx context.Context, req api.ListUserMember
 		return nil, err
 	}
 	return api.ListUserMemberships200JSONResponse{Memberships: s.withUser(all, user)}, nil
-}
-
-// SetMembershipPresence is where the person is, from the engine's identity
-// adapter, so a return puts them back.
-func (s *Server) SetMembershipPresence(ctx context.Context, req api.SetMembershipPresenceRequestObject) (api.SetMembershipPresenceResponseObject, error) {
-	if err := auth.RequireService(ctx, "realtime"); err != nil {
-		return api.SetMembershipPresence403JSONResponse{Code: httpx.CodeForbidden, Message: "The realtime service only."}, nil
-	}
-	params := store.SetMembershipPresenceParams{
-		OrgID: req.OrgId, ID: req.MembershipId,
-		OfficeID: pgtype.UUID{Bytes: req.Body.OfficeId, Valid: true},
-	}
-	if v, err := req.Body.RoomId.Get(); err == nil && v != "" {
-		params.RoomID = pgtype.Text{String: v, Valid: true}
-	}
-	var rows int64
-	err := s.cluster.Tx(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
-		var err error
-		rows, err = store.New(tx).SetMembershipPresence(ctx, params)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if rows == 0 {
-		return api.SetMembershipPresence404JSONResponse{Code: codeNotFound, Message: "No such membership."}, nil
-	}
-	return api.SetMembershipPresence204Response{}, nil
 }
 
 // GetMe is the caller: their user, and the membership their session carries.
@@ -660,38 +629,33 @@ func (s *Server) SetMembershipStatus(ctx context.Context, req api.SetMembershipS
 	return api.SetMembershipStatus200JSONResponse(toMembership(after, before.User)), nil
 }
 
-// GetMembershipCard is the name and photo the office shows for a membership.
-// The realtime service asks for it instead of believing the client, so a
-// person cannot appear in presence under a name they typed.
-func (s *Server) GetMembershipCard(ctx context.Context, req api.GetMembershipCardRequestObject) (api.GetMembershipCardResponseObject, error) {
-	if err := auth.RequireService(ctx, "realtime"); err != nil {
-		return api.GetMembershipCard403JSONResponse{Code: httpx.CodeForbidden, Message: "The realtime service only."}, nil
+// searchable is the memberships the caller may find: nil for everyone, or,
+// for a guest, only themselves. A guest is a collaborator from outside the
+// org and does not browse its people; a product that gives guests a wider
+// view widens this.
+func (s *Server) searchable(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
+	c, ok := auth.CallerFrom(ctx)
+	if !ok || c.IsService() || c.OrgID != orgID.String() {
+		return nil, nil
+	}
+	me, err := uuid.Parse(c.MembershipID)
+	if err != nil {
+		return []uuid.UUID{}, nil
 	}
 	var row store.GetMembershipRow
-	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
+	err = s.cluster.Read(ctx, orgID.String(), func(tx pgx.Tx) error {
 		var err error
-		row, err = store.New(tx).GetMembership(ctx, store.GetMembershipParams{OrgID: req.OrgId, ID: req.MembershipId})
+		row, err = store.New(tx).GetMembership(ctx, store.GetMembershipParams{OrgID: orgID, ID: me})
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return api.GetMembershipCard404JSONResponse{Code: codeNotFound, Message: "No such membership."}, nil
+		return []uuid.UUID{}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	name := strings.TrimSpace(row.User.Name)
-	if row.User.DisplayName.Valid && strings.TrimSpace(row.User.DisplayName.String) != "" {
-		name = strings.TrimSpace(row.User.DisplayName.String)
+	if row.Membership.Role != "guest" {
+		return nil, nil
 	}
-	if name == "" {
-		// An account with no name yet: the part of the address before the @,
-		// which the person owns, rather than the whole address in a room.
-		name, _, _ = strings.Cut(row.User.Email, "@")
-	}
-	return api.GetMembershipCard200JSONResponse{
-		UserId:      row.User.ID,
-		DisplayName: name,
-		Guest:       row.Membership.Kind == "guest",
-		PhotoUrl:    s.photoURL(ctx, row.User.PhotoKey),
-	}, nil
+	return []uuid.UUID{me}, nil
 }

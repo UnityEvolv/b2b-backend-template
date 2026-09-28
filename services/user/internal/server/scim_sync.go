@@ -18,13 +18,16 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// Group sync and reconciliation (UO-181). SCIM pushes are lost, duplicated
-// and reordered by every provider eventually, so what a group grants is
-// always sent to the office service whole, and a daily pass puts right what
-// drifted, in the provider's direction. A change that would take too much
-// of the org away at once is halted for an admin instead of applied.
+// Group sync and reconciliation. SCIM pushes are lost, duplicated and
+// reordered by every provider eventually, so what a group grants is always
+// handed to the product whole, and a daily pass puts right what drifted, in
+// the provider's direction. A change that would take too much of the org
+// away at once is halted for an admin instead of applied.
+//
+// The template stores groups and their members; what a group grants (a
+// team, a project, a workspace) is the product's, through GroupSync.
 
-// GroupMember is one person a group grants an office to.
+// GroupMember is one person in a group.
 type GroupMember struct {
 	MembershipID uuid.UUID `json:"membership_id"`
 	UserID       uuid.UUID `json:"user_id"`
@@ -36,18 +39,17 @@ type GroupSyncResult struct {
 	Removed []uuid.UUID `json:"removed"`
 }
 
-// ErrNoOffice means the office is not in the org.
-var ErrNoOffice = errors.New("no such office")
-
-// Offices is what this service needs of the office service: who a group
-// grants an office to.
-type Offices interface {
-	SyncGroup(ctx context.Context, org, office, group uuid.UUID, members []GroupMember, dryRun bool) (GroupSyncResult, error)
+// GroupSync is the hook a product implements to carry a SCIM group to what
+// it grants. Without one, groups are stored and grant nothing.
+type GroupSync interface {
+	// SyncGroup makes what the group grants match members exactly: the
+	// people added and removed. With dryRun it only says who would be.
+	SyncGroup(ctx context.Context, org, group uuid.UUID, members []GroupMember, dryRun bool) (GroupSyncResult, error)
 }
 
-// WithOffices is s, carrying groups to the offices they feed.
-func (s *Server) WithOffices(o Offices) *Server {
-	s.offices = o
+// WithGroupSync is s, carrying groups to what they grant through sync.
+func (s *Server) WithGroupSync(sync GroupSync) *Server {
+	s.groupSync = sync
 	return s
 }
 
@@ -113,12 +115,11 @@ func (s *Server) haltAbove(active int) int {
 
 // haltedChange is one change waiting for an admin.
 type haltedChange struct {
-	// group: a group's offices would lose these people. deactivate: the
-	// reconciliation would deactivate them.
+	// group: these people would lose what the group grants. deactivate:
+	// the reconciliation would deactivate them.
 	Kind        string      `json:"kind"`
 	GroupID     *uuid.UUID  `json:"group_id,omitempty"`
 	GroupName   string      `json:"group_name,omitempty"`
-	OfficeIDs   []uuid.UUID `json:"office_ids,omitempty"`
 	Memberships []uuid.UUID `json:"memberships"`
 	// The provider deleted the group; applying removes it.
 	DeleteGroup bool `json:"delete_group,omitempty"`
@@ -172,95 +173,53 @@ func (s *Server) halt(ctx context.Context, org uuid.UUID, change haltedChange, r
 	return nil
 }
 
-// syncGroup carries a group's members to every office it feeds. It halts
-// instead when the offices would lose more people at once than haltAbove
-// allows: an emptied group is the classic SCIM accident.
+// syncGroup carries a group's members to what it grants. It halts instead
+// when that would take more people away at once than haltAbove allows: an
+// emptied group is the classic SCIM accident.
 func (s *Server) syncGroup(ctx context.Context, org, group uuid.UUID, cause string) (bool, error) {
-	if s.offices == nil {
+	if s.groupSync == nil {
 		return false, nil
 	}
 	ctx = db.WithActor(ctx, scimActor)
-	var (
-		g       store.ScimGroup
-		offices []uuid.UUID
-		members []GroupMember
-		active  int64
-	)
-	err := s.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
-		q := store.New(tx)
-		var err error
-		if g, err = q.GetScimGroup(ctx, store.GetScimGroupParams{OrgID: org, ID: group}); err != nil {
+	var active int64
+	g, members, err := s.groupMembers(ctx, org, group)
+	if err == nil {
+		err = s.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
+			var err error
+			active, err = store.New(tx).CountActiveMemberships(ctx, org)
 			return err
-		}
-		mapped, err := q.ListOfficesOfGroup(ctx, store.ListOfficesOfGroupParams{OrgID: org, GroupID: group})
-		if err != nil {
-			return err
-		}
-		for _, m := range mapped {
-			if !m.Paused {
-				offices = append(offices, m.OfficeID)
-			}
-		}
-		rows, err := q.GroupMembersForSync(ctx, store.GroupMembersForSyncParams{OrgID: org, GroupID: group})
-		if err != nil {
-			return err
-		}
-		for _, r := range rows {
-			members = append(members, GroupMember{MembershipID: r.ID, UserID: r.UserID})
-		}
-		active, err = q.CountActiveMemberships(ctx, org)
-		return err
-	})
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && len(offices) == 0) {
-		return false, err
+		})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	losing := map[uuid.UUID]bool{}
-	for _, office := range offices {
-		res, err := s.offices.SyncGroup(ctx, org, office, group, members, true)
-		if errors.Is(err, ErrNoOffice) {
-			continue
-		}
-		if err != nil {
-			return false, err
-		}
-		for _, m := range res.Removed {
-			losing[m] = true
-		}
+	res, err := s.groupSync.SyncGroup(ctx, org, group, members, true)
+	if err != nil {
+		return false, err
 	}
-	if len(losing) > s.haltAbove(int(active)) {
-		who := make([]uuid.UUID, 0, len(losing))
-		for m := range losing {
-			who = append(who, m)
-		}
-		reason := fmt.Sprintf("Syncing the group %q would take %d people out of its offices at once, more than this organization allows in one change.", g.DisplayName, len(who))
-		return true, s.halt(ctx, org, haltedChange{Kind: "group", GroupID: &group, GroupName: g.DisplayName, OfficeIDs: offices, Memberships: who, DeleteGroup: cause == "delete"}, reason)
+	if len(res.Removed) > s.haltAbove(int(active)) {
+		reason := fmt.Sprintf("Syncing the group %q would take %d people out of what it grants at once, more than this organization allows in one change.", g.DisplayName, len(res.Removed))
+		return true, s.halt(ctx, org, haltedChange{Kind: "group", GroupID: &group, GroupName: g.DisplayName, Memberships: res.Removed, DeleteGroup: cause == "delete"}, reason)
 	}
-	return false, s.carry(ctx, org, g, offices, members, cause)
+	return false, s.carry(ctx, org, g, members, cause)
 }
 
-// carry sends a group's members to its offices, unguarded.
-func (s *Server) carry(ctx context.Context, org uuid.UUID, g store.ScimGroup, offices []uuid.UUID, members []GroupMember, cause string) error {
-	added, removed := 0, 0
-	for _, office := range offices {
-		res, err := s.offices.SyncGroup(ctx, org, office, g.ID, members, false)
-		if errors.Is(err, ErrNoOffice) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		added, removed = added+len(res.Added), removed+len(res.Removed)
+// carry hands a group's members to the product, unguarded.
+func (s *Server) carry(ctx context.Context, org uuid.UUID, g store.ScimGroup, members []GroupMember, cause string) error {
+	res, err := s.groupSync.SyncGroup(ctx, org, g.ID, members, false)
+	if err != nil {
+		return err
 	}
-	if added > 0 || removed > 0 {
-		s.scimLog(ctx, org, "sync group offices", nil, &g.ID, "ok", "", map[string]any{"group": g.DisplayName, "offices": len(offices), "added": added, "removed": removed, "by": cause})
+	if len(res.Added) > 0 || len(res.Removed) > 0 {
+		s.scimLog(ctx, org, "sync group", nil, &g.ID, "ok", "", map[string]any{"group": g.DisplayName, "added": len(res.Added), "removed": len(res.Removed), "by": cause})
 	}
 	return nil
 }
 
-// groupMembers is who a group grants its offices to now.
+// groupMembers is who is in a group now.
 func (s *Server) groupMembers(ctx context.Context, org, group uuid.UUID) (store.ScimGroup, []GroupMember, error) {
 	var (
 		g       store.ScimGroup
@@ -322,14 +281,14 @@ func (s *Server) ReconcileAll(ctx context.Context) error {
 }
 
 // Reconcile puts one org right against the provider's last word: status
-// toward what it said about active, and every mapped group's offices toward
-// its members. Office memberships added by hand, profiles and roles above
-// User are never touched. Every correction is audited.
+// toward what it said about active, and what every group grants toward its
+// members. Profiles and roles above User are never touched. Every
+// correction is audited.
 func (s *Server) Reconcile(ctx context.Context, org uuid.UUID) error {
 	ctx = db.WithActor(ctx, scimActor)
 	var (
 		drift  []store.ScimDriftRow
-		mapped []store.ScimGroupOffice
+		groups []store.ScimGroupSummariesRow
 		active int64
 	)
 	if err := s.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
@@ -338,7 +297,7 @@ func (s *Server) Reconcile(ctx context.Context, org uuid.UUID) error {
 		if drift, err = q.ScimDrift(ctx, org); err != nil {
 			return err
 		}
-		if mapped, err = q.ListGroupOffices(ctx, org); err != nil {
+		if groups, err = q.ScimGroupSummaries(ctx, org); err != nil {
 			return err
 		}
 		active, err = q.CountActiveMemberships(ctx, org)
@@ -366,13 +325,8 @@ func (s *Server) Reconcile(ctx context.Context, org uuid.UUID) error {
 			return err
 		}
 	}
-	seen := map[uuid.UUID]bool{}
-	for _, m := range mapped {
-		if m.Paused || seen[m.GroupID] {
-			continue
-		}
-		seen[m.GroupID] = true
-		if _, err := s.syncGroup(ctx, org, m.GroupID, "reconciliation"); err != nil {
+	for _, g := range groups {
+		if _, err := s.syncGroup(ctx, org, g.ID, "reconciliation"); err != nil {
 			return err
 		}
 	}
@@ -433,7 +387,7 @@ func (s *Server) applyHalted(ctx context.Context, org uuid.UUID, changes []halte
 	for _, c := range changes {
 		switch c.Kind {
 		case "group":
-			if c.GroupID == nil || s.offices == nil {
+			if c.GroupID == nil || s.groupSync == nil {
 				continue
 			}
 			g, members, err := s.groupMembers(ctx, org, *c.GroupID)
@@ -443,7 +397,7 @@ func (s *Server) applyHalted(ctx context.Context, org uuid.UUID, changes []halte
 			if err != nil {
 				return err
 			}
-			if err := s.carry(ctx, org, g, c.OfficeIDs, members, "admin"); err != nil {
+			if err := s.carry(ctx, org, g, members, "admin"); err != nil {
 				return err
 			}
 			if c.DeleteGroup && len(members) == 0 {
@@ -465,23 +419,15 @@ func (s *Server) applyHalted(ctx context.Context, org uuid.UUID, changes []halte
 	return nil
 }
 
-// dismissHalted leaves things as they are: a group's offices stop following
-// it until the mapping is saved again, and the provider's word on the
-// people it would have deactivated is forgotten until it speaks again.
+// dismissHalted leaves things as they are: a held group change is dropped,
+// to be made again at the next push or reconciliation if it still takes too
+// many people at once, and the provider's word on the people it would have
+// deactivated is forgotten until it speaks again.
 func (s *Server) dismissHalted(ctx context.Context, org uuid.UUID, changes []haltedChange) error {
 	return s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		for _, c := range changes {
 			switch c.Kind {
-			case "group":
-				if c.GroupID == nil {
-					continue
-				}
-				for _, office := range c.OfficeIDs {
-					if err := q.PauseGroupOffice(ctx, store.PauseGroupOfficeParams{OrgID: org, GroupID: *c.GroupID, OfficeID: office}); err != nil {
-						return err
-					}
-				}
 			case "deactivate":
 				for _, id := range c.Memberships {
 					if err := q.ClearScimActive(ctx, store.ClearScimActiveParams{OrgID: org, ID: id}); err != nil {

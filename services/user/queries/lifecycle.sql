@@ -16,9 +16,6 @@ SELECT * FROM scim_groups WHERE org_id = @org_id ORDER BY created_at, id;
 -- name: DeleteScimGroupMembersOfOrg :execrows
 DELETE FROM scim_group_members WHERE org_id = @org_id;
 
--- name: DeleteScimGroupOfficesOfOrg :execrows
-DELETE FROM scim_group_offices WHERE org_id = @org_id;
-
 -- name: DeleteScimGroupsOfOrg :execrows
 DELETE FROM scim_groups WHERE org_id = @org_id;
 
@@ -42,7 +39,6 @@ SELECT ((SELECT count(*) FROM memberships m WHERE m.org_id = @org_id)
      + (SELECT count(*) FROM scim_tokens t WHERE t.org_id = @org_id)
      + (SELECT count(*) FROM scim_groups g WHERE g.org_id = @org_id)
      + (SELECT count(*) FROM scim_group_members gm WHERE gm.org_id = @org_id)
-     + (SELECT count(*) FROM scim_group_offices go WHERE go.org_id = @org_id)
      + (SELECT count(*) FROM scim_log l WHERE l.org_id = @org_id)
      + (SELECT count(*) FROM scim_state s WHERE s.org_id = @org_id))::bigint AS remaining;
 
@@ -88,7 +84,7 @@ UPDATE memberships
 SET idp_subject = NULL, job_title = NULL, department = NULL, division = NULL, manager = NULL,
     employee_type = NULL, location = NULL, country = NULL, city = NULL, attributes = '{}'::jsonb,
     external_id = NULL, scim = CASE WHEN scim IS NULL THEN NULL ELSE '{"_deleted": true}'::jsonb END, scim_active = NULL,
-    last_office_id = NULL, last_room_id = NULL, anonymised_at = @at
+    anonymised_at = @at
 WHERE org_id = @org_id AND id = @id AND anonymised_at IS NULL;
 
 -- name: CountLiveMembershipsOfUser :one

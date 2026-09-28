@@ -29,22 +29,21 @@ import (
 
 // Server answers the user API.
 type Server struct {
-	cluster   *db.Cluster
-	logger    *slog.Logger
-	recorder  audit.Recorder
-	plans     plan.Source
-	authz     authz.Checker
-	sessions  Sessions
-	invites   Invites
-	uploads   *storage.Client
-	roomMates RoomMates
-	capacity  Capacity
-	// SCIM (UO-180, UO-181).
+	cluster  *db.Cluster
+	logger   *slog.Logger
+	recorder audit.Recorder
+	plans    plan.Source
+	authz    authz.Checker
+	sessions Sessions
+	invites  Invites
+	uploads  *storage.Client
+	capacity Capacity
+	// SCIM.
 	scimPublic   string
-	offices      Offices
+	groupSync    GroupSync
 	notices      Notifier
 	haltFraction float64
-	// Account deletion and org offboarding (UO-183, UO-184).
+	// Account deletion and org offboarding.
 	accounts   Accounts
 	orgNames   OrgNames
 	mail       email.Sender
@@ -149,11 +148,6 @@ func toMembership(m store.Membership, u store.User) api.Membership {
 			out.Directory.Attributes = &attrs
 		}
 	}
-	if m.LastOfficeID.Valid {
-		id := uuid.UUID(m.LastOfficeID.Bytes)
-		out.LastOfficeId = &id
-	}
-	out.LastRoomId = textOf(m.LastRoomID)
 	if m.LastActiveAt.Valid {
 		out.LastActiveAt = &m.LastActiveAt.Time
 	}

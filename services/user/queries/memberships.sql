@@ -45,13 +45,6 @@ SET status = @status,
 WHERE org_id = @org_id AND id = @id
 RETURNING *;
 
--- name: SetMembershipPresence :execrows
--- Where the person is, written by the engine's identity adapter as they
--- move; a return lands them back here.
-UPDATE memberships
-SET last_office_id = sqlc.narg('office_id'), last_room_id = sqlc.narg('room_id'), last_active_at = now()
-WHERE org_id = @org_id AND id = @id;
-
 -- name: ListMembershipsOfUser :many
 -- global: every org a person belongs to, most recently active first, for
 -- the identity service to decide where a sign-in lands.
@@ -68,7 +61,7 @@ WHERE m.org_id = @org_id
   AND (sqlc.narg('status')::text IS NULL OR m.status = sqlc.narg('status')::text)
   AND (sqlc.narg('role')::text IS NULL OR m.role = sqlc.narg('role')::text)
   AND (sqlc.narg('department')::text IS NULL OR m.department = sqlc.narg('department')::text)
-  -- A guest searches only the people they have been in a room with.
+  -- A guest finds only the memberships it is shown.
   AND (sqlc.narg('only_ids')::uuid[] IS NULL OR m.id = ANY(sqlc.narg('only_ids')::uuid[]))
   AND (sqlc.narg('q')::text IS NULL
        OR lower(u.name) LIKE '%' || lower(sqlc.narg('q')::text) || '%'
@@ -92,7 +85,7 @@ WHERE m.org_id = @org_id
   AND (sqlc.narg('status')::text IS NULL OR m.status = sqlc.narg('status')::text)
   AND (sqlc.narg('role')::text IS NULL OR m.role = sqlc.narg('role')::text)
   AND (sqlc.narg('department')::text IS NULL OR m.department = sqlc.narg('department')::text)
-  -- A guest searches only the people they have been in a room with.
+  -- A guest finds only the memberships it is shown.
   AND (sqlc.narg('only_ids')::uuid[] IS NULL OR m.id = ANY(sqlc.narg('only_ids')::uuid[]))
   AND (sqlc.narg('q')::text IS NULL
        OR lower(u.name) LIKE '%' || lower(sqlc.narg('q')::text) || '%'
@@ -137,7 +130,7 @@ WHERE m.org_id = @org_id AND u.email = @email AND u.deleted_at IS NULL;
 -- global: a profile is a person's, the same in every org. NULL clears.
 UPDATE users
 SET display_name = sqlc.narg('display_name'), time_zone = sqlc.narg('time_zone'), working_hours = sqlc.narg('working_hours'),
-    theme = @theme, language = sqlc.narg('language'), hide_decorations = @hide_decorations
+    theme = @theme, language = sqlc.narg('language')
 WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
 

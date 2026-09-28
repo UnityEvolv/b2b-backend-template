@@ -22,7 +22,7 @@ const (
 
 // LeaveOrganization ends the caller's own membership in the org named. Their
 // other orgs are untouched; an Owner is refused and pointed at ownership
-// transfer; the sessions and presence end through the identity service,
+// transfer; the sessions end through the identity service,
 // which checks the membership on its next refresh.
 func (s *Server) LeaveOrganization(ctx context.Context, req api.LeaveOrganizationRequestObject) (api.LeaveOrganizationResponseObject, error) {
 	c, ok := requireCaller(ctx)

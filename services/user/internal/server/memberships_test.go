@@ -122,65 +122,10 @@ func TestUserCapIsASoftWall(t *testing.T) {
 	}
 	// Everyone already in is unaffected: a sign-in of an existing member works.
 	f.signIn(t, acme, "pa@example.com", "Person", nil)
-	// A guest by room invite does not count against the cap.
+	// A guest does not count against the cap.
 	if status, out := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"),
-		map[string]any{"org_id": acme, "email": "guest@example.com", "source": "room_invite", "kind": "guest"}); status != http.StatusCreated {
+		map[string]any{"org_id": acme, "email": "guest@example.com", "source": "invite", "kind": "guest"}); status != http.StatusCreated {
 		t.Errorf("guest over the cap: %d %v", status, out)
-	}
-	// A guest by any other route is not a guest.
-	if status, _ := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"),
-		map[string]any{"org_id": globex, "email": "g2@example.com", "source": "invite", "kind": "guest"}); status != http.StatusBadRequest {
-		t.Errorf("guest by invite accepted: %d", status)
-	}
-}
-
-func TestPresenceIsRememberedPerMembership(t *testing.T) {
-	f := newAPI(t)
-	m := f.signIn(t, acme, "dan@example.com", "Dan", nil)
-	membershipID := id(t, m, "membership", "id")
-	office := uuid.Must(uuid.NewV7()).String()
-	path := "/v1/internal/organizations/" + acme.String() + "/memberships/" + membershipID + "/presence"
-
-	if status, out := f.do(t, http.MethodPut, path, f.service(t, "billing"), map[string]any{"office_id": office, "room_id": "lobby"}); status != http.StatusForbidden {
-		t.Errorf("another service writing presence: %d %v", status, out)
-	}
-	if status, _ := f.do(t, http.MethodPut, path, f.service(t, "realtime"), map[string]any{"office_id": office, "room_id": "lobby"}); status != http.StatusNoContent {
-		t.Fatalf("presence: %d", status)
-	}
-	status, got := f.do(t, http.MethodGet, "/v1/organizations/"+acme.String()+"/memberships/"+membershipID, f.platform(t), nil)
-	if status != http.StatusOK || got["last_office_id"] != office || got["last_room_id"] != "lobby" || got["last_active_at"] == nil {
-		t.Errorf("read back: %d %v", status, got)
-	}
-	// Left the room, still in the office.
-	f.do(t, http.MethodPut, path, f.service(t, "realtime"), map[string]any{"office_id": office, "room_id": nil})
-	if _, got := f.do(t, http.MethodGet, "/v1/organizations/"+acme.String()+"/memberships/"+membershipID, f.platform(t), nil); got["last_room_id"] != nil || got["last_office_id"] != office {
-		t.Errorf("after leaving the room: %v", got)
-	}
-	if status, _ := f.do(t, http.MethodPut, "/v1/internal/organizations/"+acme.String()+"/memberships/"+uuid.NewString()+"/presence", f.service(t, "realtime"), map[string]any{"office_id": office}); status != http.StatusNotFound {
-		t.Errorf("unknown membership: %d", status)
-	}
-}
-
-// The office shows the name and photo the user service holds, never one
-// the client sent; only the realtime service may ask.
-func TestMembershipCard(t *testing.T) {
-	f := newAPI(t)
-	m := f.signIn(t, acme, "erin@example.com", "Erin", nil)
-	membershipID := id(t, m, "membership", "id")
-	path := "/v1/internal/organizations/" + acme.String() + "/memberships/" + membershipID + "/card"
-
-	if status, _ := f.do(t, http.MethodGet, path, f.service(t, "billing"), nil); status != http.StatusForbidden {
-		t.Errorf("another service reading a card: %d", status)
-	}
-	status, card := f.do(t, http.MethodGet, path, f.service(t, "realtime"), nil)
-	if status != http.StatusOK || card["display_name"] != "Erin" || card["user_id"] != id(t, m, "user", "id") {
-		t.Errorf("card: %d %v", status, card)
-	}
-	if _, has := card["photo_url"]; has {
-		t.Errorf("a photo nobody uploaded: %v", card)
-	}
-	if status, _ := f.do(t, http.MethodGet, "/v1/internal/organizations/"+acme.String()+"/memberships/"+uuid.NewString()+"/card", f.service(t, "realtime"), nil); status != http.StatusNotFound {
-		t.Errorf("unknown membership: %d", status)
 	}
 }
 
@@ -348,7 +293,7 @@ func TestStatusChangesFollowRoles(t *testing.T) {
 	if status, out := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "organization"), map[string]any{"org_id": globex, "email": "founder@example.com", "source": "owner"}); status != http.StatusCreated || out["role"] != "owner" {
 		t.Errorf("self-serve owner: %d %v", status, out)
 	}
-	if status, out := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"), map[string]any{"org_id": globex, "email": "g@example.com", "source": "room_invite", "kind": "guest", "role": "admin"}); status != http.StatusCreated || out["role"] != "guest" {
+	if status, out := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"), map[string]any{"org_id": globex, "email": "g@example.com", "source": "invite", "kind": "guest", "role": "admin"}); status != http.StatusCreated || out["role"] != "guest" {
 		t.Errorf("guest role: %d %v", status, out)
 	}
 }
@@ -358,9 +303,9 @@ func TestStatusChangesFollowRoles(t *testing.T) {
 // invite that brings the same membership back.
 func TestLeavingAnOrganization(t *testing.T) {
 	f := newAPI(t)
-	// Gina is a guest in acme (by room invite) and a member of globex.
+	// Gina is a guest in acme and a member of globex.
 	status, guest := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"),
-		map[string]any{"org_id": acme, "email": "gina@example.com", "source": "room_invite", "kind": "guest"})
+		map[string]any{"org_id": acme, "email": "gina@example.com", "source": "invite", "kind": "guest"})
 	if status != http.StatusCreated {
 		t.Fatalf("guest: %d %v", status, guest)
 	}
@@ -423,9 +368,9 @@ func TestLeavingAnOrganization(t *testing.T) {
 	}
 }
 
-// Find a person (UO-156): a guest finds only the people they have been in a
-// room with; everyone else finds the whole org.
-func TestGuestSearchIsLimitedToRoomMates(t *testing.T) {
+// Find a person: a guest, from outside the org, finds only themselves;
+// everyone else finds the whole org.
+func TestGuestSearchIsLimitedToThemselves(t *testing.T) {
 	f := newAPI(t)
 	ana := f.signIn(t, acme, "ana@example.com", "Ana", nil)
 	f.signIn(t, acme, "ben@example.com", "Ben", nil)
@@ -433,7 +378,6 @@ func TestGuestSearchIsLimitedToRoomMates(t *testing.T) {
 	if status, out := f.do(t, http.MethodPut, "/v1/internal/organizations/"+acme.String()+"/memberships/"+id(t, gil, "membership", "id")+"/role", f.service(t, "authorization"), map[string]any{"role": "guest"}); status != http.StatusOK {
 		t.Fatalf("role: %d %v", status, out)
 	}
-	f.mates[id(t, gil, "membership", "id")] = []uuid.UUID{uuid.MustParse(id(t, ana, "membership", "id"))}
 
 	names := func(token string) []string {
 		t.Helper()
@@ -448,7 +392,7 @@ func TestGuestSearchIsLimitedToRoomMates(t *testing.T) {
 		return out
 	}
 	guest := f.person(t, id(t, gil, "user", "id"), acme.String(), id(t, gil, "membership", "id"))
-	if got := names(guest); len(got) != 2 || got[0] != "Ana" || got[1] != "Gil" {
+	if got := names(guest); len(got) != 1 || got[0] != "Gil" {
 		t.Errorf("a guest's search: %v", got)
 	}
 	member := f.person(t, id(t, ana, "user", "id"), acme.String(), id(t, ana, "membership", "id"))

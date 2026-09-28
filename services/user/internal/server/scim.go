@@ -324,8 +324,8 @@ func (s *Server) setActive(ctx context.Context, q *store.Queries, m store.Member
 }
 
 // afterStatus is what a status change sets off once committed: the audit
-// entry, and at a deactivation the person's sessions and sockets ending,
-// which takes them out of any room with a message.
+// entry, and at a deactivation the person's sessions and connections
+// ending.
 func (s *Server) afterStatus(ctx context.Context, m store.Membership, change *statusChange, why string) error {
 	if change == nil {
 		return nil

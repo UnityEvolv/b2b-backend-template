@@ -69,7 +69,7 @@ func run() error {
 		organizationURL  = env.Required("ORGANIZATION_URL")
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		identityURL      = env.Required("IDENTITY_URL")
-		// Room at the cap by an automatic upgrade (UO-169); unset, the cap refuses.
+		// Room at the cap by an automatic upgrade; unset, the cap refuses.
 		billingURL = env.String("BILLING_URL", "")
 		// How often SCIM reconciles; daily, in this service's own tick.
 		reconcileEvery = env.Duration("SCIM_RECONCILE_EVERY", 24*time.Hour)
@@ -153,6 +153,8 @@ func run() error {
 	if baseHost != "" {
 		scimBase = "https://" + config.HostsFor(baseHost).API + "/" + name
 	}
+	// SCIM groups are stored and grant nothing until a product carries them to
+	// what they grant, with srv.WithGroupSync.
 	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb}).WithSCIM(scimBase)
 	var mail email.Sender
 	var forgetters []server.Forgetter

@@ -269,10 +269,9 @@ func TestDeletionIsCarriedOutAfterFourteenDays(t *testing.T) {
 	if l.count("account.deleted") != 2 {
 		t.Errorf("account.deleted audited %d times", l.count("account.deleted"))
 	}
-	// The card a room shows, and the member lookup, say Former member.
-	status, card := l.do(t, http.MethodGet, "/v1/internal/organizations/"+acme.String()+"/memberships/"+adaAcme+"/card", l.service(t, "realtime"), nil)
-	if status != http.StatusOK || card["display_name"] != "Former member" {
-		t.Errorf("card: %d %v", status, card)
+	// The member lookup says Former member.
+	if got := l.membership(t, acme, adaAcme); got["user"].(map[string]any)["name"] != "Former member" {
+		t.Errorf("deleted member: %v", got)
 	}
 	// Somebody else is untouched; the address is free for a new account.
 	if got := l.membership(t, acme, carolMbr); got["status"] != "active" || got["user"].(map[string]any)["name"] != "carol" {

@@ -124,7 +124,7 @@ paths:
       operationId: leaveOrganization
       summary: End the caller's own membership in this organization
       description: |
-        Ends access to this organization's offices and sessions; the caller's
+        Ends access to this organization and its sessions; the caller's
         other organizations are untouched. An Owner cannot leave: ownership is
         transferred first. Rejoining takes a fresh invite. Audited in the
         organization left.
@@ -431,7 +431,7 @@ paths:
   /v1/internal/memberships:
     post:
       operationId: createMembership
-      summary: A membership from an invite, an import, the self-serve owner or a room invite (services only)
+      summary: A membership from an invite, an import or the self-serve owner (services only)
       description: |
         The other ways a membership comes to exist. The user is created by
         email if unknown; a second org inviting the same email gets a
@@ -587,34 +587,6 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
-  /v1/internal/organizations/{org_id}/memberships/{membership_id}/presence:
-    put:
-      operationId: setMembershipPresence
-      summary: Where the person is now, from the engine's identity adapter (realtime only)
-      description: |
-        Written as a person moves; read at the next sign-in or reload to
-        put them back in the office and room they were in.
-      tags: [internal]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/MembershipId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Presence'
-      responses:
-        '204':
-          description: Recorded
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
   /v1/internal/organizations/{org_id}/member-count:
     get:
       operationId: countMembers
@@ -634,34 +606,6 @@ paths:
                   active:
                     type: integer
         '403':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/internal/organizations/{org_id}/memberships/{membership_id}/card:
-    get:
-      operationId: getMembershipCard
-      summary: The name and photo presence shows for a membership (realtime only)
-      description: |
-        What the office draws beside a person: never taken from their own
-        client, so nobody can appear as somebody else. The photo link is
-        signed and expires; the realtime service asks again when a
-        credential is refreshed.
-      tags: [internal]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/MembershipId'
-      responses:
-        '200':
-          description: The card
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MembershipCard'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
@@ -735,16 +679,10 @@ paths:
   /v1/organizations/{org_id}/scim/groups:
     get:
       operationId: listScimGroups
-      summary: The groups the provider has pushed, with the offices each feeds
+      summary: The groups the provider has pushed, with their member counts
       tags: [scim]
       parameters:
         - $ref: '#/components/parameters/OrgId'
-        - name: office_id
-          in: query
-          description: Only the groups that feed this office.
-          schema:
-            type: string
-            format: uuid
       responses:
         '200':
           description: The groups
@@ -753,52 +691,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ScimGroupList'
         '403':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/scim/groups/{group_id}/offices:
-    put:
-      operationId: setScimGroupOffices
-      summary: The offices a group feeds, replacing the list
-      description: |
-        Everyone in the group becomes an Office User of each office; an
-        office taken off the list loses what the group granted (the page warns
-        first). Saving resumes a mapping paused by a dismissed halt.
-      tags: [scim]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - name: group_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [office_ids]
-              properties:
-                office_ids:
-                  type: array
-                  maxItems: 500
-                  items:
-                    type: string
-                    format: uuid
-      responses:
-        '200':
-          description: The group as it now stands
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ScimGroupSummary'
-        '400':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
@@ -826,9 +718,10 @@ paths:
       summary: Apply or dismiss the halted change
       description: |
         apply carries out what was held, as things stand now. dismiss leaves
-        things as they are: a group's offices stop following it until the
-        mapping is saved again, and the provider's word on the people it would
-        have deactivated is forgotten until it speaks again.
+        things as they are: a held group change is dropped, and made again
+        at the next push or reconciliation if it still takes too many people
+        at once; the provider's word on the people it would have deactivated
+        is forgotten until it speaks again.
       tags: [scim]
       parameters:
         - $ref: '#/components/parameters/OrgId'
@@ -1297,14 +1190,9 @@ components:
           format: uuid
         group_name:
           type: string
-        office_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
         memberships:
           type: array
-          description: Who would lose the offices, or be deactivated.
+          description: Who would lose what the group grants, or be deactivated.
           items:
             type: string
             format: uuid
@@ -1318,7 +1206,7 @@ components:
             $ref: '#/components/schemas/ScimGroupSummary'
     ScimGroupSummary:
       type: object
-      required: [id, display_name, members, offices]
+      required: [id, display_name, members]
       properties:
         id:
           type: string
@@ -1327,20 +1215,6 @@ components:
           type: string
         members:
           type: integer
-        offices:
-          type: array
-          items:
-            $ref: '#/components/schemas/ScimGroupOffice'
-    ScimGroupOffice:
-      type: object
-      required: [office_id, paused]
-      properties:
-        office_id:
-          type: string
-          format: uuid
-        paused:
-          type: boolean
-          description: Stopped by a dismissed halt until the mapping is saved again.
     ScimLog:
       type: object
       required: [entries]
@@ -1381,12 +1255,12 @@ components:
       enum: [active, deactivated, suspended, left]
     MembershipKind:
       type: string
-      description: member is an employee of the org; guest was invited into one room.
+      description: member is an employee of the org; guest is a limited collaborator from outside it, who does not count toward the plan's user cap.
       enum: [member, guest]
     MembershipSource:
       type: string
       description: How the membership came to exist.
-      enum: [idp, invite, import, owner, room_invite, scim]
+      enum: [idp, invite, import, owner, scim]
     Directory:
       type: object
       description: What the org's identity provider says about the person. Every field optional.
@@ -1530,7 +1404,7 @@ components:
           example: '17:30'
     Preferences:
       type: object
-      required: [theme, hide_decorations]
+      required: [theme]
       description: Appearance, stored on the user so it follows the person to every device.
       properties:
         theme:
@@ -1541,8 +1415,6 @@ components:
           nullable: true
           maxLength: 35
           description: A BCP 47 tag, or null to follow the device.
-        hide_decorations:
-          type: boolean
     ProfileUpdate:
       type: object
       description: Only the fields sent change; null clears one.
@@ -1554,8 +1426,6 @@ components:
           type: string
           maxLength: 35
           nullable: true
-        hide_decorations:
-          type: boolean
         display_name:
           type: string
           maxLength: 60
@@ -1590,11 +1460,6 @@ components:
           $ref: '#/components/schemas/MembershipSource'
         directory:
           $ref: '#/components/schemas/Directory'
-        last_office_id:
-          type: string
-          format: uuid
-        last_room_id:
-          type: string
         last_active_at:
           type: string
           format: date-time
@@ -1680,33 +1545,6 @@ components:
           default: user
         source:
           $ref: '#/components/schemas/MembershipSource'
-    Presence:
-      type: object
-      required: [office_id]
-      properties:
-        office_id:
-          type: string
-          format: uuid
-        room_id:
-          type: string
-          nullable: true
-          description: null when the person is in the office but no room.
-    MembershipCard:
-      type: object
-      required: [user_id, display_name, guest]
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        display_name:
-          type: string
-          description: The name the person chose, else their account name.
-        photo_url:
-          type: string
-          description: A signed link that expires. Absent when there is no photo.
-        guest:
-          type: boolean
-          description: Someone from outside the org, on a room invite.
     Error:
       type: object
       required: [code, message]

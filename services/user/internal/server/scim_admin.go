@@ -103,10 +103,6 @@ func (s *Server) scimSettings(ctx context.Context, org uuid.UUID) (api.ScimSetti
 					name := c.GroupName
 					v.GroupName = &name
 				}
-				if len(c.OfficeIDs) > 0 {
-					offices := c.OfficeIDs
-					v.OfficeIds = &offices
-				}
 				if v.Memberships == nil {
 					v.Memberships = []uuid.UUID{}
 				}
@@ -200,35 +196,8 @@ func (s *Server) RevokeScimToken(ctx context.Context, req api.RevokeScimTokenReq
 	return api.RevokeScimToken204Response{}, nil
 }
 
-func groupSummary(g store.ScimGroupSummariesRow, mapped []store.ScimGroupOffice) api.ScimGroupSummary {
-	out := api.ScimGroupSummary{Id: g.ID, DisplayName: g.DisplayName, Members: int(g.Members), Offices: []api.ScimGroupOffice{}}
-	for _, m := range mapped {
-		if m.GroupID == g.ID {
-			out.Offices = append(out.Offices, api.ScimGroupOffice{OfficeId: m.OfficeID, Paused: m.Paused})
-		}
-	}
-	return out
-}
-
-func (s *Server) groupSummaries(ctx context.Context, org uuid.UUID) ([]store.ScimGroupSummariesRow, []store.ScimGroupOffice, error) {
-	var (
-		groups []store.ScimGroupSummariesRow
-		mapped []store.ScimGroupOffice
-	)
-	err := s.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
-		q := store.New(tx)
-		var err error
-		if groups, err = q.ScimGroupSummaries(ctx, org); err != nil {
-			return err
-		}
-		mapped, err = q.ListGroupOffices(ctx, org)
-		return err
-	})
-	return groups, mapped, err
-}
-
-// ListScimGroups is the groups the provider pushed, with what each feeds;
-// with office_id, the groups that feed that office, for the office page.
+// ListScimGroups is the groups the provider pushed, with how many people
+// each holds.
 func (s *Server) ListScimGroups(ctx context.Context, req api.ListScimGroupsRequestObject) (api.ListScimGroupsResponseObject, error) {
 	if refusal, err := s.scimAllowed(ctx, req.OrgId, false); err != nil || refusal != nil {
 		if refusal != nil {
@@ -236,113 +205,20 @@ func (s *Server) ListScimGroups(ctx context.Context, req api.ListScimGroupsReque
 		}
 		return nil, err
 	}
-	groups, mapped, err := s.groupSummaries(ctx, req.OrgId)
+	var groups []store.ScimGroupSummariesRow
+	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
+		var err error
+		groups, err = store.New(tx).ScimGroupSummaries(ctx, req.OrgId)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	out := api.ScimGroupList{Groups: []api.ScimGroupSummary{}}
 	for _, g := range groups {
-		sum := groupSummary(g, mapped)
-		if req.Params.OfficeId != nil {
-			feeds := false
-			for _, o := range sum.Offices {
-				feeds = feeds || o.OfficeId == *req.Params.OfficeId
-			}
-			if !feeds {
-				continue
-			}
-		}
-		out.Groups = append(out.Groups, sum)
+		out.Groups = append(out.Groups, api.ScimGroupSummary{Id: g.ID, DisplayName: g.DisplayName, Members: int(g.Members)})
 	}
 	return api.ListScimGroups200JSONResponse(out), nil
-}
-
-// SetScimGroupOffices is the offices a group feeds. New ones get the
-// group's members at once; one taken off the list loses what the group
-// granted. The admin chose this, having been warned, so it is not halted.
-func (s *Server) SetScimGroupOffices(ctx context.Context, req api.SetScimGroupOfficesRequestObject) (api.SetScimGroupOfficesResponseObject, error) {
-	if refusal, err := s.scimAllowed(ctx, req.OrgId, true); err != nil || refusal != nil {
-		if refusal != nil {
-			return api.SetScimGroupOffices403JSONResponse(*refusal), nil
-		}
-		return nil, err
-	}
-	org, group := req.OrgId, req.GroupId
-	g, members, err := s.groupMembers(ctx, org, group)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return api.SetScimGroupOffices404JSONResponse{Code: codeNoGroup, Message: "No such group."}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	want := map[uuid.UUID]bool{}
-	for _, o := range req.Body.OfficeIds {
-		want[o] = true
-	}
-	// Every office must be the org's: asked of the office service without
-	// changing anything.
-	if s.offices != nil {
-		for o := range want {
-			if _, err := s.offices.SyncGroup(ctx, org, o, group, nil, true); errors.Is(err, ErrNoOffice) {
-				return api.SetScimGroupOffices400JSONResponse{ErrorJSONResponse: invalid("An office is not in this organization.", map[string]string{"office_ids": o.String() + " is not an office here"})}, nil
-			} else if err != nil {
-				return nil, err
-			}
-		}
-	}
-	var dropped []uuid.UUID
-	err = s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
-		q := store.New(tx)
-		current, err := q.ListOfficesOfGroup(ctx, store.ListOfficesOfGroupParams{OrgID: org, GroupID: group})
-		if err != nil {
-			return err
-		}
-		for _, c := range current {
-			if !want[c.OfficeID] {
-				dropped = append(dropped, c.OfficeID)
-				if err := q.DeleteGroupOffice(ctx, store.DeleteGroupOfficeParams{OrgID: org, GroupID: group, OfficeID: c.OfficeID}); err != nil {
-					return err
-				}
-			}
-		}
-		for o := range want {
-			if err := q.SetGroupOffice(ctx, store.SetGroupOfficeParams{OrgID: org, GroupID: group, OfficeID: o}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := s.recorder.Record(ctx, audit.Event{OrgID: org.String(), Action: "scim.group.offices_set", TargetType: "scim_group", TargetID: group.String(),
-		Details: map[string]any{"offices": len(want), "dropped": len(dropped)}}); err != nil {
-		return nil, err
-	}
-	if s.offices != nil {
-		for _, o := range dropped {
-			if _, err := s.offices.SyncGroup(ctx, org, o, group, nil, false); err != nil && !errors.Is(err, ErrNoOffice) {
-				return nil, err
-			}
-		}
-		offices := make([]uuid.UUID, 0, len(want))
-		for o := range want {
-			offices = append(offices, o)
-		}
-		if err := s.carry(ctx, org, g, offices, members, "admin"); err != nil {
-			return nil, err
-		}
-	}
-	groups, mapped, err := s.groupSummaries(ctx, org)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range groups {
-		if row.ID == group {
-			return api.SetScimGroupOffices200JSONResponse(groupSummary(row, mapped)), nil
-		}
-	}
-	return api.SetScimGroupOffices404JSONResponse{Code: codeNoGroup, Message: "No such group."}, nil
 }
 
 // GetScimLog is the last hundred operations, newest first.

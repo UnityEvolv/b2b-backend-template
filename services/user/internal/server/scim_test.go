@@ -17,81 +17,50 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/server"
 )
 
-// fakeOffices is the office service's group sync, kept in memory with the
-// same rules: a group grants Office User, and taking someone out of a group
-// takes away only that group's grant.
-type fakeOffices struct {
-	mu      sync.Mutex
-	offices map[uuid.UUID]map[uuid.UUID]*officeGrant
+// fakeGroupSync is a product's group sync, kept in memory: each group
+// grants its own members, and nothing else.
+type fakeGroupSync struct {
+	mu     sync.Mutex
+	grants map[uuid.UUID]map[uuid.UUID]bool
 }
 
-type officeGrant struct {
-	hand   bool
-	groups map[uuid.UUID]bool
+func newFakeGroupSync() *fakeGroupSync {
+	return &fakeGroupSync{grants: map[uuid.UUID]map[uuid.UUID]bool{}}
 }
 
-func newFakeOffices() *fakeOffices {
-	return &fakeOffices{offices: map[uuid.UUID]map[uuid.UUID]*officeGrant{}}
-}
-
-func (f *fakeOffices) add(office uuid.UUID) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.offices[office] = map[uuid.UUID]*officeGrant{}
-}
-
-func (f *fakeOffices) byHand(office, membership uuid.UUID) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.offices[office][membership] = &officeGrant{hand: true, groups: map[uuid.UUID]bool{}}
-}
-
-func (f *fakeOffices) members(office uuid.UUID) []uuid.UUID {
+func (f *fakeGroupSync) members(group string) []uuid.UUID {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []uuid.UUID
-	for m := range f.offices[office] {
+	for m := range f.grants[uuid.MustParse(group)] {
 		out = append(out, m)
 	}
 	return out
 }
 
-func (f *fakeOffices) SyncGroup(_ context.Context, _, office, group uuid.UUID, members []server.GroupMember, dry bool) (server.GroupSyncResult, error) {
+func (f *fakeGroupSync) SyncGroup(_ context.Context, _, group uuid.UUID, members []server.GroupMember, dry bool) (server.GroupSyncResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	o, ok := f.offices[office]
-	if !ok {
-		return server.GroupSyncResult{}, server.ErrNoOffice
+	granted := f.grants[group]
+	if granted == nil {
+		granted = map[uuid.UUID]bool{}
+		f.grants[group] = granted
 	}
 	res := server.GroupSyncResult{Added: []uuid.UUID{}, Removed: []uuid.UUID{}}
 	want := map[uuid.UUID]bool{}
 	for _, m := range members {
 		want[m.MembershipID] = true
-		g := o[m.MembershipID]
-		switch {
-		case g == nil:
+		if !granted[m.MembershipID] {
 			res.Added = append(res.Added, m.MembershipID)
-			if !dry {
-				o[m.MembershipID] = &officeGrant{groups: map[uuid.UUID]bool{group: true}}
-			}
-		case !dry:
-			g.groups[group] = true
 		}
 	}
-	for m, g := range o {
-		if want[m] || !g.groups[group] {
-			continue
+	for m := range granted {
+		if !want[m] {
+			res.Removed = append(res.Removed, m)
 		}
-		if g.hand || len(g.groups) > 1 {
-			if !dry {
-				delete(g.groups, group)
-			}
-			continue
-		}
-		res.Removed = append(res.Removed, m)
-		if !dry {
-			delete(o, m)
-		}
+	}
+	if !dry {
+		f.grants[group] = want
 	}
 	return res, nil
 }
@@ -358,8 +327,8 @@ func TestSCIMUsers(t *testing.T) {
 	}
 }
 
-// Groups feed offices (UO-181): a mapped group's members become Office
-// Users, leaving the group takes away only what it granted, an emptied
+// Groups are carried to the product through its group sync: a group's
+// members get what it grants, leaving the group takes it away, an emptied
 // group that would take too many out at once halts for an admin, and the
 // daily reconciliation corrects status toward the provider.
 func TestSCIMGroups(t *testing.T) {
@@ -389,41 +358,35 @@ func TestSCIMGroups(t *testing.T) {
 		}
 		return out
 	}
-	design, big := uuid.New(), uuid.New()
-	f.offices.add(design)
-	f.offices.add(big)
 
+	// A new group's members get what it grants at once.
 	code, g := f.scim(t, http.MethodPost, base+"/Groups", token, map[string]any{"displayName": "Design", "externalId": "g-design", "members": members(people[0], people[1])})
 	if code != http.StatusCreated || len(g["members"].([]any)) != 2 {
 		t.Fatalf("group: %d %v", code, g)
 	}
 	groupID := id(t, g, "id")
+	if got := f.groups.members(groupID); len(got) != 2 {
+		t.Fatalf("carried: %v", got)
+	}
 	if code, out := f.scim(t, http.MethodPost, base+"/Groups", token, map[string]any{"displayName": "design"}); code != http.StatusConflict {
 		t.Errorf("replayed group: %d %v", code, out)
 	}
 	if code, out := f.scim(t, http.MethodGet, base+`/Groups?filter=displayName+eq+%22Design%22&excludedAttributes=members`, token, nil); code != http.StatusOK || out["totalResults"] != float64(1) {
 		t.Errorf("group filter: %d %v", code, out)
 	}
+	if code, list := f.do(t, http.MethodGet, admin+"/groups", ownerToken, nil); code != http.StatusOK || len(list["groups"].([]any)) != 1 || list["groups"].([]any)[0].(map[string]any)["members"] != float64(2) {
+		t.Errorf("groups: %d %v", code, list)
+	}
 
-	// Mapped: both become Office Users. An office elsewhere is refused.
-	if code, _ := f.do(t, http.MethodPut, admin+"/groups/"+groupID+"/offices", ownerToken, map[string]any{"office_ids": []string{uuid.NewString()}}); code != http.StatusBadRequest {
-		t.Errorf("unknown office: %d", code)
-	}
-	code, sum := f.do(t, http.MethodPut, admin+"/groups/"+groupID+"/offices", ownerToken, map[string]any{"office_ids": []string{design.String()}})
-	if code != http.StatusOK || len(sum["offices"].([]any)) != 1 || len(f.offices.members(design)) != 2 {
-		t.Fatalf("map: %d %v %v", code, sum, f.offices.members(design))
-	}
-	// Someone added by hand, who is also in the group, stays when they leave it.
-	f.offices.byHand(design, uuid.MustParse(people[1]))
-	f.offices.offices[design][uuid.MustParse(people[1])].groups[uuid.MustParse(groupID)] = true
+	// A patch moves the grant with the members.
 	if code, _ := f.scim(t, http.MethodPatch, base+"/Groups/"+groupID, token, patch(
 		map[string]any{"op": "Remove", "path": "members", "value": members(people[1])},
 		map[string]any{"op": "Add", "path": "members", "value": members(people[2])},
 	)); code != http.StatusNoContent {
 		t.Fatalf("group patch: %d", code)
 	}
-	got := f.offices.members(design)
-	if len(got) != 3 || !slices.Contains(got, uuid.MustParse(people[1])) {
+	got := f.groups.members(groupID)
+	if len(got) != 2 || slices.Contains(got, uuid.MustParse(people[1])) || !slices.Contains(got, uuid.MustParse(people[2])) {
 		t.Errorf("after the patch: %v", got)
 	}
 	// A filtered remove, Okta's way: person 0 goes.
@@ -432,30 +395,26 @@ func TestSCIMGroups(t *testing.T) {
 	)); code != http.StatusNoContent {
 		t.Fatalf("filtered remove: %d", code)
 	}
-	if got := f.offices.members(design); slices.Contains(got, uuid.MustParse(people[0])) {
-		t.Errorf("person 0 still in the office: %v", got)
-	}
-	if code, list := f.do(t, http.MethodGet, admin+"/groups?office_id="+design.String(), ownerToken, nil); code != http.StatusOK || len(list["groups"].([]any)) != 1 {
-		t.Errorf("groups of the office: %d %v", code, list)
+	if got := f.groups.members(groupID); slices.Contains(got, uuid.MustParse(people[0])) {
+		t.Errorf("person 0 still granted: %v", got)
 	}
 
-	// A big group, mapped, then emptied: 8 of 13 at once is too many. It
-	// halts, the admins are told, and nothing moves until one decides.
+	// A big group, then emptied: 8 of 13 at once is too many. It halts, the
+	// admins are told, and nothing moves until one decides.
 	code, bg := f.scim(t, http.MethodPost, base+"/Groups", token, map[string]any{"displayName": "Everyone", "members": members(people[4:]...)})
 	if code != http.StatusCreated {
 		t.Fatalf("big group: %d %v", code, bg)
 	}
 	bigID := id(t, bg, "id")
-	f.do(t, http.MethodPut, admin+"/groups/"+bigID+"/offices", ownerToken, map[string]any{"office_ids": []string{big.String()}})
-	if len(f.offices.members(big)) != 8 {
-		t.Fatalf("big office: %v", f.offices.members(big))
+	if len(f.groups.members(bigID)) != 8 {
+		t.Fatalf("big group: %v", f.groups.members(bigID))
 	}
 	empty := patch(map[string]any{"op": "replace", "path": "members", "value": []any{}})
 	if code, _ := f.scim(t, http.MethodPatch, base+"/Groups/"+bigID, token, empty); code != http.StatusNoContent {
 		t.Fatalf("empty: %d", code)
 	}
-	if len(f.offices.members(big)) != 8 {
-		t.Errorf("a halted change was applied: %v", f.offices.members(big))
+	if len(f.groups.members(bigID)) != 8 {
+		t.Errorf("a halted change was applied: %v", f.groups.members(bigID))
 	}
 	_, settings := f.do(t, http.MethodGet, admin, ownerToken, nil)
 	halted, _ := settings["halted"].(map[string]any)
@@ -468,22 +427,21 @@ func TestSCIMGroups(t *testing.T) {
 	if code, _ := f.do(t, http.MethodPost, admin+"/halt", ownerToken, map[string]any{"action": "apply"}); code != http.StatusOK {
 		t.Fatalf("apply: %d", code)
 	}
-	if len(f.offices.members(big)) != 0 {
-		t.Errorf("applied, still in the office: %v", f.offices.members(big))
+	if len(f.groups.members(bigID)) != 0 {
+		t.Errorf("applied, still granted: %v", f.groups.members(bigID))
 	}
 	if code, _ := f.do(t, http.MethodPost, admin+"/halt", ownerToken, map[string]any{"action": "apply"}); code != http.StatusConflict {
 		t.Errorf("nothing halted: %d", code)
 	}
 
-	// Again, dismissed this time: the mapping pauses and the office stays.
+	// Again, dismissed this time: the grant stays as it was.
 	f.scim(t, http.MethodPatch, base+"/Groups/"+bigID, token, patch(map[string]any{"op": "add", "path": "members", "value": members(people[4:]...)}))
 	f.scim(t, http.MethodPatch, base+"/Groups/"+bigID, token, empty)
 	if code, _ := f.do(t, http.MethodPost, admin+"/halt", ownerToken, map[string]any{"action": "dismiss"}); code != http.StatusOK {
 		t.Fatalf("dismiss: %d", code)
 	}
-	_, list := f.do(t, http.MethodGet, admin+"/groups?office_id="+big.String(), ownerToken, nil)
-	if len(f.offices.members(big)) != 8 || list["groups"].([]any)[0].(map[string]any)["offices"].([]any)[0].(map[string]any)["paused"] != true {
-		t.Errorf("dismissed: %v %v", f.offices.members(big), list)
+	if len(f.groups.members(bigID)) != 8 {
+		t.Errorf("dismissed: %v", f.groups.members(bigID))
 	}
 
 	// Reconciliation: an admin reactivated someone the provider deactivated;
@@ -501,10 +459,6 @@ func TestSCIMGroups(t *testing.T) {
 	if !slices.Contains(f.recorder.actions(), "scim.reconciled") {
 		t.Errorf("reconciliation not audited: %v", f.recorder.actions())
 	}
-	// The hand-added member of Design is untouched by it.
-	if got := f.offices.members(design); !slices.Contains(got, uuid.MustParse(people[1])) {
-		t.Errorf("reconciliation removed a hand-added member: %v", got)
-	}
 	// Deleting a group takes what it granted and removes it.
 	if code, _ := f.scim(t, http.MethodDelete, base+"/Groups/"+groupID, token, nil); code != http.StatusNoContent {
 		t.Fatalf("delete group: %d", code)
@@ -512,7 +466,7 @@ func TestSCIMGroups(t *testing.T) {
 	if code, _ := f.scim(t, http.MethodGet, base+"/Groups/"+groupID, token, nil); code != http.StatusNotFound {
 		t.Errorf("deleted group read: %d", code)
 	}
-	if got := f.offices.members(design); len(got) != 1 {
+	if got := f.groups.members(groupID); len(got) != 0 {
 		t.Errorf("after the group went: %v", got)
 	}
 }

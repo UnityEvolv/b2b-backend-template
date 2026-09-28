@@ -76,10 +76,10 @@ func TestProfileFieldsPersistAcrossOrgs(t *testing.T) {
 	if status, _ := f.do(t, http.MethodPatch, "/v1/me/profile", me, map[string]any{"theme": "sepia"}); status != http.StatusBadRequest {
 		t.Errorf("a theme that does not exist: %d", status)
 	}
-	f.do(t, http.MethodPatch, "/v1/me/profile", me, map[string]any{"theme": "dark", "language": "pt-BR", "hide_decorations": true})
+	f.do(t, http.MethodPatch, "/v1/me/profile", me, map[string]any{"theme": "dark", "language": "pt-BR"})
 	_, got = f.do(t, http.MethodGet, "/v1/me", elsewhere, nil)
 	prefs, _ := got["user"].(map[string]any)["preferences"].(map[string]any)
-	if prefs["theme"] != "dark" || prefs["language"] != "pt-BR" || prefs["hide_decorations"] != true {
+	if prefs["theme"] != "dark" || prefs["language"] != "pt-BR" {
 		t.Errorf("preferences from the other org: %v", prefs)
 	}
 	f.do(t, http.MethodPatch, "/v1/me/profile", me, map[string]any{"language": nil})

@@ -12,7 +12,7 @@ import (
 )
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users WHERE id = $1 AND deleted_at IS NULL
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE id = $1 AND deleted_at IS NULL
 `
 
 // global: a user is one identity across every org.
@@ -34,7 +34,6 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -42,7 +41,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after FROM users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 // global: email is the platform-wide identity.
@@ -64,7 +63,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -74,7 +72,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (id, email, name) VALUES ($1, $2, $3)
 ON CONFLICT (email) WHERE deleted_at IS NULL DO NOTHING
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
 `
 
 type InsertUserParams struct {
@@ -103,7 +101,6 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)
@@ -112,7 +109,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 
 const updateUserName = `-- name: UpdateUserName :one
 UPDATE users SET name = $1 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, hide_decorations, deletion_requested_at, deletion_after
+RETURNING id, email, name, deleted_at, created_by, created_at, last_modified_by, last_modified_at, display_name, time_zone, working_hours, photo_key, theme, language, deletion_requested_at, deletion_after
 `
 
 type UpdateUserNameParams struct {
@@ -139,7 +136,6 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.PhotoKey,
 		&i.Theme,
 		&i.Language,
-		&i.HideDecorations,
 		&i.DeletionRequestedAt,
 		&i.DeletionAfter,
 	)

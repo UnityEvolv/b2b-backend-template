@@ -82,10 +82,7 @@ type exportedPolicy struct {
 type exportedInvite struct {
 	ID                    uuid.UUID  `json:"id"`
 	Email                 string     `json:"email"`
-	Kind                  string     `json:"kind"`
 	Role                  string     `json:"role"`
-	RoomID                *uuid.UUID `json:"room_id,omitempty"`
-	Purpose               *string    `json:"purpose,omitempty"`
 	App                   string     `json:"app"`
 	ExpiresAt             time.Time  `json:"expires_at"`
 	AcceptedAt            *time.Time `json:"accepted_at,omitempty"`
@@ -133,7 +130,7 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 		}
 		for _, inv := range invites {
 			out.Invites = append(out.Invites, exportedInvite{
-				ID: inv.ID, Email: inv.Email, Kind: inv.Kind, Role: inv.Role, RoomID: uuidOf(inv.RoomID), Purpose: textOf(inv.Purpose),
+				ID: inv.ID, Email: inv.Email, Role: inv.Role,
 				App: inv.App, ExpiresAt: inv.ExpiresAt.UTC(), AcceptedAt: timeOf(inv.AcceptedAt), AcceptedUserID: uuidOf(inv.AcceptedUserID),
 				AcceptedMembershipID: uuidOf(inv.AcceptedMembershipID), RevokedAt: timeOf(inv.RevokedAt),
 				InvitedByMembershipID: uuidOf(inv.InvitedByMembershipID), CreatedAt: inv.CreatedAt.UTC(),

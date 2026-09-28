@@ -24,10 +24,9 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
-// Local accounts (UO-56): orgs without an identity provider, and guests
-// anywhere, sign in with email and password. The account exists from the
-// email verification story; this adds the password, the sign-in, and the
-// reset. Entra users never get a password.
+// Local accounts: orgs without an identity provider sign in with email and
+// password. The account exists from email verification; this adds the
+// password, the sign-in, and the reset. Entra users never get a password.
 
 const (
 	resetTTL     = time.Hour
@@ -337,7 +336,7 @@ func (s *Server) ForgotPassword(ctx context.Context, req api.ForgotPasswordReque
 	address := normalizeEmail(req.Body.Email)
 	origin, appOK := s.appOrigin(string(req.Body.App))
 	if address == "" || !appOK {
-		fields := map[string]string{"email": "an email address", "app": "ofis, admin or platform"}
+		fields := map[string]string{"email": "an email address", "app": s.appList()}
 		return api.ForgotPassword400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Which address?", Fields: &fields}}, nil
 	}
 	var (

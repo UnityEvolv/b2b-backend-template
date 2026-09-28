@@ -1,17 +1,13 @@
 # Invites
 
-One mechanism for three flows (UO-54): an admin invites an employee into
-the organization; a platform operator invites the first Owner of a new
-organization; a member invites a guest into one room (the guest invites
-story owns the room rules and the grant; this owns the token and the
-acceptance). The identity service holds them.
+One mechanism for two flows: an admin invites someone into the
+organization, and a platform operator invites the first Owner of a new
+organization. The identity service holds them.
 
 ## The record
 
-An invite says what it grants: the organization, the role (or guest and
-the room, with the inviter's purpose), who sent it, and when it expires
-(seven days by default, up to thirty; guests as short as the inviter
-says). The token is random, stored hashed, and found only through the link.
+An invite says what it grants: the organization and the role, who sent
+it, and when it expires (seven days by default, up to thirty). The token is random, stored hashed, and found only through the link.
 Statuses: `pending`, `accepted`, `revoked`, `expired`.
 
 ## Sending
@@ -20,31 +16,32 @@ Statuses: `pending`, `accepted`, `revoked`, `expired`.
   expires_in_hours}`: the users permission, for a role the caller may
   manage (an Owner any but Owner, an Admin a User); a platform operator
   may invite an Owner. Rate limited per member (fifty an hour).
-- `POST /identity/v1/internal/invites` (services): the office service's
-  guest invites (`kind: guest`, `room_id`, `purpose`, the inviter's
-  membership) and the organization service's first-Owner invite.
+- `POST /identity/v1/internal/invites` (services): another service
+  inviting, such as the user service's bulk import. `app` defaults to the
+  main app.
 
 An address that already belongs to an active member is refused
-(`invite.already_member`; for a guest the message says to add them to the
-office instead). An open invite for the same address and kind is reissued,
+(`invite.already_member`). An open invite for the same address is reissued,
 not duplicated: a fresh link, the old one dead. The email goes on the
 organization's behalf through the notification outbox (`invite` template)
-with a link into the app that asked: `app/accept-invite?token=…`.
+with a link into the app that asked: `app/accept-invite?token=…`. The apps
+are configuration: `APP_NAMES` (`account,admin,platform` by default, the
+first being the main app) and `APP_ORIGIN_<NAME>` for each.
 Audited as `invite.sent` or `invite.resent`.
 
 ## Managing
 
 - `GET /identity/v1/organizations/{org}/invites?status&cursor&limit`: the
   users permission lists every invite; any member lists the ones they sent
-  with `mine=true`, which is where a guest's inviter extends or revokes them.
+  with `mine=true`, which is where an inviter extends or revokes them.
 - `POST …/invites/{id}/resend {expires_in_hours}`: a fresh link and
-  expiry; also how an expired one is revived and a guest invite extended.
+  expiry; also how an expired one is revived.
 - `DELETE …/invites/{id}`: withdrawn; the link stops working. Audited.
 
 ## Accepting
 
 - `GET /identity/v1/invites/{token}`: what the link is for, for the
-  acceptance page: organization, kind, role, room and purpose, expiry, and
+  acceptance page: organization, role, expiry, and
   the address partly hidden. Used, withdrawn and expired links are 404 with
   a code saying which.
 - `POST /identity/v1/invites/{token}/accept {name}`: one use. The user
@@ -52,12 +49,12 @@ Audited as `invite.sent` or `invite.resent`.
   name); a second organization inviting a known address gets a second
   membership, never a second account; a membership that was left comes
   back. At the plan's user cap the acceptance is refused with
-  `plan.limit_reached` and the invite stays open for after the upgrade;
-  guests do not count. Audited as `invite.accepted`.
+  `plan.limit_reached` and the invite stays open for after the upgrade.
+  Audited as `invite.accepted`.
 
 The answer says what comes next. A member of an organization with an
 identity provider signs in through it (`sign_in_entra`). Everyone else
-(members of a local organization, guests anywhere) gets a local account: a
+(members of a local organization) gets a local account: a
 verification link is sent and they set a password (`verify_email`), unless
 they already have one (`sign_in`). See [local-accounts.md](local-accounts.md).
 

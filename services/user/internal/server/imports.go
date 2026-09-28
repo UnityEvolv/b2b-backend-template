@@ -22,14 +22,13 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// Bulk user import (UO-69): an admin seeds many people from a spreadsheet.
+// Bulk user import: an admin seeds many people from a spreadsheet.
 // Every row is checked and reported; valid rows are sent invites; nothing
 // is dropped silently.
 
-const (
-	importMaxBytes = 5 << 20
-	importApp      = "ofis"
-)
+// importMaxBytes is the largest spreadsheet taken. The invites it sends open
+// the main app.
+const importMaxBytes = 5 << 20
 
 // mapping names the spreadsheet column for each field.
 type mapping struct {
@@ -245,7 +244,7 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 			out.Rows = append(out.Rows, r)
 			continue
 		}
-		err := s.invites.CreateInvite(ctx, NewInvite{OrgID: req.OrgId, Email: address, Kind: "member", Role: roleName, App: importApp, InvitedByMembershipID: invitedBy})
+		err := s.invites.CreateInvite(ctx, NewInvite{OrgID: req.OrgId, Email: address, Role: roleName, InvitedByMembershipID: invitedBy})
 		var refusal *InviteRefusal
 		switch {
 		case errors.As(err, &refusal):

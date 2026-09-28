@@ -41,15 +41,15 @@ func TestEmailIsVerifiedByTheLinkOnce(t *testing.T) {
 	f := newAPI(t)
 	b := f.browser()
 	userID := uuid.New()
-	create := map[string]any{"user_id": userID, "email": "Ada@Example.com", "org_id": acme, "org_name": "Acme", "app": "ofis"}
+	create := map[string]any{"user_id": userID, "email": "Ada@Example.com", "org_id": acme, "org_name": "Acme", "app": "account"}
 
 	// Only a service may start an account; the shape is checked.
 	if rec := b.do(http.MethodPost, "/v1/internal/local-accounts", f.platform(), create); rec.Code != http.StatusForbidden {
 		t.Errorf("a person starting an account: %d", rec.Code)
 	}
 	for _, bad := range []map[string]any{
-		{"user_id": userID, "email": "not-an-address", "org_id": acme, "org_name": "Acme", "app": "ofis"},
-		{"user_id": userID, "email": "ada@example.com", "org_id": acme, "org_name": "", "app": "ofis"},
+		{"user_id": userID, "email": "not-an-address", "org_id": acme, "org_name": "Acme", "app": "account"},
+		{"user_id": userID, "email": "ada@example.com", "org_id": acme, "org_name": "", "app": "account"},
 		{"user_id": userID, "email": "ada@example.com", "org_id": acme, "org_name": "Acme", "app": "shop"},
 	} {
 		if rec := b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), bad); rec.Code != http.StatusBadRequest {
@@ -66,7 +66,7 @@ func TestEmailIsVerifiedByTheLinkOnce(t *testing.T) {
 	if m.OrgID != acme.String() || m.OrgName != "Acme" || m.To != "ada@example.com" || m.Template != "verify_email" {
 		t.Errorf("email: %+v", m)
 	}
-	if !strings.HasPrefix(m.Data["link"].(string), "http://ofis.test/verify-email?token=") {
+	if !strings.HasPrefix(m.Data["link"].(string), "http://account.test/verify-email?token=") {
 		t.Errorf("link: %v", m.Data["link"])
 	}
 	if f.audited("email.verification_sent") != 1 {
@@ -122,7 +122,7 @@ func TestResendIsQuietAndThrottled(t *testing.T) {
 	f := newAPI(t)
 	b := f.browser()
 	userID := uuid.New()
-	create := map[string]any{"user_id": userID, "email": "bob@example.com", "org_id": globex, "org_name": "Globex", "app": "ofis"}
+	create := map[string]any{"user_id": userID, "email": "bob@example.com", "org_id": globex, "org_name": "Globex", "app": "account"}
 	if rec := b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), create); rec.Code != http.StatusOK {
 		t.Fatalf("create: %d", rec.Code)
 	}
@@ -130,7 +130,7 @@ func TestResendIsQuietAndThrottled(t *testing.T) {
 
 	// A resend sends a new link on the same org's behalf and the first link
 	// stops working.
-	resend := map[string]any{"email": "BOB@example.com", "app": "ofis"}
+	resend := map[string]any{"email": "BOB@example.com", "app": "account"}
 	if rec := b.do(http.MethodPost, "/v1/email-verification/resend", "", resend); rec.Code != http.StatusAccepted {
 		t.Fatalf("resend: %d %s", rec.Code, rec.Body.String())
 	}
@@ -158,7 +158,7 @@ func TestResendIsQuietAndThrottled(t *testing.T) {
 		t.Errorf("throttle did not hold: %d emails", f.sentCount())
 	}
 	// Unknown address: the same answer, nothing sent. A verified one too.
-	if rec := b.do(http.MethodPost, "/v1/email-verification/resend", "", map[string]any{"email": "nobody@example.com", "app": "ofis"}); rec.Code != http.StatusAccepted || f.sentCount() != sent {
+	if rec := b.do(http.MethodPost, "/v1/email-verification/resend", "", map[string]any{"email": "nobody@example.com", "app": "account"}); rec.Code != http.StatusAccepted || f.sentCount() != sent {
 		t.Errorf("unknown address: %d, %d emails", rec.Code, f.sentCount())
 	}
 	if rec := b.do(http.MethodPost, "/v1/email-verification/verify", "", map[string]any{"token": second}); rec.Code != http.StatusBadRequest {
@@ -171,7 +171,7 @@ func TestResendIsQuietAndThrottled(t *testing.T) {
 		t.Errorf("verified address: %d, %d emails", rec.Code, f.sentCount())
 	}
 	// Not an address, or not an app: the one refusal.
-	if rec := b.do(http.MethodPost, "/v1/email-verification/resend", "", map[string]any{"email": "x", "app": "ofis"}); rec.Code != http.StatusBadRequest {
+	if rec := b.do(http.MethodPost, "/v1/email-verification/resend", "", map[string]any{"email": "x", "app": "account"}); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad address: %d", rec.Code)
 	}
 }

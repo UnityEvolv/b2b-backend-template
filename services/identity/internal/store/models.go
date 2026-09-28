@@ -67,10 +67,7 @@ type Invite struct {
 	OrgID                 uuid.UUID
 	ID                    uuid.UUID
 	Email                 string
-	Kind                  string
 	Role                  string
-	RoomID                pgtype.UUID
-	Purpose               pgtype.Text
 	App                   string
 	TokenHash             []byte
 	ExpiresAt             time.Time

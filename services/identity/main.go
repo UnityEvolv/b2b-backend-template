@@ -1,4 +1,4 @@
-// Command identity is the identity service (UO-51): sign-in through an
+// Command identity is the identity service: sign-in through an
 // organization's identity provider, sessions, and the tokens every other
 // service verifies. It replaces the stub issuer.
 package main
@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -71,7 +70,7 @@ func run() error {
 		environment = env.String("ENVIRONMENT", "local")
 		baseHost    = env.String("BASE_HOSTNAME", "")
 		origins     = config.AppOrigins(baseHost, env.List("ALLOWED_ORIGINS"))
-		// The desktop app's URL scheme (UO-117): where a sign-in it started in
+		// The desktop app's URL scheme: where a sign-in it started in
 		// the system browser is handed back. Empty turns desktop sign-in off.
 		desktopScheme = env.String("DESKTOP_SCHEME", "unityofis")
 		hosts         = config.HostsFor(baseHost)
@@ -85,11 +84,8 @@ func run() error {
 		// redirect URI and where a sign-in returns to. Derived from the base
 		// hostname; a laptop names them.
 		publicURL = env.String("IDENTITY_PUBLIC_URL", derived(baseHost, "https://"+hosts.API+"/identity"))
-		apps      = map[string]string{
-			"ofis":     env.String("APP_ORIGIN_OFIS", derived(baseHost, "https://"+hosts.Ofis)),
-			"admin":    env.String("APP_ORIGIN_ADMIN", derived(baseHost, "https://"+hosts.Admin)),
-			"platform": env.String("APP_ORIGIN_PLATFORM", derived(baseHost, "https://"+hosts.Platform)),
-		}
+		// The web apps, by name (APP_NAMES), each at APP_ORIGIN_<NAME>.
+		apps          = config.AppsFrom(env, baseHost)
 		accessTTL     = env.Duration("ACCESS_TOKEN_TTL", 15*time.Minute)
 		secureCookies = env.Bool("SECURE_COOKIES", true)
 		// Local only: mint service tokens for any service that asks, as the
@@ -112,11 +108,6 @@ func run() error {
 	}
 	if publicURL == "" {
 		env.Required("IDENTITY_PUBLIC_URL")
-	}
-	for app, origin := range apps {
-		if origin == "" {
-			env.Required("APP_ORIGIN_" + strings.ToUpper(app))
-		}
 	}
 	if err := env.Err(); err != nil {
 		return err
@@ -183,7 +174,7 @@ func run() error {
 	recorder := audit.NewClient(auditURL, tokens, nil)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
 		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), server.RedisPublisher{Client: rdb}, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
-		server.Config{PublicURL: publicURL, Apps: apps, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
+		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

@@ -16,7 +16,7 @@ import (
 const acceptInvite = `-- name: AcceptInvite :one
 UPDATE invites SET accepted_at = now(), accepted_user_id = $1, accepted_membership_id = $2
 WHERE token_hash = $3 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
-RETURNING org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
+RETURNING org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type AcceptInviteParams struct {
@@ -33,10 +33,7 @@ func (q *Queries) AcceptInvite(ctx context.Context, arg AcceptInviteParams) (Inv
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -411,7 +408,7 @@ func (q *Queries) GetIdentityProvider(ctx context.Context, orgID uuid.UUID) (Ide
 }
 
 const getInvite = `-- name: GetInvite :one
-SELECT org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE org_id = $1 AND id = $2
+SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE org_id = $1 AND id = $2
 `
 
 type GetInviteParams struct {
@@ -426,10 +423,7 @@ func (q *Queries) GetInvite(ctx context.Context, arg GetInviteParams) (Invite, e
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -447,7 +441,7 @@ func (q *Queries) GetInvite(ctx context.Context, arg GetInviteParams) (Invite, e
 }
 
 const getInviteByToken = `-- name: GetInviteByToken :one
-SELECT org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE token_hash = $1
+SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE token_hash = $1
 `
 
 // global: found by the token in the link, which names no org.
@@ -458,10 +452,7 @@ func (q *Queries) GetInviteByToken(ctx context.Context, tokenHash []byte) (Invit
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -733,19 +724,16 @@ func (q *Queries) InsertEmailVerification(ctx context.Context, arg InsertEmailVe
 }
 
 const insertInvite = `-- name: InsertInvite :one
-INSERT INTO invites (org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, invited_by_membership_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
+INSERT INTO invites (org_id, id, email, role, app, token_hash, expires_at, invited_by_membership_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type InsertInviteParams struct {
 	OrgID                 uuid.UUID
 	ID                    uuid.UUID
 	Email                 string
-	Kind                  string
 	Role                  string
-	RoomID                pgtype.UUID
-	Purpose               pgtype.Text
 	App                   string
 	TokenHash             []byte
 	ExpiresAt             time.Time
@@ -757,10 +745,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (Inv
 		arg.OrgID,
 		arg.ID,
 		arg.Email,
-		arg.Kind,
 		arg.Role,
-		arg.RoomID,
-		arg.Purpose,
 		arg.App,
 		arg.TokenHash,
 		arg.ExpiresAt,
@@ -771,10 +756,7 @@ func (q *Queries) InsertInvite(ctx context.Context, arg InsertInviteParams) (Inv
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -1042,7 +1024,7 @@ func (q *Queries) LatestEmailVerification(ctx context.Context, userID uuid.UUID)
 }
 
 const listInvites = `-- name: ListInvites :many
-SELECT org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites
+SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites
 WHERE org_id = $1
   AND ($2::uuid IS NULL OR invited_by_membership_id = $2::uuid)
   AND ($3::text IS NULL
@@ -1085,10 +1067,7 @@ func (q *Queries) ListInvites(ctx context.Context, arg ListInvitesParams) ([]Inv
 			&i.OrgID,
 			&i.ID,
 			&i.Email,
-			&i.Kind,
 			&i.Role,
-			&i.RoomID,
-			&i.Purpose,
 			&i.App,
 			&i.TokenHash,
 			&i.ExpiresAt,
@@ -1114,7 +1093,7 @@ func (q *Queries) ListInvites(ctx context.Context, arg ListInvitesParams) ([]Inv
 
 const listInvitesOfOrg = `-- name: ListInvitesOfOrg :many
 
-SELECT org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE org_id = $1 ORDER BY created_at, id
+SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE org_id = $1 ORDER BY created_at, id
 `
 
 // Org offboarding, account deletion, email change (UO-183, UO-184).
@@ -1132,10 +1111,7 @@ func (q *Queries) ListInvitesOfOrg(ctx context.Context, orgID uuid.UUID) ([]Invi
 			&i.OrgID,
 			&i.ID,
 			&i.Email,
-			&i.Kind,
 			&i.Role,
-			&i.RoomID,
-			&i.Purpose,
 			&i.App,
 			&i.TokenHash,
 			&i.ExpiresAt,
@@ -1421,8 +1397,8 @@ func (q *Queries) MoveSession(ctx context.Context, arg MoveSessionParams) (Sessi
 }
 
 const pendingInviteForEmail = `-- name: PendingInviteForEmail :one
-SELECT org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites
-WHERE org_id = $1 AND email = $2 AND kind = $3
+SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites
+WHERE org_id = $1 AND email = $2
   AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
 ORDER BY created_at DESC LIMIT 1
 `
@@ -1430,22 +1406,18 @@ ORDER BY created_at DESC LIMIT 1
 type PendingInviteForEmailParams struct {
 	OrgID uuid.UUID
 	Email string
-	Kind  string
 }
 
-// The open invite of this kind for an address, if one exists: sending
+// The open invite for an address, if one exists: sending
 // again reissues it rather than making a second.
 func (q *Queries) PendingInviteForEmail(ctx context.Context, arg PendingInviteForEmailParams) (Invite, error) {
-	row := q.db.QueryRow(ctx, pendingInviteForEmail, arg.OrgID, arg.Email, arg.Kind)
+	row := q.db.QueryRow(ctx, pendingInviteForEmail, arg.OrgID, arg.Email)
 	var i Invite
 	err := row.Scan(
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -1465,7 +1437,7 @@ func (q *Queries) PendingInviteForEmail(ctx context.Context, arg PendingInviteFo
 const reissueInvite = `-- name: ReissueInvite :one
 UPDATE invites SET token_hash = $1, expires_at = $2
 WHERE org_id = $3 AND id = $4 AND accepted_at IS NULL AND revoked_at IS NULL
-RETURNING org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
+RETURNING org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type ReissueInviteParams struct {
@@ -1488,10 +1460,7 @@ func (q *Queries) ReissueInvite(ctx context.Context, arg ReissueInviteParams) (I
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,
@@ -1530,7 +1499,7 @@ func (q *Queries) RetireEmailVerifications(ctx context.Context, arg RetireEmailV
 const revokeInvite = `-- name: RevokeInvite :one
 UPDATE invites SET revoked_at = now()
 WHERE org_id = $1 AND id = $2 AND accepted_at IS NULL AND revoked_at IS NULL
-RETURNING org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
+RETURNING org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type RevokeInviteParams struct {
@@ -1545,10 +1514,7 @@ func (q *Queries) RevokeInvite(ctx context.Context, arg RevokeInviteParams) (Inv
 		&i.OrgID,
 		&i.ID,
 		&i.Email,
-		&i.Kind,
 		&i.Role,
-		&i.RoomID,
-		&i.Purpose,
 		&i.App,
 		&i.TokenHash,
 		&i.ExpiresAt,

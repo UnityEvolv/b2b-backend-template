@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -85,12 +84,8 @@ func run() error {
 		userURL         = env.Required("USER_URL")
 		identityURL     = env.Required("IDENTITY_URL")
 		notificationURL = env.Required("NOTIFICATION_URL")
-		hosts           = config.HostsFor(baseHost)
-		apps            = map[string]string{
-			"ofis":     env.String("APP_ORIGIN_OFIS", derived(baseHost, "https://"+hosts.Ofis)),
-			"admin":    env.String("APP_ORIGIN_ADMIN", derived(baseHost, "https://"+hosts.Admin)),
-			"platform": env.String("APP_ORIGIN_PLATFORM", derived(baseHost, "https://"+hosts.Platform)),
-		}
+		// The web apps, by name (APP_NAMES), each at APP_ORIGIN_<NAME>.
+		apps = config.AppsFrom(env, baseHost)
 		// The KMS master key: "gcp" with the full crypto key name, or "file"
 		// with a path, which is for a laptop only.
 		kmsProvider = env.String("KMS_PROVIDER", "file")
@@ -108,11 +103,6 @@ func run() error {
 	password, err := db.PasswordFromEnv(service, db.LocalPasswords())
 	if err != nil {
 		return err
-	}
-	for app, origin := range apps {
-		if origin == "" {
-			env.Required("APP_ORIGIN_" + strings.ToUpper(app))
-		}
 	}
 	if err := env.Err(); err != nil {
 		return err
@@ -184,7 +174,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	srv := server.New(cluster, logger, recorder, wrapper, authz.Client(authorizationURL, tokens, nil), deps, apps).
+	srv := server.New(cluster, logger, recorder, wrapper, authz.Client(authorizationURL, tokens, nil), deps, apps.Origins).
 		WithOffboarding(server.Offboarding{
 			Platform: server.HTTPPlatform{Identity: identityURL, Billing: billingURL, Audit: auditURL, User: userURL, Tokens: tokens},
 			Data:     orgdata.NewClient(tokens, nil),
@@ -306,12 +296,4 @@ func dataOwners(notificationURL, billingURL, authorizationURL, identityURL, user
 		{Name: "authorization", Base: authorizationURL}, {Name: "identity", Base: identityURL}, {Name: "user", Base: userURL},
 		{Name: "audit", Base: auditURL},
 	}
-}
-
-// derived is value when a base hostname exists, else "" so it must be named.
-func derived(baseHost, value string) string {
-	if baseHost == "" {
-		return ""
-	}
-	return value
 }

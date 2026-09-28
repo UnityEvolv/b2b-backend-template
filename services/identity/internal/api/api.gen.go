@@ -52,24 +52,6 @@ func (e IdentityProviderStatus) Valid() bool {
 	}
 }
 
-// Defines values for InviteKind.
-const (
-	InviteKindGuest  InviteKind = "guest"
-	InviteKindMember InviteKind = "member"
-)
-
-// Valid indicates whether the value is a known member of the InviteKind enum.
-func (e InviteKind) Valid() bool {
-	switch e {
-	case InviteKindGuest:
-		return true
-	case InviteKindMember:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for InviteStatus.
 const (
 	InviteStatusAccepted InviteStatus = "accepted"
@@ -115,24 +97,6 @@ func (e InviteAcceptedNext) Valid() bool {
 	}
 }
 
-// Defines values for InvitePreviewKind.
-const (
-	InvitePreviewKindGuest  InvitePreviewKind = "guest"
-	InvitePreviewKindMember InvitePreviewKind = "member"
-)
-
-// Valid indicates whether the value is a known member of the InvitePreviewKind enum.
-func (e InvitePreviewKind) Valid() bool {
-	switch e {
-	case InvitePreviewKindGuest:
-		return true
-	case InvitePreviewKindMember:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MfaChallengeMfa.
 const (
 	Challenge MfaChallengeMfa = "challenge"
@@ -160,108 +124,6 @@ const (
 func (e NewIdentityProviderType) Valid() bool {
 	switch e {
 	case NewIdentityProviderTypeEntra:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for NewInternalInviteApp.
-const (
-	NewInternalInviteAppAdmin    NewInternalInviteApp = "admin"
-	NewInternalInviteAppOfis     NewInternalInviteApp = "ofis"
-	NewInternalInviteAppPlatform NewInternalInviteApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the NewInternalInviteApp enum.
-func (e NewInternalInviteApp) Valid() bool {
-	switch e {
-	case NewInternalInviteAppAdmin:
-		return true
-	case NewInternalInviteAppOfis:
-		return true
-	case NewInternalInviteAppPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for NewInternalInviteKind.
-const (
-	NewInternalInviteKindGuest  NewInternalInviteKind = "guest"
-	NewInternalInviteKindMember NewInternalInviteKind = "member"
-)
-
-// Valid indicates whether the value is a known member of the NewInternalInviteKind enum.
-func (e NewInternalInviteKind) Valid() bool {
-	switch e {
-	case NewInternalInviteKindGuest:
-		return true
-	case NewInternalInviteKindMember:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for NewInviteApp.
-const (
-	NewInviteAppAdmin    NewInviteApp = "admin"
-	NewInviteAppOfis     NewInviteApp = "ofis"
-	NewInviteAppPlatform NewInviteApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the NewInviteApp enum.
-func (e NewInviteApp) Valid() bool {
-	switch e {
-	case NewInviteAppAdmin:
-		return true
-	case NewInviteAppOfis:
-		return true
-	case NewInviteAppPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ResendVerificationJSONBodyApp.
-const (
-	ResendVerificationJSONBodyAppAdmin    ResendVerificationJSONBodyApp = "admin"
-	ResendVerificationJSONBodyAppOfis     ResendVerificationJSONBodyApp = "ofis"
-	ResendVerificationJSONBodyAppPlatform ResendVerificationJSONBodyApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the ResendVerificationJSONBodyApp enum.
-func (e ResendVerificationJSONBodyApp) Valid() bool {
-	switch e {
-	case ResendVerificationJSONBodyAppAdmin:
-		return true
-	case ResendVerificationJSONBodyAppOfis:
-		return true
-	case ResendVerificationJSONBodyAppPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CreateLocalAccountJSONBodyApp.
-const (
-	CreateLocalAccountJSONBodyAppAdmin    CreateLocalAccountJSONBodyApp = "admin"
-	CreateLocalAccountJSONBodyAppOfis     CreateLocalAccountJSONBodyApp = "ofis"
-	CreateLocalAccountJSONBodyAppPlatform CreateLocalAccountJSONBodyApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the CreateLocalAccountJSONBodyApp enum.
-func (e CreateLocalAccountJSONBodyApp) Valid() bool {
-	switch e {
-	case CreateLocalAccountJSONBodyAppAdmin:
-		return true
-	case CreateLocalAccountJSONBodyAppOfis:
-		return true
-	case CreateLocalAccountJSONBodyAppPlatform:
 		return true
 	default:
 		return false
@@ -307,27 +169,6 @@ func (e RevokeOrgSessionsJSONBodyReason) Valid() bool {
 	}
 }
 
-// Defines values for ForgotPasswordJSONBodyApp.
-const (
-	ForgotPasswordJSONBodyAppAdmin    ForgotPasswordJSONBodyApp = "admin"
-	ForgotPasswordJSONBodyAppOfis     ForgotPasswordJSONBodyApp = "ofis"
-	ForgotPasswordJSONBodyAppPlatform ForgotPasswordJSONBodyApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the ForgotPasswordJSONBodyApp enum.
-func (e ForgotPasswordJSONBodyApp) Valid() bool {
-	switch e {
-	case ForgotPasswordJSONBodyAppAdmin:
-		return true
-	case ForgotPasswordJSONBodyAppOfis:
-		return true
-	case ForgotPasswordJSONBodyAppPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ListInvitesParamsStatus.
 const (
 	ListInvitesParamsStatusAccepted ListInvitesParamsStatus = "accepted"
@@ -352,27 +193,6 @@ func (e ListInvitesParamsStatus) Valid() bool {
 	}
 }
 
-// Defines values for SignInLocalJSONBodyApp.
-const (
-	SignInLocalJSONBodyAppAdmin    SignInLocalJSONBodyApp = "admin"
-	SignInLocalJSONBodyAppOfis     SignInLocalJSONBodyApp = "ofis"
-	SignInLocalJSONBodyAppPlatform SignInLocalJSONBodyApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the SignInLocalJSONBodyApp enum.
-func (e SignInLocalJSONBodyApp) Valid() bool {
-	switch e {
-	case SignInLocalJSONBodyAppAdmin:
-		return true
-	case SignInLocalJSONBodyAppOfis:
-		return true
-	case SignInLocalJSONBodyAppPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SignInMethods200JSONResponseBodyMethod.
 const (
 	SignInMethods200JSONResponseBodyMethodEntra SignInMethods200JSONResponseBodyMethod = "entra"
@@ -385,27 +205,6 @@ func (e SignInMethods200JSONResponseBodyMethod) Valid() bool {
 	case SignInMethods200JSONResponseBodyMethodEntra:
 		return true
 	case SignInMethods200JSONResponseBodyMethodLocal:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for StartSignInParamsApp.
-const (
-	StartSignInParamsAppAdmin    StartSignInParamsApp = "admin"
-	StartSignInParamsAppOfis     StartSignInParamsApp = "ofis"
-	StartSignInParamsAppPlatform StartSignInParamsApp = "platform"
-)
-
-// Valid indicates whether the value is a known member of the StartSignInParamsApp enum.
-func (e StartSignInParamsApp) Valid() bool {
-	switch e {
-	case StartSignInParamsAppAdmin:
-		return true
-	case StartSignInParamsAppOfis:
-		return true
-	case StartSignInParamsAppPlatform:
 		return true
 	default:
 		return false
@@ -524,17 +323,11 @@ type Invite struct {
 	ExpiresAt             time.Time           `json:"expires_at"`
 	InviteId              openapi_types.UUID  `json:"invite_id"`
 	InvitedByMembershipId *openapi_types.UUID `json:"invited_by_membership_id,omitempty"`
-	Kind                  InviteKind          `json:"kind"`
 	OrgId                 openapi_types.UUID  `json:"org_id"`
-	Purpose               *string             `json:"purpose,omitempty"`
 	RevokedAt             *time.Time          `json:"revoked_at,omitempty"`
 	Role                  string              `json:"role"`
-	RoomId                *openapi_types.UUID `json:"room_id,omitempty"`
 	Status                InviteStatus        `json:"status"`
 }
-
-// InviteKind defines model for Invite.Kind.
-type InviteKind string
 
 // InviteStatus defines model for Invite.Status.
 type InviteStatus string
@@ -565,18 +358,12 @@ type InvitePage struct {
 // InvitePreview defines model for InvitePreview.
 type InvitePreview struct {
 	// EmailHint The address, partly hidden, so the person can tell which account it is for.
-	EmailHint *string             `json:"email_hint,omitempty"`
-	ExpiresAt time.Time           `json:"expires_at"`
-	Kind      InvitePreviewKind   `json:"kind"`
-	OrgId     openapi_types.UUID  `json:"org_id"`
-	OrgName   string              `json:"org_name"`
-	Purpose   *string             `json:"purpose,omitempty"`
-	Role      string              `json:"role"`
-	RoomId    *openapi_types.UUID `json:"room_id,omitempty"`
+	EmailHint *string            `json:"email_hint,omitempty"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	OrgId     openapi_types.UUID `json:"org_id"`
+	OrgName   string             `json:"org_name"`
+	Role      string             `json:"role"`
 }
-
-// InvitePreviewKind defines model for InvitePreview.Kind.
-type InvitePreviewKind string
 
 // LocalAccount defines model for LocalAccount.
 type LocalAccount struct {
@@ -633,40 +420,27 @@ type NewIdentityProviderType string
 
 // NewInternalInvite defines model for NewInternalInvite.
 type NewInternalInvite struct {
-	App            NewInternalInviteApp `json:"app"`
-	Email          string               `json:"email"`
-	ExpiresInHours *int                 `json:"expires_in_hours,omitempty"`
+	// App Which web app the link opens, one of the configured apps; the main app when left out.
+	App            *string `json:"app,omitempty"`
+	Email          string  `json:"email"`
+	ExpiresInHours *int    `json:"expires_in_hours,omitempty"`
 
 	// InvitedByMembershipId The member who asked, when one did.
-	InvitedByMembershipId *openapi_types.UUID   `json:"invited_by_membership_id,omitempty"`
-	Kind                  NewInternalInviteKind `json:"kind"`
-	OrgId                 openapi_types.UUID    `json:"org_id"`
-	Purpose               *string               `json:"purpose,omitempty"`
-	Role                  *string               `json:"role,omitempty"`
-
-	// RoomId Required for a guest.
-	RoomId *openapi_types.UUID `json:"room_id,omitempty"`
+	InvitedByMembershipId *openapi_types.UUID `json:"invited_by_membership_id,omitempty"`
+	OrgId                 openapi_types.UUID  `json:"org_id"`
+	Role                  *string             `json:"role,omitempty"`
 }
-
-// NewInternalInviteApp defines model for NewInternalInvite.App.
-type NewInternalInviteApp string
-
-// NewInternalInviteKind defines model for NewInternalInvite.Kind.
-type NewInternalInviteKind string
 
 // NewInvite defines model for NewInvite.
 type NewInvite struct {
-	// App Which web app the link opens.
-	App            *NewInviteApp `json:"app,omitempty"`
-	Email          string        `json:"email"`
-	ExpiresInHours *int          `json:"expires_in_hours,omitempty"`
+	// App Which web app the link opens, one of the configured apps; the main app (account, unless the deployment names others) when left out.
+	App            *string `json:"app,omitempty"`
+	Email          string  `json:"email"`
+	ExpiresInHours *int    `json:"expires_in_hours,omitempty"`
 
 	// Role user, admin, billing_admin; owner only by a platform operator.
 	Role *string `json:"role,omitempty"`
 }
-
-// NewInviteApp Which web app the link opens.
-type NewInviteApp string
 
 // RecoveryCodes defines model for RecoveryCodes.
 type RecoveryCodes struct {
@@ -764,12 +538,10 @@ type OrgId = openapi_types.UUID
 
 // ResendVerificationJSONBody defines parameters for ResendVerification.
 type ResendVerificationJSONBody struct {
-	App   ResendVerificationJSONBodyApp `json:"app"`
-	Email string                        `json:"email"`
+	// App One of the configured web apps (account, admin and platform unless the deployment names others).
+	App   string `json:"app"`
+	Email string `json:"email"`
 }
-
-// ResendVerificationJSONBodyApp defines parameters for ResendVerification.
-type ResendVerificationJSONBodyApp string
 
 // VerifyEmailJSONBody defines parameters for VerifyEmail.
 type VerifyEmailJSONBody struct {
@@ -784,12 +556,12 @@ type CreateInternalInviteParams struct {
 
 // CreateLocalAccountJSONBody defines parameters for CreateLocalAccount.
 type CreateLocalAccountJSONBody struct {
-	// App Which web app the link opens.
-	App     CreateLocalAccountJSONBodyApp `json:"app"`
-	Email   string                        `json:"email"`
-	OrgId   openapi_types.UUID            `json:"org_id"`
-	OrgName string                        `json:"org_name"`
-	UserId  openapi_types.UUID            `json:"user_id"`
+	// App Which web app the link opens, one of the configured apps (account, admin and platform unless the deployment names others).
+	App     string             `json:"app"`
+	Email   string             `json:"email"`
+	OrgId   openapi_types.UUID `json:"org_id"`
+	OrgName string             `json:"org_name"`
+	UserId  openapi_types.UUID `json:"user_id"`
 
 	// Verified The caller has already proven the address (a self-serve
 	// signup): no link is sent, the account starts verified,
@@ -797,9 +569,6 @@ type CreateLocalAccountJSONBody struct {
 	// password.
 	Verified *bool `json:"verified,omitempty"`
 }
-
-// CreateLocalAccountJSONBodyApp defines parameters for CreateLocalAccount.
-type CreateLocalAccountJSONBodyApp string
 
 // MembershipEndedJSONBody defines parameters for MembershipEnded.
 type MembershipEndedJSONBody struct {
@@ -846,12 +615,10 @@ type SetPasswordJSONBody struct {
 
 // ForgotPasswordJSONBody defines parameters for ForgotPassword.
 type ForgotPasswordJSONBody struct {
-	App   ForgotPasswordJSONBodyApp `json:"app"`
-	Email string                    `json:"email"`
+	// App One of the configured web apps (account, admin and platform unless the deployment names others).
+	App   string `json:"app"`
+	Email string `json:"email"`
 }
-
-// ForgotPasswordJSONBodyApp defines parameters for ForgotPassword.
-type ForgotPasswordJSONBodyApp string
 
 // RequestEmailChangeJSONBody defines parameters for RequestEmailChange.
 type RequestEmailChangeJSONBody struct {
@@ -916,13 +683,11 @@ type ExchangeDesktopSignInJSONBody struct {
 
 // SignInLocalJSONBody defines parameters for SignInLocal.
 type SignInLocalJSONBody struct {
-	App      *SignInLocalJSONBodyApp `json:"app,omitempty"`
-	Email    string                  `json:"email"`
-	Password string                  `json:"password"`
+	// App One of the configured web apps; the main app (account, unless the deployment names others) when left out.
+	App      *string `json:"app,omitempty"`
+	Email    string  `json:"email"`
+	Password string  `json:"password"`
 }
-
-// SignInLocalJSONBodyApp defines parameters for SignInLocal.
-type SignInLocalJSONBodyApp string
 
 // SignInMethodsParams defines parameters for SignInMethods.
 type SignInMethodsParams struct {
@@ -954,7 +719,7 @@ type StartSignInParams struct {
 	OrgId  *openapi_types.UUID      `form:"org_id,omitempty" json:"org_id,omitempty"`
 	Email  *string                  `form:"email,omitempty" json:"email,omitempty"`
 	Next   *string                  `form:"next,omitempty" json:"next,omitempty"`
-	App    *StartSignInParamsApp    `form:"app,omitempty" json:"app,omitempty"`
+	App    *string                  `form:"app,omitempty" json:"app,omitempty"`
 	Client *StartSignInParamsClient `form:"client,omitempty" json:"client,omitempty"`
 
 	// CodeChallenge The desktop app's PKCE challenge, base64url SHA-256 of its verifier. Required with client=desktop.
@@ -963,9 +728,6 @@ type StartSignInParams struct {
 	// CodeChallengeMethod Only S256.
 	CodeChallengeMethod *StartSignInParamsCodeChallengeMethod `form:"code_challenge_method,omitempty" json:"code_challenge_method,omitempty"`
 }
-
-// StartSignInParamsApp defines parameters for StartSignIn.
-type StartSignInParamsApp string
 
 // StartSignInParamsClient defines parameters for StartSignIn.
 type StartSignInParamsClient string

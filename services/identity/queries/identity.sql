@@ -269,8 +269,8 @@ RETURNING *;
 DELETE FROM mfa_challenges WHERE expires_at < now() - interval '1 day';
 
 -- name: InsertInvite :one
-INSERT INTO invites (org_id, id, email, kind, role, room_id, purpose, app, token_hash, expires_at, invited_by_membership_id)
-VALUES (@org_id, @id, @email, @kind, @role, sqlc.narg('room_id'), sqlc.narg('purpose'), @app, @token_hash, @expires_at, sqlc.narg('invited_by_membership_id'))
+INSERT INTO invites (org_id, id, email, role, app, token_hash, expires_at, invited_by_membership_id)
+VALUES (@org_id, @id, @email, @role, @app, @token_hash, @expires_at, sqlc.narg('invited_by_membership_id'))
 RETURNING *;
 
 -- name: GetInvite :one
@@ -281,10 +281,10 @@ SELECT * FROM invites WHERE org_id = @org_id AND id = @id;
 SELECT * FROM invites WHERE token_hash = @token_hash;
 
 -- name: PendingInviteForEmail :one
--- The open invite of this kind for an address, if one exists: sending
+-- The open invite for an address, if one exists: sending
 -- again reissues it rather than making a second.
 SELECT * FROM invites
-WHERE org_id = @org_id AND email = @email AND kind = @kind
+WHERE org_id = @org_id AND email = @email
   AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
 ORDER BY created_at DESC LIMIT 1;
 

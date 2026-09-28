@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/mail"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -113,16 +114,26 @@ func (s *Server) appOrigin(app string) (string, bool) {
 	return origin, ok
 }
 
+// appList names every configured app, for a field error.
+func (s *Server) appList() string {
+	names := make([]string, 0, len(s.cfg.Apps))
+	for name := range s.cfg.Apps {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
+}
+
 // StartSignIn resolves the org, makes the attempt, and sends the browser
 // to the org's identity provider.
 func (s *Server) StartSignIn(ctx context.Context, req api.StartSignInRequestObject) (api.StartSignInResponseObject, error) {
 	p := req.Params
-	app := "ofis"
+	app := s.cfg.MainApp
 	if p.App != nil {
 		app = string(*p.App)
 	}
 	if _, ok := s.appOrigin(app); !ok {
-		fields := map[string]string{"app": "ofis, admin or platform"}
+		fields := map[string]string{"app": s.appList()}
 		return api.StartSignIn400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Not an app.", Fields: &fields}}, nil
 	}
 	// The desktop app starts here in the system browser with a PKCE
@@ -240,7 +251,7 @@ func (s *Server) back(app, code string) api.FinishSignInResponseObject {
 func (s *Server) backWith(app, code string, extra url.Values) api.FinishSignInResponseObject {
 	origin, ok := s.appOrigin(app)
 	if !ok {
-		origin = s.cfg.Apps["ofis"]
+		origin = s.cfg.Apps[s.cfg.MainApp]
 	}
 	q := url.Values{}
 	for k, v := range extra {
@@ -294,7 +305,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	// The attempt this browser started, from the cookie; the state must match.
 	orgID, attemptID, ok := parseAttemptCookie(cookieValue(ctx, attemptCookie))
 	if !ok || p.State == nil || *p.State != attemptID.String() {
-		return s.back("ofis", errAttemptExpired), nil
+		return s.back(s.cfg.MainApp, errAttemptExpired), nil
 	}
 	setCookie(ctx, attemptCookie, "", 0)
 
@@ -310,7 +321,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return s.back("ofis", errAttemptExpired), nil
+		return s.back(s.cfg.MainApp, errAttemptExpired), nil
 	}
 	if err != nil {
 		return nil, err

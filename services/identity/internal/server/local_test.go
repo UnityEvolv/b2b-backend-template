@@ -15,7 +15,7 @@ func (f *fixture) account(t *testing.T, email string, org uuid.UUID, pw string) 
 	t.Helper()
 	m := f.users.add(email, org, "active", nil)
 	b := f.browser()
-	rec := b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), map[string]any{"user_id": m.User.ID, "email": email, "org_id": org, "org_name": "Acme", "app": "ofis"})
+	rec := b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), map[string]any{"user_id": m.User.ID, "email": email, "org_id": org, "org_name": "Acme", "app": "account"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create account: %d %s", rec.Code, rec.Body.String())
 	}
@@ -37,7 +37,7 @@ func TestLocalAccountVerifiesSetsPasswordSignsInAndResets(t *testing.T) {
 	f := newAPI(t)
 	b := f.browser()
 	m := f.users.add("ada@example.com", acme, "active", nil)
-	create := map[string]any{"user_id": m.User.ID, "email": "ada@example.com", "org_id": acme, "org_name": "Acme", "app": "ofis"}
+	create := map[string]any{"user_id": m.User.ID, "email": "ada@example.com", "org_id": acme, "org_name": "Acme", "app": "account"}
 	b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), create)
 	_, link := f.lastLink(t)
 
@@ -101,7 +101,7 @@ func TestLocalAccountVerifiesSetsPasswordSignsInAndResets(t *testing.T) {
 	// Forgot: a reset link, quiet for strangers; the new password ends
 	// every session and the old password stops working.
 	sent := f.sentCount()
-	if rec := b.do(http.MethodPost, "/v1/local/password/forgot", "", map[string]any{"email": "nobody@example.com", "app": "ofis"}); rec.Code != http.StatusAccepted || f.sentCount() != sent {
+	if rec := b.do(http.MethodPost, "/v1/local/password/forgot", "", map[string]any{"email": "nobody@example.com", "app": "account"}); rec.Code != http.StatusAccepted || f.sentCount() != sent {
 		t.Errorf("forgot for a stranger: %d, %d emails", rec.Code, f.sentCount()-sent)
 	}
 	if rec := b.do(http.MethodPost, "/v1/local/password/forgot", "", map[string]any{"email": "ada@example.com", "app": "admin"}); rec.Code != http.StatusAccepted || f.sentCount() != sent+1 {
@@ -132,7 +132,7 @@ func TestLocalAccountVerifiesSetsPasswordSignsInAndResets(t *testing.T) {
 	// Three reset links an hour, then quiet.
 	sent = f.sentCount()
 	for i := 0; i < 4; i++ {
-		b.do(http.MethodPost, "/v1/local/password/forgot", "", map[string]any{"email": "ada@example.com", "app": "ofis"})
+		b.do(http.MethodPost, "/v1/local/password/forgot", "", map[string]any{"email": "ada@example.com", "app": "account"})
 	}
 	if f.sentCount() != sent+2 {
 		t.Errorf("reset links sent: %d, want 2 more (three an hour, one already)", f.sentCount()-sent)
@@ -149,7 +149,7 @@ func TestLocalSignInRefusals(t *testing.T) {
 	// Unverified: the right password says so; the address changed after
 	// verification, so the proof starts over.
 	bob := f.account(t, "bob@example.com", acme, "bobs-long-password")
-	b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), map[string]any{"user_id": bob, "email": "robert@example.com", "org_id": acme, "org_name": "Acme", "app": "ofis"})
+	b.do(http.MethodPost, "/v1/internal/local-accounts", f.service("user"), map[string]any{"user_id": bob, "email": "robert@example.com", "org_id": acme, "org_name": "Acme", "app": "account"})
 	if code, out := signIn("robert@example.com", "bobs-long-password"); code != http.StatusUnauthorized || out["code"] != "local_account.unverified" {
 		t.Errorf("unverified: %d %v", code, out)
 	}

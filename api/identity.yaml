@@ -72,8 +72,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [ofis, admin, platform]
-            default: ofis
+            description: One of the configured web apps; the main app (account, unless the deployment names others) when left out.
         - name: client
           in: query
           schema:
@@ -118,8 +117,8 @@ paths:
         The sign-in page cannot know which organization someone belongs to
         before they say who they are, so it asks by address. A domain
         claimed by an organization with an identity provider signs in
-        through it (`entra`); anything else (a local organization, an
-        unknown domain, a guest) signs in with a password (`local`). Nothing
+        through it (`entra`); anything else (a local organization or an
+        unknown domain) signs in with a password (`local`). Nothing
         else is said: no organization's name or existence is revealed to
         someone who has not signed in. Rate limited by address.
       security: []
@@ -562,8 +561,7 @@ paths:
                   maxLength: 200
                 app:
                   type: string
-                  enum: [ofis, admin, platform]
-                  description: Which web app the link opens.
+                  description: Which web app the link opens, one of the configured apps (account, admin and platform unless the deployment names others).
                 verified:
                   type: boolean
                   default: false
@@ -691,7 +689,7 @@ paths:
                   maxLength: 320
                 app:
                   type: string
-                  enum: [ofis, admin, platform]
+                  description: One of the configured web apps (account, admin and platform unless the deployment names others).
       responses:
         '202':
           description: Accepted
@@ -742,9 +740,9 @@ paths:
       operationId: signInLocal
       summary: Sign in with email and password
       description: |
-        For organizations without an identity provider, and for guests
-        anywhere. Starts a session and answers with the access token, as a
-        refresh would; the session cookie is set. A wrong address and a
+        For organizations without an identity provider. Starts a session and
+        answers with the access token, as a refresh would; the session
+        cookie is set. A wrong address and a
         wrong password are refused alike. Failed attempts are throttled per
         account and per address; a person who types their password right is
         never slowed. An unverified account is refused until its email is
@@ -767,8 +765,7 @@ paths:
                   maxLength: 200
                 app:
                   type: string
-                  enum: [ofis, admin, platform]
-                  default: ofis
+                  description: One of the configured web apps; the main app (account, unless the deployment names others) when left out.
       responses:
         '200':
           description: Signed in
@@ -1241,7 +1238,7 @@ paths:
                   maxLength: 320
                 app:
                   type: string
-                  enum: [ofis, admin, platform]
+                  description: One of the configured web apps (account, admin and platform unless the deployment names others).
       responses:
         '202':
           description: Accepted
@@ -1300,7 +1297,7 @@ paths:
       description: |
         Newest first, cursor paginated, by status. The users permission
         lists every invite; any member lists the ones they sent with
-        `mine=true`, which is where a guest's inviter extends or revokes them.
+        `mine=true`, which is where an inviter extends or revokes them.
       security:
         - bearer: []
       tags: [invites]
@@ -1344,7 +1341,7 @@ paths:
     post:
       operationId: resendInvite
       summary: Send an open invite again, with a fresh link and expiry
-      description: The users permission, or the member who sent it. A guest invite's inviter extends it this way. Audited.
+      description: The users permission, or the member who sent it. Audited.
       security:
         - bearer: []
       tags: [invites]
@@ -1409,9 +1406,8 @@ paths:
       operationId: createInternalInvite
       summary: An invite made by another service (services only)
       description: |
-        The office service's guest invites (kind guest, one room, a purpose
-        and an expiry set by the inviter) and the organization service's
-        first-owner invite. Same rules as the organization's own endpoint.
+        Another service inviting someone into an organization. Same rules
+        as the organization's own endpoint.
       security:
         - bearer: []
       tags: [internal]
@@ -1475,8 +1471,7 @@ paths:
         One use. The membership is made (the user too, on first sight, with
         the name given); a second organization inviting a known address
         gets a second membership, never a second account. Refused when the
-        organization is at its plan's user cap, leaving the invite open;
-        guests do not count. The answer says what comes next: sign in
+        organization is at its plan's user cap, leaving the invite open. The answer says what comes next: sign in
         through the organization's identity provider, verify the email and
         set a password, or sign in with the password the person already has.
       security: []
@@ -1525,8 +1520,7 @@ paths:
         Every live session carrying that membership moves at once: to
         another of the person's organizations by the landing rule, to the
         chooser, or, when none remain, it is revoked. Either way the person's
-        open sockets in that organization are told and closed, so nobody is
-        left standing in a room they have been removed from.
+        open connections in that organization are told and closed.
       security:
         - bearer: []
       tags: [internal]
@@ -2047,9 +2041,7 @@ components:
           description: user, admin, billing_admin; owner only by a platform operator.
         app:
           type: string
-          enum: [ofis, admin, platform]
-          default: ofis
-          description: Which web app the link opens.
+          description: Which web app the link opens, one of the configured apps; the main app (account, unless the deployment names others) when left out.
         expires_in_hours:
           type: integer
           minimum: 1
@@ -2057,7 +2049,7 @@ components:
           default: 168
     NewInternalInvite:
       type: object
-      required: [org_id, email, kind, app]
+      required: [org_id, email]
       properties:
         org_id:
           type: string
@@ -2065,22 +2057,12 @@ components:
         email:
           type: string
           maxLength: 320
-        kind:
-          type: string
-          enum: [member, guest]
         role:
           type: string
           default: user
-        room_id:
-          type: string
-          format: uuid
-          description: Required for a guest.
-        purpose:
-          type: string
-          maxLength: 200
         app:
           type: string
-          enum: [ofis, admin, platform]
+          description: Which web app the link opens, one of the configured apps; the main app when left out.
         expires_in_hours:
           type: integer
           minimum: 1
@@ -2092,7 +2074,7 @@ components:
           description: The member who asked, when one did.
     Invite:
       type: object
-      required: [invite_id, org_id, email, kind, role, status, expires_at, created_at]
+      required: [invite_id, org_id, email, role, status, expires_at, created_at]
       properties:
         invite_id:
           type: string
@@ -2102,15 +2084,7 @@ components:
           format: uuid
         email:
           type: string
-        kind:
-          type: string
-          enum: [member, guest]
         role:
-          type: string
-        room_id:
-          type: string
-          format: uuid
-        purpose:
           type: string
         status:
           type: string
@@ -2142,22 +2116,14 @@ components:
           type: string
     InvitePreview:
       type: object
-      required: [org_id, org_name, kind, role, expires_at]
+      required: [org_id, org_name, role, expires_at]
       properties:
         org_id:
           type: string
           format: uuid
         org_name:
           type: string
-        kind:
-          type: string
-          enum: [member, guest]
         role:
-          type: string
-        room_id:
-          type: string
-          format: uuid
-        purpose:
           type: string
         expires_at:
           type: string

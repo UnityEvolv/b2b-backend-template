@@ -373,7 +373,6 @@ type fixture struct {
 	h        http.Handler
 	idp      *fakeIdP
 	users    *fakeUsers
-	offices  *fakeOffices
 	orgs     fakeOrgs
 	recorder *memoryRecorder
 	events   *memoryEvents
@@ -455,7 +454,7 @@ func newAPI(t *testing.T) *fixture {
 		limiter = ratelimit.New(rdb, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}
 	grants := authz.Static{}
-	apps := map[string]string{"ofis": "http://ofis.test", "admin": "http://admin.test", "platform": "http://platform.test"}
+	apps := map[string]string{"account": "http://account.test", "admin": "http://admin.test", "platform": "http://platform.test"}
 	var logOut io.Writer = io.Discard
 	if os.Getenv("TEST_LOG") != "" {
 		logOut = os.Stderr
@@ -463,8 +462,6 @@ func newAPI(t *testing.T) *fixture {
 	logger := slog.New(slog.NewTextHandler(logOut, nil))
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, envelope.New(&memoryKeys{wrapper: wrapper, keys: map[string]envelope.WrappedKey{}}, wrapper),
 		users, orgs, grants, events, mail, limiter, wrapper, server.Config{PublicURL: identityURL, Apps: apps, AccessTTL: time.Minute, SecureCookies: false, EntraAuthority: idp.srv.URL, DesktopScheme: "unityofis"})
-	offices := &fakeOffices{}
-	srv = srv.WithOffices(offices)
 	api := srv.Handler(httpx.NewMux())
 
 	root := http.NewServeMux()
@@ -473,7 +470,7 @@ func newAPI(t *testing.T) *fixture {
 		root.Handle(p, api)
 	}
 	root.Handle("/", auth.Require(verifier, api))
-	return &fixture{srv: srv, offices: offices, t: t, h: httpx.Logged(logger, root), idp: idp, users: users, orgs: orgs, recorder: recorder, events: events, mail: mail, pool: pool, verifier: verifier, sig: sig, grants: grants, apps: apps, public: identityURL}
+	return &fixture{srv: srv, t: t, h: httpx.Logged(logger, root), idp: idp, users: users, orgs: orgs, recorder: recorder, events: events, mail: mail, pool: pool, verifier: verifier, sig: sig, grants: grants, apps: apps, public: identityURL}
 }
 
 // A browser: keeps cookies between requests.
@@ -557,20 +554,6 @@ func (f *fixture) signIn(b *browser, start string, who person) string {
 		f.t.Fatalf("callback: %d %s", rec.Code, rec.Body.String())
 	}
 	return rec.Header().Get("Location")
-}
-
-// fakeOffices stands in for the office service: the grants bound on a
-// guest's acceptance.
-type fakeOffices struct {
-	mu       sync.Mutex
-	accepted []uuid.UUID
-}
-
-func (o *fakeOffices) AcceptGrant(_ context.Context, _, grantID, _, _ uuid.UUID) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.accepted = append(o.accepted, grantID)
-	return nil
 }
 
 // FindByEmail is the person with an address.

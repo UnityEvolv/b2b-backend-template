@@ -54,7 +54,7 @@ func (s *Server) BootstrapOperator(ctx context.Context, address string) (bool, e
 		return false, nil
 	}
 	_, refused, err := s.issue(system(ctx), platform, inviteRequest{
-		email: address, kind: kindMember, role: string(authz.Owner), app: "platform", ttl: defaultInviteTTL, firstOnly: true,
+		email: address, role: string(authz.Owner), app: "platform", ttl: defaultInviteTTL, firstOnly: true,
 	})
 	if err != nil {
 		return false, withoutURL(err)

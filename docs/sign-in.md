@@ -9,7 +9,7 @@ verifies. It replaces the stub issuer.
 ## The flow
 
 1. The app sends the browser to `GET /identity/v1/sign-in/start?email=…`
-   (or `org_id=…`) with `next` (a path in the app) and `app` (ofis, admin,
+   (or `org_id=…`) with `next` (a path in the app) and `app` (account, admin,
    platform). The domain of the address picks the organization; the
    organization's provider is fetched (discovery); an attempt is stored with
    the PKCE verifier and nonce; a cookie binds the attempt to this browser;

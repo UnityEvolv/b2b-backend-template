@@ -63,12 +63,6 @@ type Organizations interface {
 	Status(ctx context.Context, orgID uuid.UUID) (OrgStatus, error)
 }
 
-// Offices is what this service needs of the office service: a guest's
-// room grant, bound to the membership accepting the invite that carried it.
-type Offices interface {
-	AcceptGrant(ctx context.Context, orgID, grantID, membershipID, userID uuid.UUID) error
-}
-
 // NewMembership is what an accepted invite asks the user service for.
 type NewMembership struct {
 	OrgID          uuid.UUID `json:"org_id"`

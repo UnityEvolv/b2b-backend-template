@@ -21,8 +21,7 @@ import (
 // Sessions are recorded so they can be listed and revoked, rather than only
 // expiring on their own (UO-77). Revocation is pushed: every ended session
 // is published for the realtime service, which tells any open socket and
-// closes it, so nobody is left standing in a room they have been removed
-// from, or clicking controls that quietly do nothing.
+// closes it, so nobody is left clicking controls that quietly do nothing.
 
 // person is the signed-in person behind a bearer token, never a service.
 func person(ctx context.Context) (auth.Caller, bool) {

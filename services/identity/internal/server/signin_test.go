@@ -21,8 +21,8 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 
 	// The identity provider is chosen by the address's domain, and the
 	// provider's tenant issuer was really fetched before being saved.
-	to := f.signIn(b, "/v1/sign-in/start?email=ada@ACME.com&next=/offices/1&app=ofis", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada", department: "R&D"})
-	if to != "http://ofis.test/offices/1" {
+	to := f.signIn(b, "/v1/sign-in/start?email=ada@ACME.com&next=/offices/1&app=account", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada", department: "R&D"})
+	if to != "http://account.test/offices/1" {
 		t.Fatalf("landed at %s", to)
 	}
 	if _, ok := b.cookies["uo_session"]; !ok {
@@ -96,7 +96,7 @@ func TestTwoMembershipsLandInTheOneUsedLast(t *testing.T) {
 	f.users.add("ada@globex.com", acme, "active", &recent)
 	b := f.browser()
 	to := f.signIn(b, "/v1/sign-in/start?org_id="+globex.String(), person{sub: "oid", email: "ada@globex.com", name: "Ada"})
-	if to != "http://ofis.test/" {
+	if to != "http://account.test/" {
 		t.Fatalf("landed at %s", to)
 	}
 	tok := body(t, b.do(http.MethodPost, "/v1/session/refresh", "", nil))
@@ -142,7 +142,7 @@ func TestTwoMembershipsLandInTheOneUsedLast(t *testing.T) {
 	f.users.add("bob@acme.com", uuid.New(), "active", nil)
 	bob := f.browser()
 	to = f.signIn(bob, "/v1/sign-in/start?email=bob@acme.com", person{sub: "oid-bob", email: "bob@acme.com", name: "Bob"})
-	if to != "http://ofis.test/" {
+	if to != "http://account.test/" {
 		t.Errorf("bob landed at %s", to)
 	}
 	if tok := body(t, bob.do(http.MethodPost, "/v1/session/refresh", "", nil)); tok["org_id"] != acme.String() {
@@ -164,7 +164,7 @@ func TestSeveralOrgsNoneRecentGetTheChooser(t *testing.T) {
 	code, state := f.idp.authorize(t, rec.Header().Get("Location"), person{sub: "c", email: "carol@acme.com", name: "Carol"})
 	rec = b.do(http.MethodGet, "/v1/sign-in/callback?code="+code+"&state="+state, "", nil)
 	// A deactivated membership refuses the sign-in through that org.
-	if to := rec.Header().Get("Location"); to != "http://ofis.test/sign-in?error=membership_inactive" {
+	if to := rec.Header().Get("Location"); to != "http://account.test/sign-in?error=membership_inactive" {
 		t.Fatalf("deactivated: %s", to)
 	}
 
@@ -173,7 +173,7 @@ func TestSeveralOrgsNoneRecentGetTheChooser(t *testing.T) {
 	f.users.add("dave@acme.com", globex, "active", &old)
 	f.users.add("dave@acme.com", uuid.New(), "active", nil)
 	d := f.browser()
-	if to := f.signIn(d, "/v1/sign-in/start?email=dave@acme.com", person{sub: "d", email: "dave@acme.com", name: "Dave"}); to != "http://ofis.test/" {
+	if to := f.signIn(d, "/v1/sign-in/start?email=dave@acme.com", person{sub: "d", email: "dave@acme.com", name: "Dave"}); to != "http://account.test/" {
 		t.Errorf("dave: %s", to)
 	}
 }
@@ -367,12 +367,12 @@ func TestAProviderCannotAssertAnotherOrgsAddresses(t *testing.T) {
 	f.configure(acme)
 	f.configure(globex)
 	// Ada is a real acme member.
-	if to := f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&app=ofis", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"}); !strings.HasPrefix(to, "http://ofis.test/") || strings.Contains(to, "error=") {
+	if to := f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&app=account", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"}); !strings.HasPrefix(to, "http://account.test/") || strings.Contains(to, "error=") {
 		t.Fatalf("ada's own sign-in: %s", to)
 	}
 	for _, email := range []string{"ada@acme.com", "someone@example.com", "not-an-address"} {
 		b := f.browser()
-		to := f.signIn(b, "/v1/sign-in/start?org_id="+globex.String()+"&app=ofis", person{sub: "oid-evil", email: email, name: "Evil"})
+		to := f.signIn(b, "/v1/sign-in/start?org_id="+globex.String()+"&app=account", person{sub: "oid-evil", email: email, name: "Evil"})
 		if !strings.Contains(to, "error=provider_refused") {
 			t.Errorf("globex's provider asserting %s landed at %s", email, to)
 		}
@@ -381,7 +381,7 @@ func TestAProviderCannotAssertAnotherOrgsAddresses(t *testing.T) {
 		}
 	}
 	// Its own people still sign in.
-	if to := f.signIn(f.browser(), "/v1/sign-in/start?org_id="+globex.String()+"&app=ofis", person{sub: "oid-gus", email: "gus@globex.com", name: "Gus"}); strings.Contains(to, "error=") {
+	if to := f.signIn(f.browser(), "/v1/sign-in/start?org_id="+globex.String()+"&app=account", person{sub: "oid-gus", email: "gus@globex.com", name: "Gus"}); strings.Contains(to, "error=") {
 		t.Errorf("globex's own member: %s", to)
 	}
 }

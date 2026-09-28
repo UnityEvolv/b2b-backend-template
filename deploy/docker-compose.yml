@@ -94,7 +94,7 @@ services:
       KMS_FILE: /kms/master.json
       # Where a browser reaches this service and each app, on a laptop.
       IDENTITY_PUBLIC_URL: http://localhost:${IDENTITY_PORT:-8093}
-      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ACCOUNT: http://localhost:5173
       APP_ORIGIN_ADMIN: http://localhost:5174
       APP_ORIGIN_PLATFORM: http://localhost:5175
       SECURE_COOKIES: 'false'
@@ -143,7 +143,7 @@ services:
       USER_URL: http://user:8080
       IDENTITY_URL: http://identity:8080
       NOTIFICATION_URL: http://notification:8080
-      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ACCOUNT: http://localhost:5173
       APP_ORIGIN_ADMIN: http://localhost:5174
       APP_ORIGIN_PLATFORM: http://localhost:5175
       CAPTCHA_PROVIDER: 'off'
@@ -317,8 +317,9 @@ services:
       ORGANIZATION_URL: http://organization:8080
       AUTHORIZATION_URL: http://authorization:8080
       SERVICE_TOKEN_URL: http://identity:8080
-      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ACCOUNT: http://localhost:5173
       APP_ORIGIN_ADMIN: http://localhost:5174
+      APP_ORIGIN_PLATFORM: http://localhost:5175
       NOTIFICATION_PUBLIC_URL: http://localhost:${NOTIFICATION_PORT:-8083}
       NOTIFICATION_LINK_KEY: local-notification-link-key
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}

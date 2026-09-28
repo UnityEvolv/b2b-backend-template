@@ -20,6 +20,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/envelope"
@@ -39,6 +40,9 @@ type Config struct {
 	PublicURL string
 	// Apps is each web app's origin, by name: where a sign-in returns to.
 	Apps map[string]string
+	// MainApp is the app a sign-in or a link opens when nothing names
+	// another; "account" when empty.
+	MainApp string
 	// AccessTTL is how long an access token lives. How long a session lives
 	// is the org's policy (policy.go), not configuration.
 	AccessTTL time.Duration
@@ -46,9 +50,9 @@ type Config struct {
 	SecureCookies bool
 	// EntraAuthority is where Entra tenants live; a test points it at a fake.
 	EntraAuthority string
-	// DesktopScheme is the desktop app's URL scheme (UO-117): where a
-	// sign-in it started in the system browser is handed back. Empty turns
-	// desktop sign-in off.
+	// DesktopScheme is the desktop app's URL scheme: where a sign-in it
+	// started in the system browser is handed back. Empty turns desktop
+	// sign-in off.
 	DesktopScheme string
 }
 
@@ -61,7 +65,6 @@ type Server struct {
 	oidc     *oidc.Client
 	keyring  *envelope.Keyring
 	users    Users
-	offices  Offices
 	orgs     Organizations
 	authz    authz.Checker
 	events   Publisher
@@ -86,15 +89,10 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	if cfg.EntraAuthority == "" {
 		cfg.EntraAuthority = oidc.EntraAuthority
 	}
+	if cfg.MainApp == "" {
+		cfg.MainApp = config.DefaultApps[0]
+	}
 	return &Server{cluster: cluster, logger: logger, recorder: recorder, signer: sig, oidc: oidcClient, keyring: keyring, users: users, orgs: orgs, authz: checker, events: events, email: sender, limiter: limiter, kms: wrapper, cfg: cfg}
-}
-
-// WithOffices is s, binding a guest's room grant when they accept (UO-98).
-// Without it a guest invite is refused at acceptance rather than leaving a
-// guest with no room.
-func (s *Server) WithOffices(o Offices) *Server {
-	s.offices = o
-	return s
 }
 
 // Limits is this API's rate limits: one line per endpoint (UO-119). The

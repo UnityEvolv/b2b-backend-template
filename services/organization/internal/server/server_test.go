@@ -96,7 +96,7 @@ func newAPIAudited(t *testing.T) (http.Handler, *db.Cluster, *stubissuer.Issuer,
 	root := http.NewServeMux()
 	httpx.Health(root, httpx.Check{Name: "database", Check: cluster.Ping})
 	deps = newTestDeps()
-	srv := server.New(cluster, logger, recorder, testWrapper(t), grants, deps.deps(), map[string]string{"ofis": "http://ofis.test", "admin": "http://admin.test", "platform": "http://platform.test"})
+	srv := server.New(cluster, logger, recorder, testWrapper(t), grants, deps.deps(), map[string]string{"account": "http://account.test", "admin": "http://admin.test", "platform": "http://platform.test"})
 	api := srv.Handler(httpx.NewMux())
 	// As main mounts them: signup public (the CAPTCHA off, as on a laptop),
 	// everything else behind auth.

@@ -80,7 +80,7 @@ func TestInviteIsCreatedAcceptedOnceAndRefusedAfter(t *testing.T) {
 	// The acceptance page: what it is for, without the whole address.
 	rec = b.do(http.MethodGet, "/v1/invites/"+token2, "", nil)
 	preview := body(t, rec)
-	if rec.Code != http.StatusOK || preview["org_name"] != "Acme" || preview["kind"] != "member" || preview["email_hint"] != "a***@example.com" {
+	if rec.Code != http.StatusOK || preview["org_name"] != "Acme" || preview["email_hint"] != "a***@example.com" {
 		t.Errorf("preview: %d %v", rec.Code, preview)
 	}
 	// Listed, and the listing is paginated.
@@ -168,10 +168,9 @@ func TestInviteIsCreatedAcceptedOnceAndRefusedAfter(t *testing.T) {
 	}
 }
 
-// The other two flows: an operator invites the first Owner of an Entra
-// org, who then signs in through the provider; a service invites a guest
-// into one room, who gets a local account even in an Entra org.
-func TestOwnerAndGuestInvites(t *testing.T) {
+// The other flows: an operator invites the first Owner of an Entra org, who
+// then signs in through the provider; a service invites on a member's behalf.
+func TestOwnerAndServiceInvites(t *testing.T) {
 	f := newAPI(t)
 	f.configure(acme)
 	b := f.browser()
@@ -190,28 +189,28 @@ func TestOwnerAndGuestInvites(t *testing.T) {
 		t.Errorf("owner membership: %+v", f.users.created[0])
 	}
 
-	// A guest: one room, a purpose, a short expiry, sent by a member.
+	// Another service inviting on a member's behalf: the main app when none
+	// is named.
 	member := f.users.add("host@acme.com", acme, "active", nil)
-	room := uuid.New()
-	guest := map[string]any{"org_id": acme, "email": "guest@elsewhere.example", "kind": "guest", "room_id": room, "purpose": "Design review", "app": "ofis", "expires_in_hours": 4, "invited_by_membership_id": member.ID}
-	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.platform(), guest); rec.Code != http.StatusForbidden {
+	internal := map[string]any{"org_id": acme, "email": "gus@elsewhere.example", "expires_in_hours": 4, "invited_by_membership_id": member.ID}
+	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.platform(), internal); rec.Code != http.StatusForbidden {
 		t.Errorf("a person on the internal endpoint: %d", rec.Code)
 	}
-	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.service("billing"), map[string]any{"org_id": acme, "email": "guest@elsewhere.example", "kind": "guest", "app": "ofis"}); rec.Code != http.StatusBadRequest {
-		t.Errorf("a guest with no room: %d", rec.Code)
+	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.service("user"), map[string]any{"org_id": acme, "email": "gus@elsewhere.example", "app": "nowhere"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("an app that is not configured: %d", rec.Code)
 	}
-	rec = b.do(http.MethodPost, "/v1/internal/invites", f.service("billing"), guest)
+	rec = b.do(http.MethodPost, "/v1/internal/invites", f.service("user"), internal)
 	inv := body(t, rec)
-	if rec.Code != http.StatusCreated || inv["kind"] != "guest" || inv["role"] != "guest" || inv["room_id"] != room.String() || inv["purpose"] != "Design review" {
-		t.Fatalf("guest invite: %d %v", rec.Code, inv)
+	if rec.Code != http.StatusCreated || inv["role"] != "user" || inv["kind"] != nil || inv["room_id"] != nil {
+		t.Fatalf("internal invite: %d %v", rec.Code, inv)
 	}
-	msg, guestToken := f.lastLink(t)
-	if msg.Data["purpose"] != "Design review" || !strings.Contains(msg.Data["what"].(string), "guest") {
-		t.Errorf("guest email: %+v", msg.Data)
+	msg, gusToken := f.lastLink(t)
+	if link, _ := msg.Data["link"].(string); !strings.HasPrefix(link, "http://account.test/accept-invite?token=") {
+		t.Errorf("internal invite email: %+v", msg.Data)
 	}
-	// A member's address cannot be a guest.
-	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.service("billing"), map[string]any{"org_id": acme, "email": "host@acme.com", "kind": "guest", "room_id": room, "app": "ofis"}); rec.Code != http.StatusConflict || !strings.Contains(body(t, rec)["message"].(string), "office") {
-		t.Errorf("a member as a guest: %d %s", rec.Code, rec.Body.String())
+	// An active member is not invited again.
+	if rec := b.do(http.MethodPost, "/v1/internal/invites", f.service("user"), map[string]any{"org_id": acme, "email": "host@acme.com"}); rec.Code != http.StatusConflict {
+		t.Errorf("a member invited again: %d %s", rec.Code, rec.Body.String())
 	}
 	// The inviter sees it under "mine" and can extend it; nobody else's shows.
 	host, _ := f.sig.Issue(auth.Caller{UserID: member.User.ID.String(), OrgID: acme.String(), MembershipID: member.ID.String()}, time.Hour)
@@ -222,35 +221,26 @@ func TestOwnerAndGuestInvites(t *testing.T) {
 	if rec := b.do(http.MethodPost, path+"/"+inv["invite_id"].(string)+"/resend", host, map[string]any{"expires_in_hours": 8}); rec.Code != http.StatusOK {
 		t.Errorf("host extending: %d %s", rec.Code, rec.Body.String())
 	}
-	_, guestToken2 := f.lastLink(t)
-	if rec := b.do(http.MethodGet, "/v1/invites/"+guestToken, "", nil); rec.Code != http.StatusNotFound {
-		t.Errorf("old guest link: %d", rec.Code)
+	_, gusToken2 := f.lastLink(t)
+	if rec := b.do(http.MethodGet, "/v1/invites/"+gusToken, "", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("old link: %d", rec.Code)
 	}
-	// Accepting: a guest membership by room invite, and a local account
-	// even though acme signs members in through Entra.
-	rec = b.do(http.MethodPost, "/v1/invites/"+guestToken2+"/accept", "", map[string]any{"name": "Gus"})
-	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "verify_email" {
-		t.Fatalf("guest accepting: %d %v", rec.Code, out)
+	// Accepting: a member of acme, which signs members in through Entra.
+	rec = b.do(http.MethodPost, "/v1/invites/"+gusToken2+"/accept", "", map[string]any{"name": "Gus"})
+	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "sign_in_entra" {
+		t.Fatalf("accepting: %d %v", rec.Code, out)
 	}
 	last := f.users.created[len(f.users.created)-1]
-	if last.Kind != "guest" || last.Role != "guest" || last.Source != "room_invite" {
-		t.Errorf("guest membership: %+v", last)
+	if last.Kind != "member" || last.Role != "user" || last.Source != "invite" {
+		t.Errorf("membership: %+v", last)
 	}
-	// And the room grant the invite carried is bound in the office service.
-	if len(f.offices.accepted) != 1 || f.offices.accepted[0] != room {
-		t.Errorf("grant bound: %v", f.offices.accepted)
-	}
-	// Someone with a password already is told to sign in.
-	f.account(t, "dana@example.com", globex, "danas-long-password")
-	owner, _ := f.owner(t, acme)
-	b.do(http.MethodPost, path, owner, map[string]any{"email": "dana@example.com"})
+	// Someone with a password already, invited into an org without an
+	// identity provider, is told to sign in.
+	f.account(t, "dana@example.com", acme, "danas-long-password")
+	owner, _ := f.owner(t, globex)
+	b.do(http.MethodPost, "/v1/organizations/"+globex.String()+"/invites", owner, map[string]any{"email": "dana@example.com"})
 	_, danaToken := f.lastLink(t)
-	// (acme is an Entra org, so a member invite says Entra; make it a guest
-	// invite instead, which always uses a local account.)
-	b.do(http.MethodPost, "/v1/internal/invites", f.service("billing"), map[string]any{"org_id": acme, "email": "dana@example.com", "kind": "guest", "room_id": room, "app": "ofis"})
-	_, danaGuest := f.lastLink(t)
-	if out := body(t, b.do(http.MethodPost, "/v1/invites/"+danaGuest+"/accept", "", nil)); out["next"] != "sign_in" {
+	if out := body(t, b.do(http.MethodPost, "/v1/invites/"+danaToken+"/accept", "", nil)); out["next"] != "sign_in" {
 		t.Errorf("a person with a password: %v", out)
 	}
-	_ = danaToken
 }

@@ -150,7 +150,7 @@ func (s *Server) RequestEmailChange(ctx context.Context, req api.RequestEmailCha
 	if err != nil {
 		return nil, err
 	}
-	link := s.cfg.Apps["ofis"] + "/confirm-email-change?token=" + url.QueryEscape(raw)
+	link := s.cfg.Apps[s.cfg.MainApp] + "/confirm-email-change?token=" + url.QueryEscape(raw)
 	if _, err := s.email.Send(ctx, email.Message{
 		OrgID: orgID.String(), OrgName: orgName, To: address, Template: "email_change_verify",
 		Data: map[string]any{"link": link, "hours": int(emailChangeTTL.Hours())},
@@ -297,7 +297,7 @@ func (s *Server) ConfirmEmailChange(ctx context.Context, req api.ConfirmEmailCha
 	if err != nil {
 		return nil, err
 	}
-	link := s.cfg.Apps["ofis"] + "/undo-email-change?token=" + url.QueryEscape(raw)
+	link := s.cfg.Apps[s.cfg.MainApp] + "/undo-email-change?token=" + url.QueryEscape(raw)
 	if _, err := s.email.Send(ctx, email.Message{
 		OrgID: v.OrgID.String(), OrgName: v.OrgName, To: old, Template: "email_changed",
 		Data: map[string]any{"new_email": next, "link": link},

@@ -74,9 +74,7 @@ type Invites interface {
 type NewInvite struct {
 	OrgID                 uuid.UUID  `json:"org_id"`
 	Email                 string     `json:"email"`
-	Kind                  string     `json:"kind"`
 	Role                  string     `json:"role"`
-	App                   string     `json:"app"`
 	InvitedByMembershipID *uuid.UUID `json:"invited_by_membership_id,omitempty"`
 }
 

@@ -113,7 +113,7 @@ func ensurePerson(ctx context.Context, cfg config, operator, orgID string, p per
 	}
 	since := time.Now().Add(-2 * time.Second)
 	if err := call(ctx, http.MethodPost, cfg.identity+"/v1/organizations/"+orgID+"/invites", operator, "seed-invite-"+p.Email,
-		map[string]any{"email": p.Email, "role": p.Role, "app": "ofis"}, nil); err != nil {
+		map[string]any{"email": p.Email, "role": p.Role}, nil); err != nil {
 		return fmt.Errorf("invite: %w", err)
 	}
 	inviteToken, err := linkToken(ctx, cfg.mail, p.Email, "accept-invite", since)

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,18 +20,14 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
-// Invites (UO-54): one mechanism for an admin inviting an employee, the
-// platform inviting the first Owner of a new org, and a member inviting a
-// guest into one room. A single-use token with an expiry, recording what it
+// Invites: one mechanism for an admin inviting someone into the org, and the
+// platform inviting the first Owner of a new org. A single-use token with an expiry, recording what it
 // grants; accept, resend, revoke; refused at acceptance when the org is at
 // its plan's cap. The email goes through the notification outbox.
 
 const (
 	defaultInviteTTL = 7 * 24 * time.Hour
 	maxInviteTTL     = 720 * time.Hour
-
-	kindMember = "member"
-	kindGuest  = "guest"
 
 	codeAlreadyMember = "invite.already_member"
 	codeInviteNotOpen = "invite.not_open"
@@ -58,15 +53,8 @@ func inviteStatus(row store.Invite, now time.Time) api.InviteStatus {
 
 func toInvite(row store.Invite) api.Invite {
 	out := api.Invite{
-		InviteId: row.ID, OrgId: row.OrgID, Email: row.Email, Kind: api.InviteKind(row.Kind), Role: row.Role,
+		InviteId: row.ID, OrgId: row.OrgID, Email: row.Email, Role: row.Role,
 		Status: inviteStatus(row, time.Now()), ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt,
-	}
-	if row.RoomID.Valid {
-		id := uuid.UUID(row.RoomID.Bytes)
-		out.RoomId = &id
-	}
-	if row.Purpose.Valid {
-		out.Purpose = &row.Purpose.String
 	}
 	if row.AcceptedAt.Valid {
 		out.AcceptedAt = &row.AcceptedAt.Time
@@ -84,10 +72,7 @@ func toInvite(row store.Invite) api.Invite {
 // inviteRequest is what every way of inviting boils down to.
 type inviteRequest struct {
 	email     string
-	kind      string
 	role      string
-	roomID    pgtype.UUID
-	purpose   pgtype.Text
 	app       string
 	ttl       time.Duration
 	invitedBy pgtype.UUID
@@ -97,18 +82,16 @@ type inviteRequest struct {
 	firstOnly bool
 }
 
-// issue makes the invite, or reissues the open one for the same address
-// and kind, and sends the email. Returns a refusal code when the address
+// issue makes the invite, or reissues the open one for the same address,
+// and sends the email. Returns a refusal code when the address
 // already belongs to an active member.
 func (s *Server) issue(ctx context.Context, orgID uuid.UUID, in inviteRequest) (store.Invite, string, error) {
 	existing, err := s.users.MembershipByEmail(ctx, orgID, in.email)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return store.Invite{}, "", err
 	}
-	// An active member is never invited again, and never as a guest: an
-	// employee does not get a second, weaker identity in their own org. An
-	// active guest may be invited to another room.
-	if err == nil && existing.Status == "active" && (existing.Kind != kindGuest || in.kind != kindGuest) {
+	// An active member is never invited again.
+	if err == nil && existing.Status == "active" {
 		return store.Invite{}, codeAlreadyMember, nil
 	}
 	raw, hash, err := newSecret()
@@ -129,7 +112,7 @@ func (s *Server) issue(ctx context.Context, orgID uuid.UUID, in inviteRequest) (
 				return err
 			}
 		}
-		open, err := q.PendingInviteForEmail(ctx, store.PendingInviteForEmailParams{OrgID: orgID, Email: in.email, Kind: in.kind})
+		open, err := q.PendingInviteForEmail(ctx, store.PendingInviteForEmailParams{OrgID: orgID, Email: in.email})
 		if err == nil {
 			reissued = true
 			row, err = q.ReissueInvite(ctx, store.ReissueInviteParams{TokenHash: hash, ExpiresAt: time.Now().Add(in.ttl), OrgID: orgID, ID: open.ID})
@@ -143,7 +126,7 @@ func (s *Server) issue(ctx context.Context, orgID uuid.UUID, in inviteRequest) (
 			return err
 		}
 		row, err = q.InsertInvite(ctx, store.InsertInviteParams{
-			OrgID: orgID, ID: id, Email: in.email, Kind: in.kind, Role: in.role, RoomID: in.roomID, Purpose: in.purpose,
+			OrgID: orgID, ID: id, Email: in.email, Role: in.role,
 			App: in.app, TokenHash: hash, ExpiresAt: time.Now().Add(in.ttl), InvitedByMembershipID: in.invitedBy,
 		})
 		return err
@@ -161,7 +144,7 @@ func (s *Server) issue(ctx context.Context, orgID uuid.UUID, in inviteRequest) (
 	if reissued {
 		action = "invite.resent"
 	}
-	details := map[string]any{"kind": row.Kind, "role": row.Role, "expires_at": row.ExpiresAt}
+	details := map[string]any{"role": row.Role, "expires_at": row.ExpiresAt}
 	if in.firstOnly {
 		details["bootstrap"] = true
 	}
@@ -178,17 +161,10 @@ func (s *Server) sendInvite(ctx context.Context, row store.Invite, raw string) e
 		return err
 	}
 	origin, _ := s.appOrigin(row.App)
-	what := "to join their office"
-	if row.Kind == kindGuest {
-		what = "as a guest to one of their rooms"
-	}
 	data := map[string]any{
 		"link":  origin + "/accept-invite?token=" + raw,
-		"what":  what,
+		"what":  "to join them",
 		"until": row.ExpiresAt.UTC().Format("2 January 2006 15:04 UTC"),
-	}
-	if row.Purpose.Valid {
-		data["purpose"] = row.Purpose.String
 	}
 	_, err = s.email.Send(ctx, email.Message{OrgID: row.OrgID.String(), OrgName: orgName, To: row.Email, Template: "invite", Data: data})
 	return err
@@ -226,7 +202,7 @@ func ttlOf(hours *int) time.Duration {
 	return ttl
 }
 
-// CreateInvite is an admin inviting an employee, or an operator the first Owner.
+// CreateInvite is an admin inviting someone, or an operator the first Owner.
 func (s *Server) CreateInvite(ctx context.Context, req api.CreateInviteRequestObject) (api.CreateInviteResponseObject, error) {
 	body := req.Body
 	fields := map[string]string{}
@@ -242,12 +218,12 @@ func (s *Server) CreateInvite(ctx context.Context, req api.CreateInviteRequestOb
 		}
 		role = r
 	}
-	app := "ofis"
+	app := s.cfg.MainApp
 	if body.App != nil {
 		app = string(*body.App)
 	}
 	if _, ok := s.appOrigin(app); !ok {
-		fields["app"] = "ofis, admin or platform"
+		fields["app"] = s.appList()
 	}
 	if len(fields) > 0 {
 		return api.CreateInvite400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "The invite could not be made.", Fields: &fields}}, nil
@@ -259,7 +235,7 @@ func (s *Server) CreateInvite(ctx context.Context, req api.CreateInviteRequestOb
 	if !ok {
 		return api.CreateInvite403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to invite that role."}, nil
 	}
-	row, refused, err := s.issue(ctx, req.OrgId, inviteRequest{email: address, kind: kindMember, role: string(role), app: app, ttl: ttlOf(body.ExpiresInHours), invitedBy: invitedBy})
+	row, refused, err := s.issue(ctx, req.OrgId, inviteRequest{email: address, role: string(role), app: app, ttl: ttlOf(body.ExpiresInHours), invitedBy: invitedBy})
 	if err != nil {
 		return nil, err
 	}
@@ -269,8 +245,8 @@ func (s *Server) CreateInvite(ctx context.Context, req api.CreateInviteRequestOb
 	return api.CreateInvite201JSONResponse(toInvite(row)), nil
 }
 
-// CreateInternalInvite is another service inviting: the office service's
-// guest invites, the organization service's first Owner.
+// CreateInternalInvite is another service inviting: the user service's bulk
+// import and SCIM, say.
 func (s *Server) CreateInternalInvite(ctx context.Context, req api.CreateInternalInviteRequestObject) (api.CreateInternalInviteResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.CreateInternalInvite403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil
@@ -281,31 +257,19 @@ func (s *Server) CreateInternalInvite(ctx context.Context, req api.CreateInterna
 	if address == "" {
 		fields["email"] = "an email address"
 	}
-	in := inviteRequest{email: address, kind: string(body.Kind), role: string(authz.User), app: string(body.App), ttl: ttlOf(body.ExpiresInHours)}
+	in := inviteRequest{email: address, role: string(authz.User), app: s.cfg.MainApp, ttl: ttlOf(body.ExpiresInHours)}
+	if body.App != nil {
+		in.app = *body.App
+	}
 	if _, ok := s.appOrigin(in.app); !ok {
-		fields["app"] = "ofis, admin or platform"
+		fields["app"] = s.appList()
 	}
-	switch body.Kind {
-	case api.NewInternalInviteKindGuest:
-		in.role = string(authz.Guest)
-		if body.RoomId == nil {
-			fields["room_id"] = "the room the guest is invited to"
-		} else {
-			in.roomID = pgtype.UUID{Bytes: *body.RoomId, Valid: true}
+	if body.Role != nil && *body.Role != "" {
+		r, perr := authz.ParseRole(*body.Role)
+		if perr != nil || r == authz.Guest {
+			fields["role"] = "user, admin, billing_admin or owner"
 		}
-	case api.NewInternalInviteKindMember:
-		if body.Role != nil && *body.Role != "" {
-			r, perr := authz.ParseRole(*body.Role)
-			if perr != nil || r == authz.Guest {
-				fields["role"] = "user, admin, billing_admin or owner"
-			}
-			in.role = string(r)
-		}
-	default:
-		fields["kind"] = "member or guest"
-	}
-	if body.Purpose != nil && strings.TrimSpace(*body.Purpose) != "" {
-		in.purpose = pgtype.Text{String: strings.TrimSpace(*body.Purpose), Valid: true}
+		in.role = string(r)
 	}
 	if body.InvitedByMembershipId != nil {
 		in.invitedBy = pgtype.UUID{Bytes: *body.InvitedByMembershipId, Valid: true}
@@ -318,11 +282,7 @@ func (s *Server) CreateInternalInvite(ctx context.Context, req api.CreateInterna
 		return nil, err
 	}
 	if refused != "" {
-		msg := "That address already belongs to a member of this organization."
-		if in.kind == kindGuest {
-			msg = "That address already belongs to a member of this organization; add them to the office instead."
-		}
-		return api.CreateInternalInvite409JSONResponse{Code: refused, Message: msg}, nil
+		return api.CreateInternalInvite409JSONResponse{Code: refused, Message: "That address already belongs to a member of this organization."}, nil
 	}
 	return api.CreateInternalInvite201JSONResponse(toInvite(row)), nil
 }
@@ -448,7 +408,7 @@ func (s *Server) ResendInvite(ctx context.Context, req api.ResendInviteRequestOb
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
 		OrgID: req.OrgId.String(), Action: "invite.resent", TargetType: "invite", TargetID: row.ID.String(),
-		Details: map[string]any{"kind": row.Kind, "expires_at": row.ExpiresAt},
+		Details: map[string]any{"expires_at": row.ExpiresAt},
 	}); err != nil {
 		return nil, err
 	}
@@ -479,7 +439,6 @@ func (s *Server) RevokeInvite(ctx context.Context, req api.RevokeInviteRequestOb
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
 		OrgID: req.OrgId.String(), Action: "invite.revoked", TargetType: "invite", TargetID: row.ID.String(),
-		Details: map[string]any{"kind": row.Kind},
 	}); err != nil {
 		return nil, err
 	}
@@ -548,14 +507,7 @@ func (s *Server) PreviewInvite(ctx context.Context, req api.PreviewInviteRequest
 		return nil, err
 	}
 	hint := emailHint(row.Email)
-	out := api.InvitePreview{OrgId: row.OrgID, OrgName: orgName, Kind: api.InvitePreviewKind(row.Kind), Role: row.Role, ExpiresAt: row.ExpiresAt, EmailHint: &hint}
-	if row.RoomID.Valid {
-		id := uuid.UUID(row.RoomID.Bytes)
-		out.RoomId = &id
-	}
-	if row.Purpose.Valid {
-		out.Purpose = &row.Purpose.String
-	}
+	out := api.InvitePreview{OrgId: row.OrgID, OrgName: orgName, Role: row.Role, ExpiresAt: row.ExpiresAt, EmailHint: &hint}
 	return api.PreviewInvite200JSONResponse(out), nil
 }
 
@@ -576,11 +528,7 @@ func (s *Server) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestOb
 			return api.AcceptInvite400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "That name is too long.", Fields: &fields}}, nil
 		}
 	}
-	source := "invite"
-	if row.Kind == kindGuest {
-		source = "room_invite"
-	}
-	m, err := s.users.CreateMembership(ctx, NewMembership{OrgID: row.OrgID, Email: row.Email, Name: name, Kind: row.Kind, Role: row.Role, Source: source, IdempotencyKey: row.ID.String()})
+	m, err := s.users.CreateMembership(ctx, NewMembership{OrgID: row.OrgID, Email: row.Email, Name: name, Kind: "member", Role: row.Role, Source: "invite", IdempotencyKey: row.ID.String()})
 	var refusal *Refusal
 	if errors.As(err, &refusal) {
 		if refusal.Code == "plan.limit_reached" {
@@ -590,17 +538,6 @@ func (s *Server) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestOb
 	}
 	if err != nil {
 		return nil, err
-	}
-	// A guest's invite carries their room grant: bound to the membership now,
-	// before the invite is spent, so a failure leaves the invite open to try
-	// again rather than a guest with no room.
-	if row.Kind == kindGuest {
-		if s.offices == nil || !row.RoomID.Valid {
-			return nil, errors.New("guest invite: no office service to grant the room")
-		}
-		if err := s.offices.AcceptGrant(ctx, row.OrgID, uuid.UUID(row.RoomID.Bytes), m.ID, m.User.ID); err != nil {
-			return nil, fmt.Errorf("guest invite: grant: %w", err)
-		}
 	}
 	err = s.cluster.Tx(db.WithActor(ctx, db.UserActor(m.User.ID.String())), row.OrgID.String(), func(tx pgx.Tx) error {
 		var err error
@@ -617,16 +554,16 @@ func (s *Server) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestOb
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
 		OrgID: row.OrgID.String(), Action: "invite.accepted", TargetType: "invite", TargetID: row.ID.String(),
-		Details: map[string]any{"user_id": m.User.ID.String(), "membership_id": m.ID.String(), "kind": row.Kind},
+		Details: map[string]any{"user_id": m.User.ID.String(), "membership_id": m.ID.String()},
 		Actor:   db.UserActor(m.User.ID.String()),
 	}); err != nil {
 		return nil, err
 	}
 	// What comes next: the org's provider signs members of an Entra org in;
-	// everyone else (guests anywhere, members of a local org) gets a local
-	// account, verified by email, unless they have one with a password.
+	// everyone else gets a local account, verified by email, unless they have
+	// one with a password.
 	next := api.SignInEntra
-	if row.Kind == kindGuest || !s.hasProvider(ctx, row.OrgID) {
+	if !s.hasProvider(ctx, row.OrgID) {
 		orgName, err := s.orgName(ctx, row.OrgID)
 		if err != nil {
 			return nil, err

@@ -71,7 +71,7 @@ func (s *Server) CreateLocalAccount(ctx context.Context, req api.CreateLocalAcco
 		fields["org_name"] = "the organization's name"
 	}
 	if _, ok := s.appOrigin(string(body.App)); !ok {
-		fields["app"] = "ofis, admin or platform"
+		fields["app"] = s.appList()
 	}
 	if len(fields) > 0 {
 		return api.CreateLocalAccount400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "The account could not be started.", Fields: &fields}}, nil
@@ -279,7 +279,7 @@ func (s *Server) ResendVerification(ctx context.Context, req api.ResendVerificat
 	address := normalizeEmail(req.Body.Email)
 	_, appOK := s.appOrigin(string(req.Body.App))
 	if address == "" || !appOK {
-		fields := map[string]string{"email": "an email address", "app": "ofis, admin or platform"}
+		fields := map[string]string{"email": "an email address", "app": s.appList()}
 		return api.ResendVerification400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Which address?", Fields: &fields}}, nil
 	}
 	var (

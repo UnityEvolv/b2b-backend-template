@@ -76,15 +76,15 @@ func run() error {
 		webhookSecret = env.String("RESEND_WEBHOOK_SECRET", "")
 		from          = env.Required("EMAIL_FROM")
 		pollEvery     = env.Duration("OUTBOX_POLL", 2*time.Second)
-		// Notifications (UO-175 to UO-179): who people are, and this
+		// Notifications: who people are, and this
 		// service's own token to ask.
 		userURL          = env.Required("USER_URL")
 		organizationURL  = env.Required("ORGANIZATION_URL")
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
 		hosts            = config.HostsFor(baseHost)
-		appOrigin        = env.String("APP_ORIGIN_OFIS", derived(baseHost, "https://"+hosts.Ofis))
-		adminOrigin      = env.String("APP_ORIGIN_ADMIN", derived(baseHost, "https://"+hosts.Admin))
+		// The web apps: links open the main one, admin events the admin app.
+		apps = config.AppsFrom(env, baseHost)
 		// This service as the internet reaches it, for one-click unsubscribe.
 		publicURL = env.String("NOTIFICATION_PUBLIC_URL", derived(baseHost, "https://"+hosts.API+"/notification"))
 		// Signs one-click unsubscribe links.
@@ -185,7 +185,7 @@ func run() error {
 		pushers["android"] = notify.NewFCM(fcmBase, fcmProject, source, nil)
 	}
 	router := notify.NewRouter(cluster, rdb, notify.Services{User: userURL, Organization: organizationURL, Tokens: tokens}, pushers,
-		notify.RedisLive{Client: rdb}, notify.Links{App: appOrigin, Admin: adminOrigin, API: publicURL, Key: []byte(linkKey)}, logger)
+		notify.RedisLive{Client: rdb}, notify.Links{App: apps.Origins[apps.Main()], Admin: adminOrigin(apps), API: publicURL, Key: []byte(linkKey)}, logger)
 	srv := server.New(cluster, logger).WithNotifications(server.Notifications{
 		Router: router, Authz: authz.Client(authorizationURL, tokens, nil), VAPIDPublic: vapidPublic, LinkKey: []byte(linkKey),
 	})
@@ -245,4 +245,13 @@ func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) err
 	}
 	_, err = migrator.Up(ctx)
 	return err
+}
+
+// adminOrigin is the admin app's origin, or the main app's when the product
+// has no app named admin.
+func adminOrigin(apps config.Apps) string {
+	if origin, ok := apps.Origins["admin"]; ok {
+		return origin
+	}
+	return apps.Origins[apps.Main()]
 }

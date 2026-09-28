@@ -1,0 +1,503 @@
+openapi: 3.0.3
+info:
+  title: authorization
+  version: 1.0.0
+  description: |
+    The authorization service: what each org role may do, configured per
+    organization by its Owner, and the permission check every other service
+    makes. This contract is the source of truth: the Go server interface and
+    the TypeScript client are both generated from it.
+
+    Every error is the same envelope, `{ code, message, fields? }`. Codes are
+    stable; messages are for people and are never parsed.
+servers:
+  - url: /authorization
+security:
+  - bearer: []
+paths:
+  /v1/organizations/{org_id}/permissions:
+    get:
+      operationId: getPermissions
+      summary: The organization's permission configuration and what every role can do
+      tags: [permissions]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionConfig'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setPermissions
+      summary: Change which groups the Admin and Billing Admin roles hold (Owner only)
+      description: |
+        Only the configurable groups may be named; Owner-only actions never
+        can. The answer carries warnings for anything the change leaves
+        nobody but the Owner able to do. Audited. Takes effect on the next
+        action: nothing is cached.
+      tags: [permissions]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPermissionConfig'
+      responses:
+        '200':
+          description: The configuration after the change, with warnings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionConfig'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/memberships/{membership_id}/role:
+    put:
+      operationId: setRole
+      summary: Give a membership another org role (Owner only)
+      description: |
+        Owner is not assigned here: ownership is transferred, in its own
+        story. The last Owner cannot be demoted. Audited.
+      tags: [roles]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '200':
+          description: The membership's role after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The change would leave the organization without an Owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/ownership-transfers:
+    post:
+      operationId: requestOwnershipTransfer
+      summary: Ask another member to take ownership (Owner only)
+      description: |
+        The target must be an active member who is not a guest; they must
+        accept, so ownership is never dumped on someone unaware. One
+        request is open at a time; a new one replaces it. It expires after
+        seven days if not accepted. Both parties are emailed. Audited.
+      tags: [ownership]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_membership_id]
+              properties:
+                to_membership_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipTransfer'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listOwnershipTransfers
+      summary: The open ownership transfer, for the Owner and for the person asked
+      tags: [ownership]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The open requests the caller is party to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transfers]
+                properties:
+                  transfers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OwnershipTransfer'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/ownership-transfers/{transfer_id}/accept:
+    post:
+      operationId: acceptOwnershipTransfer
+      summary: Take ownership (the person asked only)
+      description: |
+        The target becomes Owner and the previous Owner becomes an Admin,
+        not removed. Both are emailed. Audited. An expired, withdrawn or
+        already accepted request is refused.
+      tags: [ownership]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: The transfer, accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnershipTransfer'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The request is no longer open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/ownership-transfers/{transfer_id}:
+    delete:
+      operationId: cancelOwnershipTransfer
+      summary: Withdraw the request (the Owner) or decline it (the person asked)
+      tags: [ownership]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '204':
+          description: Ended; nothing changed
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/permissions:
+    get:
+      operationId: getGrant
+      summary: What one membership may do right now (services only)
+      description: |
+        Resolved at the moment of the action from the membership's role and
+        the org's configuration. A deactivated or suspended membership has
+        no permissions.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: The grant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grant'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipId:
+      name: membership_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransferId:
+      name: transfer_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer
+    Role:
+      type: string
+      description: An org role. Fixed in code; one per membership.
+      enum: [owner, admin, billing_admin, user, guest]
+    Permission:
+      type: string
+      description: A configurable group, or an Owner-only action.
+      enum: [settings, billing, users, offices, providers, audit, assign_roles, configure_permissions, transfer_ownership, delete_organization, claim_domain]
+    NewPermissionConfig:
+      type: object
+      required: [admin, billing_admin]
+      properties:
+        admin:
+          type: array
+          description: The configurable groups the Admin role holds.
+          items:
+            $ref: '#/components/schemas/Permission'
+        billing_admin:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    PermissionConfig:
+      type: object
+      required: [org_id, admin, billing_admin, effective, warnings]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        admin:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        billing_admin:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        effective:
+          type: object
+          description: Every permission each role has under this configuration, by role.
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/Permission'
+        warnings:
+          type: array
+          description: What this configuration leaves nobody but the Owner able to do.
+          items:
+            type: string
+    OwnershipTransfer:
+      type: object
+      required: [transfer_id, org_id, from_membership_id, to_membership_id, status, expires_at, created_at]
+      properties:
+        transfer_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        from_membership_id:
+          type: string
+          format: uuid
+          description: The Owner asking.
+        to_membership_id:
+          type: string
+          format: uuid
+          description: The member asked.
+        status:
+          type: string
+          enum: [pending, accepted, cancelled, expired]
+        expires_at:
+          type: string
+          format: date-time
+        accepted_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    RoleAssignment:
+      type: object
+      required: [org_id, membership_id, role]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/Role'
+    Grant:
+      type: object
+      required: [org_id, membership_id, role, permissions]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string

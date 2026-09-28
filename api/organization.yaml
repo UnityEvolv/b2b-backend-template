@@ -1,0 +1,1748 @@
+openapi: 3.0.3
+info:
+  title: organization
+  version: 1.0.0
+  description: |
+    The organization service. This contract is the source of truth: the Go
+    server interface and the TypeScript client are both generated from it.
+
+    Every error is the same envelope, `{ code, message, fields? }`. Codes are
+    stable; messages are for people and are never parsed.
+servers:
+  - url: /organization
+security:
+  - bearer: []
+paths:
+  /v1/organizations:
+    post:
+      operationId: createOrganization
+      summary: Create an organization (platform operators)
+      description: |
+        The organization is the top-level tenant. It starts on the free plan
+        with its first data key. The Idempotency-Key header is required: a
+        retried request with the same key returns the organization the first
+        one created and never makes a second.
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrganization'
+      responses:
+        '201':
+          description: The organization, whether created now or by the first request with this key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The domain is claimed by another organization, or the key was used for a different request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listOrganizations
+      summary: Every organization on the platform, a page at a time (platform operators)
+      tags: [organizations]
+      parameters:
+        - name: cursor
+          in: query
+          description: The next_cursor of the previous page. Omit for the first page.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: sort
+          in: query
+          description: The field to order by. The sort is stable across pages.
+          schema:
+            type: string
+            enum: [created_at, name]
+            default: created_at
+        - name: order
+          in: query
+          description: Newest first by default when sorting by created_at; A to Z by name.
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: q
+          in: query
+          description: A prefix of the name or the domain, case-insensitive.
+          schema:
+            type: string
+            maxLength: 200
+        - name: plan
+          in: query
+          schema:
+            $ref: '#/components/schemas/Plan'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrganizationStatus'
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}:
+    get:
+      operationId: getOrganization
+      summary: One organization
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateOrganization
+      summary: Change an organization's settings
+      description: |
+        Only the fields sent change. Sending null for display_name or domain
+        clears it. The plan is not a setting; the plan story changes it.
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSettings'
+      responses:
+        '200':
+          description: The organization after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The domain is claimed by another organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/plan:
+    put:
+      operationId: changePlan
+      summary: Move the organization to another plan (platform operators, until billing)
+      description: |
+        Audited on the org. A downgrade closes doors going forward and never
+        deletes anything or removes anyone; the checklist of what stops is
+        at GET /plan-change. Limits are read at the moment of every action,
+        so the change takes effect on the next attempt with no sign-out.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  $ref: '#/components/schemas/Plan'
+      responses:
+        '200':
+          description: The organization on its new plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/close:
+    post:
+      operationId: closeOrganization
+      summary: Close the organization; it is deleted 30 days later (the Owner, or a platform operator with a reason)
+      description: |
+        Nothing is deleted now. Every session in the org ends within a
+        minute, sign-in is refused with a message that it is closing, and its
+        paid subscription is cancelled. For 30 days an Owner can reopen it
+        from the link emailed when it closed, and everything comes back. After
+        that the daily loop purges every record and file, service by service,
+        checks each is empty, and keeps only the fact that the org existed.
+        The Owner types the organization's name to confirm.
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_name]
+              properties:
+                confirm_name:
+                  type: string
+                  maxLength: 200
+                reason:
+                  type: string
+                  maxLength: 500
+                  description: Why, for the audit log. Required of a platform operator.
+      responses:
+        '200':
+          description: The organization, now closing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/reopen:
+    post:
+      operationId: reopenOrganization
+      summary: Reopen a closing organization with the emailed link (public; the link is the proof)
+      tags: [organizations]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Reopened
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [org_id, status]
+                properties:
+                  org_id:
+                    type: string
+                    format: uuid
+                  status:
+                    $ref: '#/components/schemas/OrganizationStatus'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '410':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/reopen-link:
+    post:
+      operationId: requestReopenLink
+      summary: Email a fresh reopen link to a closing organization's Owner (public; always accepted)
+      description: What the sign-in page offers when it says an organization is closing. The answer is the same whether or not anything was sent.
+      tags: [organizations]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '202':
+          description: Accepted
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/retention:
+    get:
+      operationId: getRetention
+      summary: What the platform keeps of this organization, and for how long
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The schedule that applies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Retention'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setRetention
+      summary: Change the organization's audit log retention (platform operators; beyond 13 months on enterprise only)
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audit_months]
+              properties:
+                audit_months:
+                  type: integer
+                  minimum: 13
+                  maximum: 84
+      responses:
+        '200':
+          description: The schedule as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Retention'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/exports:
+    post:
+      operationId: createOrgExport
+      summary: Ask for an export of everything the organization has (Owners)
+      description: Produced within the hour by the daily loop's export pass, and emailed as a download link that lasts 7 days.
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExport'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listOrgExports
+      summary: The organization's recent exports (Owners)
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/exports:
+    post:
+      operationId: createPersonalExport
+      summary: Ask for an export of everything about me, across every organization
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExport'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listPersonalExports
+      summary: My recent exports
+      tags: [organizations]
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/status:
+    put:
+      operationId: setOrganizationStatus
+      summary: Suspend or reactivate the organization (platform operators)
+      description: |
+        Suspension keeps every record and removes nobody. Members cannot get
+        a session in a suspended org: open sessions move elsewhere or to the
+        chooser at their next refresh. Audited on the org with the reason.
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: '#/components/schemas/OrganizationStatus'
+                reason:
+                  type: string
+                  maxLength: 500
+                  description: Why, for the audit log. Required to suspend.
+      responses:
+        '200':
+          description: The organization as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/plan-change:
+    get:
+      operationId: previewPlanChange
+      summary: What a move to another plan would close, for the admin to confirm
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: plan
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Plan'
+      responses:
+        '200':
+          description: The checklist. Empty consequences means nothing closes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanChange'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/signups:
+    post:
+      operationId: startSignup
+      summary: Sign up to create an organization
+      description: |
+        No sales call: an email, a name, the organization's name and time
+        zone. The address must be proven before anything is created, so a
+        link is emailed; nothing else happens until it is used. Needs a
+        CAPTCHA token. An address at a domain another organization has
+        claimed is refused and pointed at requesting access instead; a
+        public mailbox domain (gmail.com and the like) claims nothing.
+        Always 202 otherwise: whether an address was sent a link lately is
+        not something this endpoint tells, and a person gets a few an hour.
+      security: []
+      tags: [signups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewSignup'
+      responses:
+        '202':
+          description: A link is on its way
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          description: The CAPTCHA check did not pass
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Another organization has claimed the address's domain; request access to it instead
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/signups/complete:
+    post:
+      operationId: completeSignup
+      summary: "Use the link: prove the address and create the organization"
+      description: |
+        One use. The organization is created with the signer-up as its
+        Owner, the domain claimed when it is not a public mailbox
+        provider, and a local account started as verified. The answer
+        carries the token for setting the first password.
+      security: []
+      tags: [signups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupCompleted'
+        '404':
+          description: Not an open signup; the code says whether it was used or has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The domain was claimed by another organization meanwhile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/domain:
+    get:
+      operationId: getDomain
+      summary: The organization's domain claim and how to prove a pending one
+      security:
+        - bearer: []
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The claim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainClaim'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setDomain
+      summary: Start claiming a domain
+      description: |
+        The settings permission. The domain waits until a TXT record proves
+        it (`POST …/domain/verify`); until then it counts for nothing. A
+        domain another organization holds is refused. A platform operator
+        may set a domain directly through the organization's settings.
+      security:
+        - bearer: []
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain:
+                  type: string
+                  maxLength: 253
+      responses:
+        '200':
+          description: The claim, pending, with the record to publish
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainClaim'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: Another organization has claimed this domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/domain/verify:
+    post:
+      operationId: verifyDomain
+      summary: Look for the TXT record and claim the pending domain
+      security:
+        - bearer: []
+      tags: [organizations]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainClaim'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          description: No domain is pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The record was not found, or another organization claimed the domain meanwhile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/frames:
+    get:
+      operationId: getFrameSettings
+      summary: The organization's festival frames and how each is set (Admins, Owners)
+      description: |
+        Every platform frame with its default and effective dates and whether
+        it is on, the organization's own frames, and the one decorations
+        switch. A platform frame the organization has never touched is on,
+        with its default dates; one with no default dates (celebration) is off
+        until it is given dates. Platform frame images are static paths the
+        web app ships; the organization's own are signed links good for an hour.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The frames and their settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameSettings'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createOrgFrame
+      summary: Add one of the organization's own frames (Admins, Owners)
+      description: |
+        The images are uploads made with links from the uploads endpoint. Each
+        is fetched and checked before the frame is created: a PNG or WebP of
+        at most 5 MB, with transparency, of the canvas shape it is for
+        (landscape 16:9, square 1:1, portrait 3:4, at the same resolutions a
+        background takes). A light image for every shape is required; a dark
+        one is optional and the light one is used in its place. The dates are
+        calendar dates in the organization's time zone, both included, and do
+        not repeat. At most 50 frames per organization.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrgFrame'
+      responses:
+        '201':
+          description: The frame, whether created now or by the first request with this key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgFrame'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/frames/uploads:
+    post:
+      operationId: createFrameUploads
+      summary: Links to upload the images of a new frame (Admins, Owners)
+      description: |
+        One pre-signed PUT per image the client will send, each good for 15
+        minutes. The client PUTs the file's bytes to upload_url with the
+        Content-Type it declared here, then names the returned keys when it
+        creates the frame. Nothing is checked until then.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrameUploadRequest'
+      responses:
+        '200':
+          description: One upload per file asked for, in the same order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUploads'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/frames/{frame_key}:
+    put:
+      operationId: setPlatformFrame
+      summary: Turn a platform frame on or off, or change its yearly dates (Admins, Owners)
+      description: |
+        Dates are month-day, MM-DD, and repeat every year; a start after the
+        end wraps the year (12-31 to 01-02). start_md and end_md go together:
+        both left out keeps the dates as they are, both null goes back to the
+        defaults. A frame with no default dates cannot be turned on without dates.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: frame_key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformFrameUpdate'
+      responses:
+        '200':
+          description: The frame as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFrame'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/frames/org/{frame_id}:
+    delete:
+      operationId: deleteOrgFrame
+      summary: Remove one of the organization's own frames and its images (Admins, Owners)
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: frame_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/decorations:
+    put:
+      operationId: setDecorations
+      summary: Turn every frame on or off for the organization (Admins, Owners)
+      description: Off shows no frame at all, whatever each frame's own setting. The settings are kept.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decorations'
+      responses:
+        '200':
+          description: The switch as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decorations'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/frame:
+    get:
+      operationId: getActiveFrame
+      summary: The one frame showing over the office on a date (any member)
+      description: |
+        Dates are the organization's time zone. The organization's own frame
+        wins over a platform frame; among platform frames, the one most
+        recently turned on. None when decorations are off or nothing is on.
+        Platform frame images are static paths the web app ships; the
+        organization's own are signed links good for an hour.
+      tags: [frames]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: date
+          in: query
+          required: false
+          description: A calendar date, YYYY-MM-DD; today in the organization's time zone when left out.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The frame, or null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveFrameResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/domains/{domain}/organization:
+    get:
+      operationId: getOrganizationByDomain
+      summary: The organization that claimed an email domain (services only)
+      description: |
+        The identity service resolves which org's identity provider a person
+        signs in through from the domain of the address they typed.
+      tags: [organizations]
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 253
+      responses:
+        '200':
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}:
+    get:
+      operationId: getOrganizationInternal
+      summary: An organization's record, for a service acting on its behalf (services only)
+      description: The name for an email sent on the org's behalf, the time zone for a schedule, the plan for a gate.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/plan:
+    put:
+      operationId: setPlanInternal
+      summary: Move the organization to another plan (the billing service only)
+      description: |
+        Billing's path to the plan: an upgrade, a downgrade, a trial's start
+        or end, a payment failure. Audited on the org with the reason. An
+        enterprise org is a platform operator's to move, never billing's.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan, reason]
+              properties:
+                plan:
+                  $ref: '#/components/schemas/Plan'
+                reason:
+                  type: string
+                  enum: [upgrade, downgrade, trial_start, trial_end, payment_failure, subscription]
+      responses:
+        '200':
+          description: The plan and its limits, after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanLimits'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: getPlan
+      summary: The org's plan and its limits, for a service gating an action (services only)
+      description: |
+        Read at the moment of the action, never cached. The limits are the
+        platform's table for the band, so a service can refuse with a message
+        that names the plan and the next one up.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The plan and its limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanLimits'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data-keys/current:
+    get:
+      operationId: getCurrentDataKey
+      summary: The org's current wrapped data key (services that may decrypt only)
+      tags: [data-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The wrapped key. Unwrapping it is KMS's decision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WrappedDataKey'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data-keys/{version}:
+    get:
+      operationId: getDataKeyVersion
+      summary: One version of the org's wrapped data key
+      tags: [data-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: The wrapped key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WrappedDataKey'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data-keys/rotate:
+    post:
+      operationId: rotateDataKey
+      summary: Add a new data key version for the org (audited)
+      description: |
+        The new version becomes current; earlier versions stay readable until
+        every secret written under them has been re-encrypted. Services only,
+        until the platform admin role exists.
+      tags: [data-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '201':
+          description: The new current key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WrappedDataKey'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Issued by the identity service (the local stub issuer in development).
+        Scoped to one org; a token for another org is refused with 403.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        A key the client makes up once per intended create and reuses on
+        every retry of it. A second request with the same key returns what
+        the first one made.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    WrappedDataKey:
+      type: object
+      required: [org_id, version, wrapped_key, kms_key_version]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        wrapped_key:
+          type: string
+          format: byte
+          description: The data key, encrypted by the KMS master key. Useless without KMS.
+        kms_key_version:
+          type: string
+    Plan:
+      type: string
+      description: The plan band. What each band allows is read at the moment of every action.
+      enum: [free, team-50, team-200, team-500, enterprise]
+    PlanLimits:
+      type: object
+      required: [org_id, plan, users, offices, min_message_retention_seconds, max_message_retention_seconds, attachment_bytes, features]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        plan:
+          $ref: '#/components/schemas/Plan'
+        users:
+          type: integer
+          description: Cap on active memberships. 0 means no cap in the product.
+        offices:
+          type: integer
+          description: Cap on active offices. 0 means no cap in the product.
+        min_message_retention_seconds:
+          type: integer
+        max_message_retention_seconds:
+          type: integer
+        attachment_bytes:
+          type: integer
+          format: int64
+        features:
+          type: array
+          description: The gated features this plan includes. Everything not gated is on every plan.
+          items:
+            type: string
+    PlanChange:
+      type: object
+      required: [from, to, downgrade, consequences]
+      properties:
+        from:
+          $ref: '#/components/schemas/Plan'
+        to:
+          $ref: '#/components/schemas/Plan'
+        downgrade:
+          type: boolean
+        consequences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanConsequence'
+    PlanConsequence:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable; the admin page keys its explanation on it.
+        message:
+          type: string
+    TimeZone:
+      type: string
+      description: |
+        IANA time zone name, such as Asia/Kolkata. Never an offset. This is
+        the organization's zone: festival frames, scheduled switches, grace
+        periods and heat maps use it. A person's own zone is on their profile.
+      example: Asia/Kolkata
+      maxLength: 64
+    NewOrganization:
+      type: object
+      required: [name, time_zone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: What people see in the office. Defaults to the name.
+        domain:
+          type: string
+          minLength: 3
+          maxLength: 253
+          description: The email domain the organization claims, such as acme.com. One organization per domain.
+        time_zone:
+          $ref: '#/components/schemas/TimeZone'
+        owner_user_id:
+          type: string
+          format: uuid
+          description: The first owner. Set when the person exists already; self-serve signup sets it to the signer-up.
+    NewSignup:
+      type: object
+      required: [email, name, org_name, time_zone]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The signer-up's own name.
+        org_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        time_zone:
+          $ref: '#/components/schemas/TimeZone'
+    SignupCompleted:
+      type: object
+      required: [org_id, user_id, membership_id, domain_claimed]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        domain_claimed:
+          type: boolean
+          description: Whether the address's domain is now the organization's.
+        setup_token:
+          type: string
+          description: For setting the first password with the identity service; one use, fifteen minutes.
+    DomainClaim:
+      type: object
+      required: [verified]
+      properties:
+        domain:
+          type: string
+          description: The claimed domain, when one is.
+        verified_at:
+          type: string
+          format: date-time
+        verified:
+          type: boolean
+        pending_domain:
+          type: string
+        txt_name:
+          type: string
+          description: The DNS name to publish the record at, for a pending domain.
+        txt_value:
+          type: string
+          description: The record's value.
+    OrganizationSettings:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        display_name:
+          type: string
+          maxLength: 200
+          nullable: true
+        domain:
+          type: string
+          maxLength: 253
+          nullable: true
+        time_zone:
+          $ref: '#/components/schemas/TimeZone'
+        remote_control:
+          type: boolean
+          description: |
+            Whether people may give control of their screen during a share
+            (UO-216). Off refuses every new grant, however it is asked for;
+            one already running ends with its share.
+    OrganizationStatus:
+      type: string
+      enum: [active, suspended, closing]
+    Retention:
+      type: object
+      required: [classes, audit_months, audit_configurable]
+      properties:
+        audit_months:
+          type: integer
+          description: How long the audit log is kept, in months.
+        audit_configurable:
+          type: boolean
+          description: Whether a platform operator may lengthen it (enterprise).
+        classes:
+          type: array
+          items:
+            type: object
+            required: [class, kept]
+            properties:
+              class:
+                type: string
+                enum: [identity, audit, usage, messages, transient, backups]
+              kept:
+                type: string
+                description: How long, in words, the same every time for every org.
+    DataExport:
+      type: object
+      required: [id, kind, status, requested_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [organization, personal]
+        status:
+          type: string
+          enum: [pending, ready, failed, expired]
+        requested_at:
+          type: string
+          format: date-time
+        ready_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        download_url:
+          type: string
+          description: While ready, a link that works for an hour. The same link is emailed for 7 days.
+    DataExportList:
+      type: object
+      required: [exports]
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataExport'
+    Organization:
+      type: object
+      required: [org_id, name, plan, status, time_zone, created_at, last_modified_at]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        display_name:
+          type: string
+          description: Present when it differs from the name.
+        domain:
+          type: string
+        plan:
+          $ref: '#/components/schemas/Plan'
+        user_cap:
+          type: integer
+          description: Active members the plan allows. Absent on a plan with no cap.
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        suspended_at:
+          type: string
+          format: date-time
+        suspension_reason:
+          type: string
+        closing_at:
+          type: string
+          format: date-time
+          description: When it was closed; present while it is closing.
+        purge_after:
+          type: string
+          format: date-time
+          description: When everything in it is deleted; present while it is closing.
+        time_zone:
+          $ref: '#/components/schemas/TimeZone'
+        remote_control:
+          type: boolean
+          description: Whether people may give control of their screen during a share.
+        owner_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        last_modified_at:
+          type: string
+          format: date-time
+    OrganizationPage:
+      type: object
+      required: [organizations]
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+        next_cursor:
+          type: string
+          description: Present when there is another page.
+    CanvasShape:
+      type: string
+      description: A template canvas shape. Landscape is 16:9, square 1:1, portrait 3:4.
+      enum: [landscape, square, portrait]
+    PlatformFrameKey:
+      type: string
+      enum: [christmas, new_year, diwali, holi, eid, easter, halloween, celebration]
+    FrameVariant:
+      type: string
+      enum: [light, dark]
+    FrameImage:
+      type: object
+      required: [light]
+      properties:
+        light:
+          type: string
+          description: A static path (platform frames) or a signed link (the organization's own).
+        dark:
+          type: string
+          description: Absent when there is none; the light image is used in dark mode.
+    FrameImages:
+      type: object
+      required: [landscape, square, portrait]
+      properties:
+        landscape:
+          $ref: '#/components/schemas/FrameImage'
+        square:
+          $ref: '#/components/schemas/FrameImage'
+        portrait:
+          $ref: '#/components/schemas/FrameImage'
+    PlatformFrame:
+      type: object
+      required: [key, name, icon, enabled, customized, images]
+      properties:
+        key:
+          $ref: '#/components/schemas/PlatformFrameKey'
+        name:
+          type: string
+        icon:
+          type: string
+          description: An icon name from the web app's icon set.
+        enabled:
+          type: boolean
+          description: Whether it shows on its dates. An enabled frame always has dates.
+        customized:
+          type: boolean
+          description: Whether the organization has set its own dates.
+        default_start_md:
+          type: string
+          description: MM-DD. Absent for a frame with no default dates.
+        default_end_md:
+          type: string
+          description: MM-DD. Absent for a frame with no default dates.
+        start_md:
+          type: string
+          description: MM-DD, the dates in effect. Absent when it has none.
+        end_md:
+          type: string
+          description: MM-DD, the dates in effect. Absent when it has none.
+        enabled_at:
+          type: string
+          format: date-time
+          description: When the organization last turned it on; absent when it is on by default.
+        images:
+          $ref: '#/components/schemas/FrameImages'
+    PlatformFrameUpdate:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        start_md:
+          type: string
+          nullable: true
+          description: MM-DD. Left out keeps the dates; null goes back to the default.
+        end_md:
+          type: string
+          nullable: true
+          description: MM-DD. Left out keeps the dates; null goes back to the default.
+    OrgFrame:
+      type: object
+      required: [id, name, icon, start_date, end_date, images, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        icon:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        images:
+          $ref: '#/components/schemas/FrameImages'
+        created_at:
+          type: string
+          format: date-time
+    NewOrgFrameImage:
+      type: object
+      required: [light]
+      properties:
+        light:
+          type: string
+          description: The key of an upload from the uploads endpoint.
+        dark:
+          type: string
+    NewOrgFrame:
+      type: object
+      required: [name, start_date, end_date, images]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        icon:
+          type: string
+          description: An icon name from the web app's icon set, lower-case letters, digits and dashes. confetti when left out.
+        start_date:
+          type: string
+          description: YYYY-MM-DD, in the organization's time zone.
+        end_date:
+          type: string
+          description: YYYY-MM-DD, included; on or after the start.
+        images:
+          type: object
+          required: [landscape, square, portrait]
+          properties:
+            landscape:
+              $ref: '#/components/schemas/NewOrgFrameImage'
+            square:
+              $ref: '#/components/schemas/NewOrgFrameImage'
+            portrait:
+              $ref: '#/components/schemas/NewOrgFrameImage'
+    FrameSettings:
+      type: object
+      required: [decorations_enabled, time_zone, platform_frames, org_frames]
+      properties:
+        decorations_enabled:
+          type: boolean
+        time_zone:
+          type: string
+          description: The organization's time zone, which every frame date is in.
+        platform_frames:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformFrame'
+        org_frames:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/OrgFrame'
+    Decorations:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    FrameUploadFile:
+      type: object
+      required: [shape, variant, content_type, size]
+      properties:
+        shape:
+          $ref: '#/components/schemas/CanvasShape'
+        variant:
+          $ref: '#/components/schemas/FrameVariant'
+        content_type:
+          type: string
+          description: image/png or image/webp.
+        size:
+          type: integer
+          format: int64
+          description: Bytes, exactly, at most 5 MB; the upload must be this size.
+    FrameUploadRequest:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          description: 1 to 6 files, each shape and variant at most once.
+          items:
+            $ref: '#/components/schemas/FrameUploadFile'
+    FrameUpload:
+      type: object
+      required: [shape, variant, key, upload_url, content_type, expires_at]
+      properties:
+        shape:
+          $ref: '#/components/schemas/CanvasShape'
+        variant:
+          $ref: '#/components/schemas/FrameVariant'
+        key:
+          type: string
+          description: What to name in the new frame's images.
+        upload_url:
+          type: string
+          description: PUT the bytes here, with the Content-Type below.
+        content_type:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    FrameUploads:
+      type: object
+      required: [uploads]
+      properties:
+        uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrameUpload'
+    ActiveFrame:
+      type: object
+      required: [kind, name, icon, start_date, end_date, images]
+      properties:
+        kind:
+          type: string
+          enum: [platform, organization]
+        key:
+          $ref: '#/components/schemas/PlatformFrameKey'
+        id:
+          type: string
+          format: uuid
+          description: The organization's own frame's id.
+        name:
+          type: string
+        icon:
+          type: string
+        start_date:
+          type: string
+          format: date
+          description: The first day of this showing.
+        end_date:
+          type: string
+          format: date
+          description: The last day of this showing.
+        images:
+          $ref: '#/components/schemas/FrameImages'
+    ActiveFrameResponse:
+      type: object
+      required: [date, frame]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The date the answer is for, in the organization's time zone.
+        frame:
+          allOf:
+            - $ref: '#/components/schemas/ActiveFrame'
+          nullable: true
+          description: The frame showing, or null when none is.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable, machine-readable. Clients branch on this.
+          example: organization.not_found
+        message:
+          type: string
+          description: For a person. Never parsed.
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+          description: The inputs that were wrong, when there were any.

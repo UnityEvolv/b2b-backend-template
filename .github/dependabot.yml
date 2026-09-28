@@ -1,0 +1,34 @@
+# Small, reviewable update PRs rather than one painful upgrade a year.
+#
+# Major versions are ignored everywhere except GitHub Actions: a major is a
+# deliberate upgrade with its own story, not a weekly PR. Patch and minor
+# updates, where security fixes land, keep arriving.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

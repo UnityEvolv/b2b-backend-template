@@ -1,0 +1,785 @@
+openapi: 3.0.3
+info:
+  title: notification
+  version: 1.0.0
+  description: |
+    The notification service: transactional email from its own outbox, and
+    notifications (UO-175 to UO-179), the one place that decides who is told
+    about what, on which channel, and whether at all: the in-app feed, push to
+    browsers and Android, and email, immediate or in a daily digest.
+
+    Delivery events arrive from Resend at POST /v1/webhooks/resend, signed
+    (Svix); that endpoint verifies the raw body, so it is not in this contract.
+
+    Every error is the same envelope, `{ code, message, fields? }`.
+servers:
+  - url: /notification
+security:
+  - bearer: []
+paths:
+  /v1/internal/emails:
+    post:
+      operationId: queueEmail
+      summary: Queue a templated email (services only)
+      tags: [emails]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewEmail'
+      responses:
+        '202':
+          description: Queued. Delivery happens from the outbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Email'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/emails/{email_id}:
+    get:
+      operationId: getEmail
+      summary: One queued email's state (services only)
+      tags: [emails]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: email_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Email'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/notifications:
+    get:
+      operationId: listNotifications
+      summary: The caller's feed, newest first, for the last 30 days
+      tags: [feed]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        '200':
+          description: One page, and how many entries are unread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/notifications/read:
+    post:
+      operationId: readNotifications
+      summary: Mark entries read, the ones named or all of them, or those about one thing
+      tags: [feed]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: string
+                    format: uuid
+                all:
+                  type: boolean
+                about:
+                  type: string
+                  maxLength: 200
+                  description: The thing opened, such as a conversation, as the entries group it.
+      responses:
+        '200':
+          description: How many are unread now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unread'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: The caller's notification preferences, defaults filled in
+      tags: [preferences]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setNotificationPreferences
+      summary: Change the caller's notification preferences
+      tags: [preferences]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferences'
+      responses:
+        '200':
+          description: The preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/notification-preferences/test:
+    post:
+      operationId: testNotification
+      summary: Send one test notification on a channel
+      tags: [preferences]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel:
+                  $ref: '#/components/schemas/Channel'
+      responses:
+        '202':
+          description: Sent, or queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivered]
+                properties:
+                  delivered:
+                    type: integer
+                    description: Devices a push went to; 1 for the feed or an email.
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/notification-settings:
+    get:
+      operationId: getOrgNotificationSettings
+      summary: The org's defaults for new members, and whether push previews are allowed
+      tags: [preferences]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNotificationSettings'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setOrgNotificationSettings
+      summary: Change the org's defaults (Owner only)
+      tags: [preferences]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgNotificationSettings'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNotificationSettings'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/devices:
+    post:
+      operationId: registerDevice
+      summary: This device gets pushes, for the caller's session
+      tags: [devices]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewDevice'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/devices/unregister:
+    post:
+      operationId: unregisterDevice
+      summary: This device stops getting pushes
+      tags: [devices]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  maxLength: 4000
+      responses:
+        '204':
+          description: Gone
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/push-config:
+    get:
+      operationId: getPushConfig
+      summary: What a browser subscribes to web push with
+      tags: [devices]
+      responses:
+        '200':
+          description: The public key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled:
+                    type: boolean
+                  vapid_public_key:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/unsubscribe/{token}:
+    post:
+      operationId: unsubscribe
+      summary: One-click unsubscribe from a category's email, from the link in it
+      description: No sign-in; the token is signed and names the person and the category.
+      security: []
+      tags: [preferences]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 500
+      responses:
+        '200':
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [category]
+                properties:
+                  category:
+                    $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/events:
+    post:
+      operationId: emitEvent
+      summary: Something happened that people may be told about (services only)
+      description: The same intake as the Redis channel unityofis:notify.
+      tags: [internal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '202':
+          description: Taken
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/data:
+    delete:
+      operationId: forgetMembershipData
+      summary: Delete what this service keeps personally under one membership, for account deletion (the organization and user services only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: membership_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Forgotten
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    NewEmail:
+      type: object
+      required: [org_id, org_name, to, template]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        org_name:
+          type: string
+          description: Shown in the template, so the recipient knows which org wrote.
+        to:
+          type: string
+          description: The recipient. Validated by the service, which names the field when it is wrong.
+        template:
+          type: string
+          description: A template name from pkg/email.
+          example: notice
+        data:
+          type: object
+          additionalProperties: true
+          description: The template's fields.
+    Email:
+      type: object
+      required: [id, org_id, template, state, attempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        template:
+          type: string
+        state:
+          type: string
+          enum: [queued, sending, sent, failed, suppressed, bounced]
+        attempts:
+          type: integer
+        next_attempt_at:
+          type: string
+          format: date-time
+        sent_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+    Category:
+      type: string
+      enum: [mention, direct_message, room_message, room_activity, knock, meeting, admin_providers, admin_billing, admin_templates, admin_marketplace, admin_directory]
+    Channel:
+      type: string
+      enum: [in_app, push, email]
+    ChannelChoice:
+      type: object
+      required: [in_app, push, email]
+      properties:
+        in_app:
+          type: boolean
+        push:
+          type: boolean
+        email:
+          type: boolean
+    FeedEntry:
+      type: object
+      required: [id, category, kind, data, link, count, items, occurred_at, read]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          $ref: '#/components/schemas/Category'
+        kind:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+          description: What the entry is about, for the app to put into words.
+        link:
+          type: string
+          description: Where it opens, a path in the app.
+        count:
+          type: integer
+        items:
+          type: array
+          description: A batch's individual items, newest first.
+          items:
+            type: object
+            additionalProperties: true
+        occurred_at:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    FeedPage:
+      type: object
+      required: [entries, unread]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedEntry'
+        unread:
+          type: integer
+        next_cursor:
+          type: string
+    Unread:
+      type: object
+      required: [unread]
+      properties:
+        unread:
+          type: integer
+    QuietHours:
+      type: object
+      required: [enabled, start_minute, end_minute, days]
+      properties:
+        enabled:
+          type: boolean
+        start_minute:
+          type: integer
+          minimum: 0
+          maximum: 1439
+          description: Minutes after midnight, in the person's time zone.
+        end_minute:
+          type: integer
+          minimum: 0
+          maximum: 1439
+        days:
+          type: array
+          description: ISO weekdays, 1 Monday to 7 Sunday.
+          items:
+            type: integer
+            minimum: 1
+            maximum: 7
+    NotificationPreferences:
+      type: object
+      required: [channels, push_previews, quiet_hours, muted]
+      properties:
+        channels:
+          type: object
+          description: Category => channels. Every category, defaults filled in.
+          additionalProperties:
+            $ref: '#/components/schemas/ChannelChoice'
+        push_previews:
+          type: boolean
+        previews_allowed:
+          type: boolean
+          description: False when the org requires previews off; answers only.
+        digest_minute:
+          type: integer
+          minimum: 0
+          maximum: 1439
+          nullable: true
+          description: When the daily digest comes, in the person's time zone; null is the start of their working hours.
+        quiet_hours:
+          $ref: '#/components/schemas/QuietHours'
+        muted:
+          type: array
+          description: Conversations silenced from the conversation itself.
+          items:
+            type: string
+            format: uuid
+    OrgNotificationSettings:
+      type: object
+      required: [channels, previews_allowed]
+      properties:
+        channels:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ChannelChoice'
+        previews_allowed:
+          type: boolean
+    NewDevice:
+      type: object
+      required: [platform, token]
+      properties:
+        platform:
+          type: string
+          enum: [web, android, ios]
+        token:
+          type: string
+          maxLength: 4000
+          description: An FCM token, or for web the push subscription as JSON.
+        app_version:
+          type: string
+          maxLength: 50
+    Device:
+      type: object
+      required: [id, platform]
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+    Event:
+      type: object
+      required: [id, org_id, kind, category, recipients, link]
+      properties:
+        id:
+          type: string
+          description: The emitter's id for the event; the same id twice is one event.
+          maxLength: 200
+        org_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          maxLength: 60
+          description: What happened, such as mention, direct_message, knock or provider_failing.
+        category:
+          $ref: '#/components/schemas/Category'
+        recipients:
+          type: array
+          maxItems: 5000
+          description: Memberships. Empty with an audience set, for the service to resolve.
+          items:
+            type: string
+            format: uuid
+        audience:
+          type: string
+          enum: [admins, billing]
+          description: Instead of recipients, everyone in the org holding that permission.
+        actor:
+          type: string
+          format: uuid
+          description: Who did it, who is never told about their own action.
+        link:
+          type: string
+          maxLength: 500
+        group:
+          type: string
+          maxLength: 200
+          description: 'What it is about, for batching and suppression, such as conv:<id> or room:<office>:<room>.'
+        data:
+          type: object
+          additionalProperties: true
+        preview:
+          type: string
+          maxLength: 300
+          description: Message text, shown only where the recipient allows previews.
+        expires_at:
+          type: string
+          format: date-time
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer

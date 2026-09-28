@@ -1,0 +1,1721 @@
+openapi: 3.0.3
+info:
+  title: user
+  version: 1.0.0
+  description: |
+    The user service: who a person is (one identity across the platform)
+    and which organizations they belong to (one membership per org). This
+    contract is the source of truth: the Go server interface and the
+    TypeScript client are both generated from it.
+
+    Every error is the same envelope, `{ code, message, fields? }`. Codes are
+    stable; messages are for people and are never parsed.
+servers:
+  - url: /user
+security:
+  - bearer: []
+paths:
+  /v1/me:
+    get:
+      operationId: getMe
+      summary: 'The caller: their user and the membership their session carries'
+      tags: [me]
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/profile:
+    patch:
+      operationId: updateProfile
+      summary: Change the fields the person controls themselves
+      description: |
+        Display name, time zone and working hours, the same in every
+        organization the person belongs to. Only the fields sent change;
+        null clears one. The time zone must be an IANA name.
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          description: The user as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/photo:
+    put:
+      operationId: setPhoto
+      summary: Upload a profile photo
+      description: |
+        JPEG, PNG or WebP, at most five megabytes, as a `photo` part. The
+        image is decoded, cropped to a square and stored at 512 pixels; the
+        previous photo is deleted. The answer carries a signed link.
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [photo]
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The user with the new photo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          description: The file is too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePhoto
+      summary: Remove the profile photo
+      tags: [me]
+      responses:
+        '204':
+          description: Removed, or there was none
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/leave:
+    post:
+      operationId: leaveOrganization
+      summary: End the caller's own membership in this organization
+      description: |
+        Ends access to this organization's offices and sessions; the caller's
+        other organizations are untouched. An Owner cannot leave: ownership is
+        transferred first. Rejoining takes a fresh invite. Audited in the
+        organization left.
+      tags: [me]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Left; how many organizations the person still belongs to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [remaining_memberships]
+                properties:
+                  remaining_memberships:
+                    type: integer
+                    description: Active memberships left. Zero means the person is signed out to the no-organization screen; the account stays for a future invite.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          description: An Owner cannot leave; transfer ownership first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/imports:
+    post:
+      operationId: importUsers
+      summary: Invite many people at once from a spreadsheet
+      description: |
+        The users permission. A CSV or XLSX (first sheet, header row first,
+        at most 5000 rows and 5 MB) as a `file` part, and optionally a
+        `mapping` part: JSON naming the spreadsheet column for each field
+        (`email`, `name`, `role`); without it the columns are found by
+        those names. Every row is checked (missing fields, malformed
+        address, duplicates within the sheet, already a member, an unknown
+        role, the plan's user cap) and reported row by row. With
+        `dry_run=true` nothing is sent; otherwise the valid rows are sent
+        invites and the invalid ones reported. Nothing is silently dropped.
+        Audited.
+      tags: [imports]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: dry_run
+          in: query
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                mapping:
+                  type: string
+                  description: JSON, such as {"email":"E-mail","name":"Full name","role":"Role"}.
+      responses:
+        '200':
+          description: What was, or would be, done, row by row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          description: The file is too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/imports/columns:
+    post:
+      operationId: readImportColumns
+      summary: The columns of a spreadsheet, for mapping them before an import
+      description: |
+        The users permission. The same file the import takes, read and
+        nothing else: its header row, how many people it holds, and the
+        first few rows, so the admin can match columns to fields whatever
+        the sheet calls them. Nothing is stored.
+      tags: [imports]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The sheet's shape
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportColumns'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          description: The file is too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/memberships:
+    get:
+      operationId: listMemberships
+      summary: One organization's memberships, a page at a time
+      tags: [memberships]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: sort
+          in: query
+          description: The sort is stable across pages. By name A to Z, or newest first.
+          schema:
+            type: string
+            enum: [name, created_at]
+            default: name
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: q
+          in: query
+          description: Part of the name, or a prefix of the email.
+          schema:
+            type: string
+            maxLength: 200
+        - name: department
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/MembershipStatus'
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/memberships/{membership_id}:
+    get:
+      operationId: getMembership
+      summary: One membership
+      tags: [memberships]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: The membership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/memberships/{membership_id}/status:
+    put:
+      operationId: setMembershipStatus
+      summary: Deactivate, suspend or reactivate one membership
+      description: |
+        Per membership: the person's other organizations are untouched.
+        Until the roles story, a platform operator's action; an org's Admin
+        then. Audited.
+      tags: [memberships]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: '#/components/schemas/MembershipStatus'
+      responses:
+        '200':
+          description: The membership after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The change would leave the organization without an active Owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/sign-ins:
+    post:
+      operationId: recordSignIn
+      summary: A person authenticated through an org's identity provider (identity service only)
+      description: |
+        Creates the user on first sight (by email) and the membership on
+        first sign-in to this org, and refreshes the directory attributes
+        every time. The org's identity provider is the gate: nobody is
+        asked for an invite. Answers with every membership the person has,
+        most recently active first, so the caller can decide where they land.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignIn'
+      responses:
+        '200':
+          description: The user, this org's membership, and all their memberships
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignInResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The membership exists but is deactivated or suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/memberships:
+    post:
+      operationId: createMembership
+      summary: A membership from an invite, an import, the self-serve owner or a room invite (services only)
+      description: |
+        The other ways a membership comes to exist. The user is created by
+        email if unknown; a second org inviting the same email gets a
+        second membership, never a second account. Idempotent by key.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewMembership'
+      responses:
+        '201':
+          description: The membership, whether created now or found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/membership-by-email:
+    get:
+      operationId: getMembershipByEmail
+      summary: The membership an email address has in an organization, whatever its status (services only)
+      description: So an invite to someone already in can be refused with a reason.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 320
+      responses:
+        '200':
+          description: The membership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/activity:
+    post:
+      operationId: recordMembershipActivity
+      summary: The person is active in this org now (identity service only)
+      description: |
+        Written when a session switches to this membership, so the org a
+        person used last is the one their next sign-in lands in.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/role:
+    put:
+      operationId: setMembershipRole
+      summary: Give a membership another org role (authorization service only)
+      description: |
+        The authorization service decides who may do this and refuses to
+        demote the last Owner; this endpoint records the outcome. Audited by
+        the caller.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+      responses:
+        '200':
+          description: The membership after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The change would leave the organization without an active Owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/memberships:
+    get:
+      operationId: listUserMemberships
+      summary: Every organization a person belongs to, most recently active first (services only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The memberships
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [memberships]
+                properties:
+                  memberships:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/presence:
+    put:
+      operationId: setMembershipPresence
+      summary: Where the person is now, from the engine's identity adapter (realtime only)
+      description: |
+        Written as a person moves; read at the next sign-in or reload to
+        put them back in the office and room they were in.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Presence'
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/member-count:
+    get:
+      operationId: countMembers
+      summary: How many active members the org has, the number its plan caps (services only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active]
+                properties:
+                  active:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/card:
+    get:
+      operationId: getMembershipCard
+      summary: The name and photo presence shows for a membership (realtime only)
+      description: |
+        What the office draws beside a person: never taken from their own
+        client, so nobody can appear as somebody else. The photo link is
+        signed and expires; the realtime service asks again when a
+        credential is refreshed.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipCard'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim:
+    get:
+      operationId: getScimSettings
+      summary: The org's SCIM setup, status and any halted change
+      description: |
+        Readable on every plan, so an org can see what SCIM does before
+        upgrading; everything that changes it is Enterprise only. Needs the
+        settings permission (an Owner or Admin).
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimSettings'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/tokens:
+    post:
+      operationId: createScimToken
+      summary: A new bearer token for the identity provider, shown once
+      description: |
+        Any earlier token keeps working for seven more days, so the provider
+        can be switched to the new one without a gap; revoke ends one at
+        once. Only a hash is kept. Not idempotent by key: the token cannot be
+        shown a second time, and a retried call only makes a newer token.
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '201':
+          description: The token, in full this once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewScimToken'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/tokens/{token_id}:
+    delete:
+      operationId: revokeScimToken
+      summary: End a token now
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: token_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Revoked
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/groups:
+    get:
+      operationId: listScimGroups
+      summary: The groups the provider has pushed, with the offices each feeds
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: office_id
+          in: query
+          description: Only the groups that feed this office.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimGroupList'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/groups/{group_id}/offices:
+    put:
+      operationId: setScimGroupOffices
+      summary: The offices a group feeds, replacing the list
+      description: |
+        Everyone in the group becomes an Office User of each office; an
+        office taken off the list loses what the group granted (the page warns
+        first). Saving resumes a mapping paused by a dismissed halt.
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [office_ids]
+              properties:
+                office_ids:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The group as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimGroupSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/log:
+    get:
+      operationId: getScimLog
+      summary: The last hundred SCIM operations and reconciliation actions
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimLog'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/scim/halt:
+    post:
+      operationId: resolveScimHalt
+      summary: Apply or dismiss the halted change
+      description: |
+        apply carries out what was held, as things stand now. dismiss leaves
+        things as they are: a group's offices stop following it until the
+        mapping is saved again, and the provider's word on the people it would
+        have deactivated is forgotten until it speaks again.
+      tags: [scim]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [apply, dismiss]
+      responses:
+        '200':
+          description: The settings after
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimSettings'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/deletion:
+    post:
+      operationId: requestAccountDeletion
+      summary: Ask for the caller's account to be deleted, after fourteen days
+      description: |
+        The person types DELETE to confirm. Their account and everything
+        about them in every organization they belong to is deleted fourteen
+        days from now, unless they sign in before then, which cancels it. An
+        email says when. Refused while they are the last active Owner of any
+        organization: ownership is transferred first. Asking again changes
+        nothing and answers with the same date. Audited in every
+        organization they belong to.
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  maxLength: 20
+                  description: Must be DELETE.
+      responses:
+        '200':
+          description: Scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletion'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The caller is the last active Owner of the organizations named in fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: cancelAccountDeletion
+      summary: Cancel the caller's pending account deletion
+      tags: [me]
+      responses:
+        '204':
+          description: Cancelled, or there was nothing to cancel
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/platform/users/{user_id}/deletion:
+    post:
+      operationId: scheduleUserDeletion
+      summary: Schedule a person's account for deletion (platform operators only)
+      description: |
+        The same fourteen days and the same email as the person asking
+        themselves; signing in still cancels it. The reason is recorded in
+        the audit log of every organization they belong to. Refused while
+        they are the last active Owner of any organization.
+      tags: [platform]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        '200':
+          description: Scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletion'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: The person is the last active Owner of the organizations named in fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/signed-in:
+    post:
+      operationId: recordUserSignedIn
+      summary: The person signed in (identity service only)
+      description: |
+        Called on every completed sign-in that did not come through an
+        identity provider (those come through the sign-ins endpoint). A
+        pending account deletion is cancelled.
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/email:
+    put:
+      operationId: setUserEmail
+      summary: Change a person's email once the new address is proven (identity service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  maxLength: 320
+      responses:
+        '200':
+          description: The user as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          description: Another person has that address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/user-by-email:
+    get:
+      operationId: findUserByEmail
+      summary: Which person, if any, has an address (identity service only)
+      tags: [internal]
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 320
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user_id]
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      description: |
+        The org's memberships and SCIM records go; so does every person who
+        then belongs nowhere, with their photo and their sign-in account.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipId:
+      name: membership_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: A key the caller makes up once per intended create and reuses on every retry of it.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer
+    AccountDeletion:
+      type: object
+      required: [requested_at, deletion_after]
+      properties:
+        requested_at:
+          type: string
+          format: date-time
+        deletion_after:
+          type: string
+          format: date-time
+          description: When the account is deleted unless the person signs in first.
+    ScimSettings:
+      type: object
+      required: [available, base_url, tokens, groups]
+      properties:
+        available:
+          type: boolean
+          description: Whether the org's plan has SCIM.
+        base_url:
+          type: string
+          description: Where the identity provider sends SCIM requests.
+        tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimToken'
+        groups:
+          type: integer
+          description: How many groups the provider has pushed.
+        last_call_at:
+          type: string
+          format: date-time
+        last_operation:
+          type: string
+        halted:
+          $ref: '#/components/schemas/ScimHalt'
+    ScimToken:
+      type: object
+      required: [id, prefix, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        prefix:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Set once a newer token replaced this one.
+    NewScimToken:
+      type: object
+      required: [id, token, prefix, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: The whole token. It is not shown again.
+        prefix:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ScimHalt:
+      type: object
+      required: [at, reason, changes]
+      properties:
+        at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimHaltedChange'
+    ScimHaltedChange:
+      type: object
+      required: [kind, memberships]
+      properties:
+        kind:
+          type: string
+          enum: [group, deactivate]
+        group_id:
+          type: string
+          format: uuid
+        group_name:
+          type: string
+        office_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        memberships:
+          type: array
+          description: Who would lose the offices, or be deactivated.
+          items:
+            type: string
+            format: uuid
+    ScimGroupList:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimGroupSummary'
+    ScimGroupSummary:
+      type: object
+      required: [id, display_name, members, offices]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        members:
+          type: integer
+        offices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimGroupOffice'
+    ScimGroupOffice:
+      type: object
+      required: [office_id, paused]
+      properties:
+        office_id:
+          type: string
+          format: uuid
+        paused:
+          type: boolean
+          description: Stopped by a dismissed halt until the mapping is saved again.
+    ScimLog:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimLogEntry'
+    ScimLogEntry:
+      type: object
+      required: [id, at, operation, outcome, details]
+      properties:
+        id:
+          type: string
+          format: uuid
+        at:
+          type: string
+          format: date-time
+        operation:
+          type: string
+        membership_id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [ok, failed, halted]
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    MembershipStatus:
+      type: string
+      description: left is the person's own doing; a fresh invite brings them back.
+      enum: [active, deactivated, suspended, left]
+    MembershipKind:
+      type: string
+      description: member is an employee of the org; guest was invited into one room.
+      enum: [member, guest]
+    MembershipSource:
+      type: string
+      description: How the membership came to exist.
+      enum: [idp, invite, import, owner, room_invite, scim]
+    Directory:
+      type: object
+      description: What the org's identity provider says about the person. Every field optional.
+      properties:
+        job_title:
+          type: string
+        department:
+          type: string
+        division:
+          type: string
+        manager:
+          type: string
+        employee_type:
+          type: string
+        location:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        attributes:
+          type: object
+          description: Custom attributes, as the provider sent them.
+          additionalProperties: true
+    User:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        display_name:
+          type: string
+          description: What people see under the avatar, when it differs from the name.
+        time_zone:
+          type: string
+          description: An IANA zone name the person chose; quiet hours, digests and stats weeks follow it.
+        working_hours:
+          $ref: '#/components/schemas/WorkingHours'
+        photo_url:
+          type: string
+          description: A signed link to the profile photo, good for an hour. Absent when there is none.
+        preferences:
+          $ref: '#/components/schemas/Preferences'
+        created_at:
+          type: string
+          format: date-time
+    ImportResult:
+      type: object
+      required: [dry_run, summary, rows]
+      properties:
+        dry_run:
+          type: boolean
+        summary:
+          type: object
+          required: [rows, valid, invalid, invited]
+          properties:
+            rows:
+              type: integer
+            valid:
+              type: integer
+            invalid:
+              type: integer
+            invited:
+              type: integer
+              description: Zero on a dry run.
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportRow'
+    ImportColumns:
+      type: object
+      required: [columns, rows, sample]
+      properties:
+        columns:
+          type: array
+          description: The header row, in order.
+          items:
+            type: string
+        rows:
+          type: integer
+          description: People in the sheet, the header not counted.
+        sample:
+          type: array
+          description: The first few rows under the header.
+          items:
+            type: array
+            items:
+              type: string
+    ImportRow:
+      type: object
+      required: [row, status, errors]
+      properties:
+        row:
+          type: integer
+          description: The row's number in the sheet, the header being 1.
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+          enum: [invited, would_invite, failed]
+        errors:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                description: |
+                  missing_email, missing_name, email_invalid, name_too_long,
+                  role_invalid, duplicate, already_member, plan_limit,
+                  invite_failed.
+              message:
+                type: string
+    WorkingHours:
+      type: object
+      required: [days, start, end]
+      description: When the person is normally at work, in their own time zone.
+      properties:
+        days:
+          type: array
+          items:
+            type: string
+            enum: [mon, tue, wed, thu, fri, sat, sun]
+        start:
+          type: string
+          description: HH:MM, twenty-four hour.
+          example: '09:00'
+        end:
+          type: string
+          description: HH:MM, after start.
+          example: '17:30'
+    Preferences:
+      type: object
+      required: [theme, hide_decorations]
+      description: Appearance, stored on the user so it follows the person to every device.
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        language:
+          type: string
+          nullable: true
+          maxLength: 35
+          description: A BCP 47 tag, or null to follow the device.
+        hide_decorations:
+          type: boolean
+    ProfileUpdate:
+      type: object
+      description: Only the fields sent change; null clears one.
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        language:
+          type: string
+          maxLength: 35
+          nullable: true
+        hide_decorations:
+          type: boolean
+        display_name:
+          type: string
+          maxLength: 60
+          nullable: true
+        time_zone:
+          type: string
+          maxLength: 64
+          nullable: true
+        working_hours:
+          allOf:
+            - $ref: '#/components/schemas/WorkingHours'
+          nullable: true
+    Membership:
+      type: object
+      required: [id, org_id, user, kind, role, status, source, directory, created_at, last_modified_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        user:
+          $ref: '#/components/schemas/User'
+        kind:
+          $ref: '#/components/schemas/MembershipKind'
+        role:
+          type: string
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        source:
+          $ref: '#/components/schemas/MembershipSource'
+        directory:
+          $ref: '#/components/schemas/Directory'
+        last_office_id:
+          type: string
+          format: uuid
+        last_room_id:
+          type: string
+        last_active_at:
+          type: string
+          format: date-time
+        deactivated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        last_modified_at:
+          type: string
+          format: date-time
+    MembershipPage:
+      type: object
+      required: [memberships]
+      properties:
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        next_cursor:
+          type: string
+    Me:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        membership:
+          $ref: '#/components/schemas/Membership'
+        deletion_after:
+          type: string
+          format: date-time
+          description: Set while the account is scheduled for deletion; signing in cancels it.
+    SignIn:
+      type: object
+      required: [org_id, email, name]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        idp_subject:
+          type: string
+          description: The subject claim the org's identity provider issued.
+        directory:
+          $ref: '#/components/schemas/Directory'
+    SignInResult:
+      type: object
+      required: [user, membership, memberships]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        membership:
+          $ref: '#/components/schemas/Membership'
+        memberships:
+          type: array
+          description: Every membership the person has, most recently active first.
+          items:
+            $ref: '#/components/schemas/Membership'
+    NewMembership:
+      type: object
+      required: [org_id, email, source]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+          maxLength: 200
+          description: Used when the user does not exist yet; the email's local part otherwise.
+        kind:
+          $ref: '#/components/schemas/MembershipKind'
+        role:
+          type: string
+          default: user
+        source:
+          $ref: '#/components/schemas/MembershipSource'
+    Presence:
+      type: object
+      required: [office_id]
+      properties:
+        office_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          nullable: true
+          description: null when the person is in the office but no room.
+    MembershipCard:
+      type: object
+      required: [user_id, display_name, guest]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          description: The name the person chose, else their account name.
+        photo_url:
+          type: string
+          description: A signed link that expires. Absent when there is no photo.
+        guest:
+          type: boolean
+          description: Someone from outside the org, on a room invite.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string

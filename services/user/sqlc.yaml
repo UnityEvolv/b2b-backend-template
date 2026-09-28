@@ -1,0 +1,20 @@
+# Typed queries: SQL in queries/, the schema from this service's migrations,
+# generated Go in internal/store. Regenerate with scripts/generate.sh; never
+# edit the output by hand. CI regenerates and fails on any difference.
+version: '2'
+sql:
+  - engine: postgresql
+    schema: ../../migrations/users
+    queries: queries
+    gen:
+      go:
+        package: store
+        out: internal/store
+        sql_package: pgx/v5
+        emit_json_tags: false
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time

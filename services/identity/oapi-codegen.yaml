@@ -1,0 +1,13 @@
+# The server interface, generated from api/identity.yaml. Regenerate with
+# scripts/generate.sh; never edit the output by hand. CI fails on any difference.
+package: api
+output: internal/api/api.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: false
+output-options:
+  # Fields the contract marks nullable become nullable.Nullable[T], so a
+  # handler can tell "not sent" from "sent as null".
+  nullable-type: true

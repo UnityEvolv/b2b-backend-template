@@ -1,0 +1,464 @@
+# The local stack. Development happens here, not in the cloud.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# Every value below is a local-only default. Nothing here is used outside a
+# laptop; real secrets live in the cloud secret manager.
+
+name: unityofis
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: unityofis
+      POSTGRES_USER: unityofis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unityofis-local}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      # Runs once, on an empty volume. Schemas and roles come from dbinit below.
+      - ./local/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U unityofis -d unityofis']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # A schema and a login role per service, on every start (UO-35). Idempotent,
+  # so it also repairs a role or a grant edited by hand.
+  dbinit:
+    build:
+      context: ..
+      dockerfile: deploy/tools.Dockerfile
+      secrets:
+        - extra_ca
+    command: ['dbinit']
+    environment:
+      DATABASE_ADMIN_URL: postgres://unityofis:${POSTGRES_PASSWORD:-unityofis-local}@postgres:5432/unityofis?sslmode=disable
+      # Each service connects as svc_<schema> with password svc_<schema>-local.
+      DB_LOCAL_PASSWORDS: 'true'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  # Every service's migrations, each as its own role (UO-36), after dbinit.
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/tools.Dockerfile
+      secrets:
+        - extra_ca
+    command: ['migrate', 'up']
+    environment:
+      # Host and database only: each service connects as svc_<schema>.
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+    depends_on:
+      dbinit:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  # Mints tokens for local development until the identity service does (UO-41).
+  #   curl -X POST localhost:8090/token -d '{"org_id":"<uuid>"}'
+  # Its key is generated at start: restarting it invalidates every token.
+  # Go services. Each connects as its own role; copy this block for a new one.
+  # Sign-in through an org's identity provider, sessions, and the tokens
+  # every other service verifies (UO-51). Locally it also mints service and
+  # development tokens at POST /token, as the stub issuer did.
+  identity:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: identity
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      REDIS_URL: redis://redis:6379/0
+      AUDIT_URL: http://audit:8080
+      USER_URL: http://user:8080
+      ORGANIZATION_URL: http://organization:8080
+      AUTHORIZATION_URL: http://authorization:8080
+      NOTIFICATION_URL: http://notification:8080
+      KMS_PROVIDER: file
+      KMS_FILE: /kms/master.json
+      # Where a browser reaches this service and each app, on a laptop.
+      IDENTITY_PUBLIC_URL: http://localhost:${IDENTITY_PORT:-8093}
+      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ADMIN: http://localhost:5174
+      APP_ORIGIN_PLATFORM: http://localhost:5175
+      SECURE_COOKIES: 'false'
+      LOCAL_SERVICE_TOKENS: 'true'
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+      # The first platform operator, invited on start while the platform org
+      # is empty; the invite lands in the mail catcher. Empty invites nobody.
+      BOOTSTRAP_OPERATOR_EMAIL: ${BOOTSTRAP_OPERATOR_EMAIL:-}
+    volumes:
+      - kms:/kms
+    # Not 8085: gcloud auth login listens there for its browser redirect.
+    ports:
+      - '${IDENTITY_PORT:-8093}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  organization:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: organization
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Error tracking is off unless deploy/.env names a DSN.
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      # Where this service records audit entries, and where it gets the
+      # service token it presents there.
+      AUDIT_URL: http://audit:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      # Self-serve signup (UO-55): the Owner, their account, the link, and
+      # where it opens. No CAPTCHA on a laptop.
+      AUTHORIZATION_URL: http://authorization:8080
+      USER_URL: http://user:8080
+      IDENTITY_URL: http://identity:8080
+      NOTIFICATION_URL: http://notification:8080
+      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ADMIN: http://localhost:5174
+      APP_ORIGIN_PLATFORM: http://localhost:5175
+      CAPTCHA_PROVIDER: 'off'
+      # Offboarding and exports (UO-183, UO-184): every service with data,
+      # and the bucket the archives go to.
+      BILLING_URL: http://billing:8080
+      S3_ENDPOINT: http://s3:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
+      S3_PATH_STYLE: 'true'
+      S3_BUCKET: ${S3_BUCKET:-unityofis}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      # The master key. A file on a laptop, created on first start; Cloud KMS
+      # everywhere else (KMS_PROVIDER=gcp, KMS_KEY_NAME=projects/...).
+      KMS_PROVIDER: file
+      KMS_FILE: /kms/master.json
+      # The three web apps' dev servers; the only origins CORS admits.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+    volumes:
+      - kms:/kms
+    ports:
+      - '${ORGANIZATION_PORT:-8081}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Who a person is and which organizations they belong to (UO-52). The
+  # identity service records sign-ins here; the engine's identity adapter
+  # writes where people are.
+  user:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: user
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      AUDIT_URL: http://audit:8080
+      ORGANIZATION_URL: http://organization:8080
+      AUTHORIZATION_URL: http://authorization:8080
+      IDENTITY_URL: http://identity:8080
+      BILLING_URL: http://billing:8080
+      # Account deletion (UO-184): the notice, and what each service forgets.
+      NOTIFICATION_URL: http://notification:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+      # Profile photos, in the local bucket (UO-57).
+      S3_ENDPOINT: http://s3:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
+      S3_PATH_STYLE: 'true'
+      S3_BUCKET: ${S3_BUCKET:-unityofis}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+    ports:
+      - '${USER_PORT:-8084}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # What each org role may do, configured per org by its Owner, and the
+  # permission check every service makes (UO-53).
+  authorization:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: authorization
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      AUDIT_URL: http://audit:8080
+      USER_URL: http://user:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      # Ownership transfers (UO-86) email both parties and link into the admin app.
+      NOTIFICATION_URL: http://notification:8080
+      ORGANIZATION_URL: http://organization:8080
+      APP_ORIGIN_ADMIN: http://localhost:5174
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+    ports:
+      - '${AUTHORIZATION_PORT:-8086}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # The append-only record of who did what (UO-46). Services record through
+  # its API with a service token; an org's admins read their own entries.
+  audit:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: audit
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Error tracking is off unless deploy/.env names a DSN.
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      # Who may read an org's log, asked with this service's own token (UO-85).
+      AUTHORIZATION_URL: http://authorization:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+    ports:
+      - '${AUDIT_PORT:-8082}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Transactional email from its own outbox with retries (UO-112). Locally
+  # everything goes to Mailpit; deployed, to Resend.
+  notification:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: notification
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+      EMAIL_TRANSPORT: smtp
+      SMTP_ADDR: mailpit:1025
+      EMAIL_FROM: unityofis <no-reply@unityofis.local>
+      # Notifications (UO-175 to UO-179): who people are, links into the
+      # apps, the unsubscribe key, and web push with a local VAPID key from
+      # deploy/.env (push is off without one).
+      USER_URL: http://user:8080
+      ORGANIZATION_URL: http://organization:8080
+      AUTHORIZATION_URL: http://authorization:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      APP_ORIGIN_OFIS: http://localhost:5173
+      APP_ORIGIN_ADMIN: http://localhost:5174
+      NOTIFICATION_PUBLIC_URL: http://localhost:${NOTIFICATION_PORT:-8083}
+      NOTIFICATION_LINK_KEY: local-notification-link-key
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: mailto:no-reply@unityofis.local
+      NOTIFY_POLL: 10s
+    ports:
+      - '${NOTIFICATION_PORT:-8083}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    # Presence and pub/sub are rebuilt from live sockets, so nothing here needs
+    # to survive a restart.
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Catches every email so invites and verification mails can be opened without
+  # sending anything real. SMTP on 1025, inbox on 8025.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - '${MAIL_SMTP_PORT:-1025}:1025'
+      - '${MAIL_UI_PORT:-8025}:8025'
+
+  # The object store, speaking the S3 API like the deployed bucket does
+  # (RustFS; MinIO's images are no longer public). Console on 9001; the API
+  # on 9000 is what services and the browser reach.
+  s3:
+    image: rustfs/rustfs:1.0.0
+    command: ['/data']
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_CONSOLE_ADDRESS: ':9001'
+    ports:
+      - '${S3_PORT:-9000}:9000'
+      - '${S3_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - s3:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:9000/health']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the one bucket, private, then exits. Idempotent.
+  s3-init:
+    image: amazon/aws-cli:2.37.2
+    depends_on:
+      s3:
+        condition: service_healthy
+    # A bucket is private unless given a policy; none is.
+    entrypoint: >-
+      /bin/sh -c "aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $${BUCKET} 2>/dev/null
+      || aws --endpoint-url http://s3:9000 s3 mb s3://$${BUCKET}"
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-unityofis}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      AWS_DEFAULT_REGION: us-east-1
+      BUCKET: ${S3_BUCKET:-unityofis}
+
+  billing:
+    build:
+      context: ..
+      dockerfile: deploy/service.Dockerfile
+      args:
+        SERVICE: billing
+      secrets:
+        - extra_ca
+    environment:
+      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DB_LOCAL_PASSWORDS: 'true'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+      ENVIRONMENT: local
+      AUTH_ISSUER: unityofis-local
+      AUTH_AUDIENCE: unityofis
+      AUTH_JWKS_URL: http://identity:8080/v1/jwks
+      REDIS_URL: redis://redis:6379/0
+      ORGANIZATION_URL: http://organization:8080
+      USER_URL: http://user:8080
+      AUTHORIZATION_URL: http://authorization:8080
+      AUDIT_URL: http://audit:8080
+      SERVICE_TOKEN_URL: http://identity:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+      APP_ORIGIN_ADMIN: http://localhost:5174
+      # Stripe test mode, from the git-ignored deploy/.env; without a key,
+      # paid plans cannot be bought locally (UO-168).
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICES: ${STRIPE_PRICES:-}
+    ports:
+      - '${BILLING_PORT:-8089}:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # One org, its Owner and a colleague, through the services'
+  # own APIs (UO-203). Local only; run it on demand, twice changes nothing:
+  #   docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
+  seed:
+    profiles: ['seed']
+    build:
+      context: ..
+      dockerfile: deploy/tools.Dockerfile
+      secrets:
+        - extra_ca
+    command: ['seed']
+    environment:
+      SEED_IDENTITY_URL: http://identity:8080
+      SEED_ORGANIZATION_URL: http://organization:8080
+      SEED_MAIL_URL: http://mailpit:8025
+    depends_on:
+      identity:
+        condition: service_started
+    restart: 'no'
+
+volumes:
+  postgres:
+  # The local master key file. Never leaves this machine.
+  kms:
+  s3:
+
+secrets:
+  # Empty unless deploy/.env sets EXTRA_CA_CERTS to a PEM file: the root CA of
+  # an antivirus or proxy that intercepts TLS on this machine.
+  extra_ca:
+    file: ${EXTRA_CA_CERTS:-./local/no-extra-ca.pem}

@@ -1,0 +1,521 @@
+openapi: 3.0.3
+info:
+  title: billing
+  version: 1.0.0
+  description: |
+    The billing service (UO-168 to UO-171): one account per org, the payment
+    provider behind an interface (Stripe first), and the subscription state
+    the plan follows. Card details never reach us: a payment method is added
+    on the provider's hosted form.
+
+    Provider webhooks arrive at POST /v1/webhooks/stripe, signed; that
+    endpoint verifies the raw body, so it is not in this contract.
+
+    Every error is the same envelope, `{ code, message, fields? }`.
+servers:
+  - url: /billing
+security:
+  - bearer: []
+paths:
+  /v1/organizations/{org_id}/billing:
+    get:
+      operationId: getBilling
+      summary: What the org is on and paying, for the billing page and its banners
+      description: The billing permission reads it; the banners across the admin app read it too.
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Billing'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/setup:
+    post:
+      operationId: startSetup
+      summary: The provider's hosted form, to add or replace the payment method, address and tax ID
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Where to send the browser
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/band:
+    put:
+      operationId: changeBand
+      summary: Move to another band; up applies now with proration, down at the period's end
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [band]
+              properties:
+                band:
+                  $ref: '#/components/schemas/Band'
+      responses:
+        '200':
+          description: The account after the change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Billing'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/band-preview:
+    get:
+      operationId: previewBand
+      summary: What moving to a band would charge today
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: band
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Band'
+      responses:
+        '200':
+          description: The charge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BandPreview'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/pending:
+    delete:
+      operationId: cancelPending
+      summary: Cancel a scheduled downgrade
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Billing'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/trial:
+    post:
+      operationId: startTrial
+      summary: Start the one team trial, 14 days, on a free org
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The account, trialing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Billing'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/auto-upgrade:
+    put:
+      operationId: setAutoUpgrade
+      summary: Turn automatic upgrade on or off (Owner only)
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [on]
+              properties:
+                'on':
+                  type: boolean
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Billing'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/billing/invoices:
+    get:
+      operationId: listInvoices
+      summary: The org's invoices from the provider, newest first
+      tags: [billing]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/capacity:
+    post:
+      operationId: makeRoom
+      summary: Room for this many active members, by an automatic upgrade if it is on (the user service only)
+      description: |
+        Called before an invite or import that would pass the cap is
+        committed. Answers the band the org is on after any upgrade, or a
+        refusal when there is no room and none can be made.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [members]
+              properties:
+                members:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: There is room
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [band, upgraded]
+                properties:
+                  band:
+                    $ref: '#/components/schemas/Band'
+                  upgraded:
+                    type: boolean
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/members-changed:
+    post:
+      operationId: membersChanged
+      summary: The active member count moved (the user service only); billing warns at 80% of the cap
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [members]
+              properties:
+                members:
+                  type: integer
+                  minimum: 0
+      responses:
+        '204':
+          description: Noted
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/close:
+    post:
+      operationId: closeAccount
+      summary: The org is closing; cancel its subscription now (the organization service only)
+      description: |
+        Cancels the provider subscription immediately and records the account
+        as cancelled on the free band. Idempotent: an org with no
+        subscription is a no-op.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '204':
+          description: Closed
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+    Band:
+      type: string
+      enum: [free, team-50, team-200, team-500, enterprise]
+    Price:
+      type: object
+      required: [amount, currency, interval]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Minor units.
+        currency:
+          type: string
+        interval:
+          type: string
+    Billing:
+      type: object
+      required: [band, state, auto_upgrade, trial_available, invoiced, prices, active_members, users_cap, can_manage_auto_upgrade]
+      properties:
+        band:
+          $ref: '#/components/schemas/Band'
+        state:
+          type: string
+          enum: [free, trialing, active, past_due, cancelled, invoiced]
+        period_end:
+          type: string
+          format: date-time
+        pending_band:
+          $ref: '#/components/schemas/Band'
+        card:
+          type: object
+          required: [brand, last4]
+          properties:
+            brand:
+              type: string
+            last4:
+              type: string
+        auto_upgrade:
+          type: boolean
+        can_manage_auto_upgrade:
+          type: boolean
+          description: Whether the caller is an Owner, who alone may change it.
+        trial_available:
+          type: boolean
+        trial_ends_at:
+          type: string
+          format: date-time
+        grace_days_left:
+          type: integer
+          description: While past due, days left before the org drops to free.
+        invoiced:
+          type: boolean
+          description: Enterprise, invoiced by contract; no controls.
+        active_members:
+          type: integer
+        users_cap:
+          type: integer
+          description: 0 means no cap.
+        next_band:
+          $ref: '#/components/schemas/Band'
+        prices:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Price'
+    BandPreview:
+      type: object
+      required: [band, amount_today, currency, applies]
+      properties:
+        band:
+          $ref: '#/components/schemas/Band'
+        amount_today:
+          type: integer
+          format: int64
+          description: Charged now, with proration; 0 for a change at the period's end.
+        currency:
+          type: string
+        applies:
+          type: string
+          enum: [now, period_end]
+    Invoice:
+      type: object
+      required: [id, status, amount, currency, created]
+      properties:
+        id:
+          type: string
+        number:
+          type: string
+        status:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        created:
+          type: string
+          format: date-time
+        pdf:
+          type: string
+        pay_url:
+          type: string
+        next_attempt:
+          type: string
+          format: date-time

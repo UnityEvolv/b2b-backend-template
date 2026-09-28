@@ -1,0 +1,403 @@
+openapi: 3.0.3
+info:
+  title: audit
+  version: 1.0.0
+  description: |
+    The audit service: an append-only record of who did what. Services record
+    entries through it (the internal endpoint takes a service token); whoever
+    holds the org's audit permission (Owners and Admins by default) reads its
+    entries a page at a time, or exports them, and so do platform operators.
+
+    Every error is the same envelope, `{ code, message, fields? }`.
+servers:
+  - url: /audit
+security:
+  - bearer: []
+paths:
+  /v1/audit/events:
+    post:
+      operationId: recordAuditEvent
+      summary: Record an entry (services only)
+      tags: [audit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewAuditEvent'
+      responses:
+        '201':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/audit-events:
+    get:
+      operationId: listAuditEvents
+      summary: An org's entries, newest first
+      tags: [audit]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: From the previous page's next_cursor. Omit for the first page.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Only entries whose action starts with this, such as `organization.`
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: target_type
+          in: query
+          schema:
+            type: string
+        - name: target_id
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Entries at or after this instant.
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Entries before this instant.
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [newest, oldest]
+            default: newest
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/audit-events/export:
+    get:
+      operationId: exportAuditEvents
+      summary: An org's entries as CSV, oldest first, for a compliance request
+      description: |
+        The same filters as the list, every matching entry up to 50,000, one
+        row each: when, actor, action, target, source address, request, and
+        the details as JSON. Ids only; names are resolved by whoever reads it.
+      tags: [audit]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Only entries whose action starts with this, such as `organization.`
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: target_type
+          in: query
+          schema:
+            type: string
+        - name: target_id
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Entries at or after this instant.
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Entries before this instant.
+      responses:
+        '200':
+          description: The entries
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/audit/expire:
+    post:
+      operationId: expireAuditEvents
+      summary: Delete an org's entries older than an instant, for its audit retention (the organization service only)
+      description: |
+        The organization service's daily loop applies each org's audit
+        retention (13 months by default, up to 7 years on enterprise) by
+        calling this with the cut-off. Retention and an org's purge are the
+        only ways an entry is ever removed.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [before]
+              properties:
+                before:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Expired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer
+    NewAuditEvent:
+      type: object
+      required: [org_id, actor, action, target_type, target_id]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        actor:
+          type: string
+          description: membership:<uuid>, user:<uuid> or system:<service>. Never a name or an email.
+          example: membership:01922b5e-0000-7000-8000-0000000000c1
+        action:
+          type: string
+          description: Dotted, stable, lower case.
+          example: organization.plan.changed
+        target_type:
+          type: string
+          example: organization
+        target_id:
+          type: string
+        source_ip:
+          type: string
+        request_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+          description: When it happened, if not now.
+        details:
+          type: object
+          additionalProperties: true
+          description: Ids and values only, never a name or an email.
+    AuditEvent:
+      type: object
+      required: [id, org_id, occurred_at, actor, action, target_type, target_id, details]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        source_ip:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    AuditEventPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_cursor:
+          type: string
+          description: Present when there is another page.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string

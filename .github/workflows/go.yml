@@ -1,0 +1,90 @@
+# Build, vet and test the Go code, against a real Postgres and Redis.
+
+name: go
+
+on:
+  # Pull requests into main only, and not while a draft: the push to main on
+  # merge is not tested again, since the PR already tested that merge.
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ['**.md', 'docs/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: b2b
+          POSTGRES_USER: b2b
+          POSTGRES_PASSWORD: ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U b2b -d b2b"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_ADMIN_URL: postgres://b2b:ci-only@localhost:5432/b2b?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
+      TEST_S3_ENDPOINT: http://localhost:9000
+      TEST_S3_BUCKET: b2b-test
+      TEST_S3_ACCESS_KEY: b2b
+      TEST_S3_SECRET_KEY: ci-only-ci-only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # An S3-compatible store (RustFS; MinIO's images are no longer public).
+      # It needs a command, which a service container cannot be given.
+      - name: Start the object store
+        run: |
+          docker run -d --name s3 -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY=b2b -e RUSTFS_SECRET_KEY=ci-only-ci-only \
+            rustfs/rustfs:1.0.0 /data
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/health && break; sleep 1; done
+          docker run --rm --network host \
+            -e AWS_ACCESS_KEY_ID=b2b -e AWS_SECRET_ACCESS_KEY=ci-only-ci-only -e AWS_DEFAULT_REGION=us-east-1 \
+            amazon/aws-cli:2.37.2 --endpoint-url http://localhost:9000 s3 mb s3://b2b-test
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go test -race -count=1 ./...
+
+  # Generated code is never edited by hand: regenerate everything and fail if
+  # a single byte differs from what is committed.
+  generated:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: scripts/generate.sh
+      - name: no drift
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated code differs from what is committed. Run scripts/generate.sh and commit the result; never edit generated files by hand."
+            git status --porcelain
+            git diff
+            exit 1
+          fi

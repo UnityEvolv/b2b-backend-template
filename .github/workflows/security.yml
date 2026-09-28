@@ -1,0 +1,202 @@
+# Secrets, dependency and container scanning.
+#
+# Runs on every ready PR into main, before a human reviews anything, and by
+# hand from the Actions tab (workflow_dispatch) for a full scan of main.
+# Each job fails the build on a finding; the findings are also posted as one
+# comment on the PR, because code scanning is not available on this repo.
+#
+# Accepted risks, once there are any, live in .trivyignore.yaml and must name a
+# reason and an expiry.
+# Accepted secret findings (a key already rotated) go in .gitleaksignore.
+
+name: security
+
+on:
+  # Pull requests into main only, and not while a draft: the push to main on
+  # merge is not tested again, since the PR already tested that merge.
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.74.0
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1
+  COMPOSE_FILE: deploy/docker-compose.yml
+
+jobs:
+  secrets:
+    name: secrets
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, every time: the repo is small, and a secret that
+          # was committed and then deleted is still a leaked secret.
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" \
+            git --redact --no-banner --exit-code 1 \
+            --report-format json --report-path /repo/gitleaks.json .
+          status=$?
+          set -e
+          python3 .github/scripts/report.py secrets gitleaks.json > secrets.md
+          cat secrets.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-secrets
+          path: secrets.md
+          if-no-files-found: ignore
+
+  dependencies:
+    name: dependencies
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: accepted risks are justified and dated
+        run: python3 .github/scripts/check_ignores.py .trivyignore.yaml
+      - name: trivy (Go modules)
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/repo" -w /repo "$TRIVY_IMAGE" \
+            fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+            --ignorefile .trivyignore.yaml --format json --output trivy-fs.json .
+          status=$?
+          set -e
+          python3 .github/scripts/report.py dependencies trivy-fs.json > dependencies.md
+          cat dependencies.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-dependencies
+          path: dependencies.md
+          if-no-files-found: ignore
+
+  images:
+    name: images
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    # Every image built and scanned one at a time, which takes a while.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Building every image is the most expensive scan: on a PR it runs only
+      # when something that goes into an image changed. A run by hand always scans.
+      - name: anything in an image changed?
+        id: changed
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then echo "images=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "origin/$GITHUB_BASE_REF...HEAD" \
+              | grep -qE '(^|/)Dockerfile|^deploy/|^go\.(mod|sum)$|package(-lock)?\.json$|^\.trivyignore\.yaml$'; then
+            echo "images=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "images=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfile, base image or dependency changed: image scan skipped." >> images.md
+          fi
+      # A hosted runner has about 14 GB free, and every image with its build
+      # cache does not fit at once. The preinstalled toolchains nobody here
+      # uses go first.
+      - name: free disk
+        if: steps.changed.outputs.images == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+      # Every image this repo builds is a compose service with a build section,
+      # so a new service is scanned without touching this file. One at a time:
+      # built, scanned, then removed with its layers, so the disk holds one
+      # image however many services there are. What they share stays: the Go
+      # module and build caches (cache mounts, kept by the prune's filter) and
+      # the vulnerability database, downloaded once into a volume.
+      - name: build and scan (every image, one at a time)
+        if: steps.changed.outputs.images == 'true'
+        run: |
+          status=0
+          : > images.md
+          docker pull -q "$TRIVY_IMAGE" >/dev/null
+          docker volume create trivy-cache >/dev/null
+          docker run --rm -v trivy-cache:/root/.cache/trivy "$TRIVY_IMAGE" image --download-db-only --no-progress
+          project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r .name)
+          for service in $(docker compose -f "$COMPOSE_FILE" config --format json \
+              | jq -r '.services | to_entries[] | select(.value.build) | .key'); do
+            image="$project-$service"
+            if ! docker compose -f "$COMPOSE_FILE" build "$service"; then
+              echo "- image $image: the build failed" >> images.md
+              status=1
+              continue
+            fi
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo" -w /repo \
+              -v trivy-cache:/root/.cache/trivy \
+              "$TRIVY_IMAGE" image --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+              --ignorefile .trivyignore.yaml --format json --output "trivy-$service.json" "$image" \
+              || status=1
+            python3 .github/scripts/report.py "image $image" "trivy-$service.json" >> images.md
+            docker image rm -f "$image" >/dev/null
+            docker builder prune -af --filter type!=exec.cachemount >/dev/null
+          done
+          df -h /
+          cat images.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-images
+          path: images.md
+          if-no-files-found: ignore
+
+  # One comment per PR, updated in place on every run.
+  comment:
+    name: comment
+    if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [secrets, dependencies, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: report-*
+          merge-multiple: true
+      - name: post
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RESULTS: ${{ needs.secrets.result }} ${{ needs.dependencies.result }} ${{ needs.images.result }}
+        run: |
+          marker='<!-- security-scan -->'
+          {
+            echo "$marker"
+            case " $RESULTS " in
+              *" failure "*) echo "### Security scan: findings" ;;
+              *) echo "### Security scan: clean" ;;
+            esac
+            echo
+            cat secrets.md dependencies.md images.md 2>/dev/null || true
+          } > body.md
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@body.md > /dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@body.md > /dev/null
+          fi

@@ -716,238 +716,6 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/frames:
-    get:
-      operationId: getFrameSettings
-      summary: The organization's festival frames and how each is set (Admins, Owners)
-      description: |
-        Every platform frame with its default and effective dates and whether
-        it is on, the organization's own frames, and the one decorations
-        switch. A platform frame the organization has never touched is on,
-        with its default dates; one with no default dates (celebration) is off
-        until it is given dates. Platform frame images are static paths the
-        web app ships; the organization's own are signed links good for an hour.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-      responses:
-        '200':
-          description: The frames and their settings
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FrameSettings'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-    post:
-      operationId: createOrgFrame
-      summary: Add one of the organization's own frames (Admins, Owners)
-      description: |
-        The images are uploads made with links from the uploads endpoint. Each
-        is fetched and checked before the frame is created: a PNG or WebP of
-        at most 5 MB, with transparency, of the canvas shape it is for
-        (landscape 16:9, square 1:1, portrait 3:4, at the same resolutions a
-        background takes). A light image for every shape is required; a dark
-        one is optional and the light one is used in its place. The dates are
-        calendar dates in the organization's time zone, both included, and do
-        not repeat. At most 50 frames per organization.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NewOrgFrame'
-      responses:
-        '201':
-          description: The frame, whether created now or by the first request with this key
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrgFrame'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/frames/uploads:
-    post:
-      operationId: createFrameUploads
-      summary: Links to upload the images of a new frame (Admins, Owners)
-      description: |
-        One pre-signed PUT per image the client will send, each good for 15
-        minutes. The client PUTs the file's bytes to upload_url with the
-        Content-Type it declared here, then names the returned keys when it
-        creates the frame. Nothing is checked until then.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FrameUploadRequest'
-      responses:
-        '200':
-          description: One upload per file asked for, in the same order
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FrameUploads'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/frames/{frame_key}:
-    put:
-      operationId: setPlatformFrame
-      summary: Turn a platform frame on or off, or change its yearly dates (Admins, Owners)
-      description: |
-        Dates are month-day, MM-DD, and repeat every year; a start after the
-        end wraps the year (12-31 to 01-02). start_md and end_md go together:
-        both left out keeps the dates as they are, both null goes back to the
-        defaults. A frame with no default dates cannot be turned on without dates.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - name: frame_key
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PlatformFrameUpdate'
-      responses:
-        '200':
-          description: The frame as it now stands
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlatformFrame'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/frames/org/{frame_id}:
-    delete:
-      operationId: deleteOrgFrame
-      summary: Remove one of the organization's own frames and its images (Admins, Owners)
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - name: frame_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: Removed
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/decorations:
-    put:
-      operationId: setDecorations
-      summary: Turn every frame on or off for the organization (Admins, Owners)
-      description: Off shows no frame at all, whatever each frame's own setting. The settings are kept.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Decorations'
-      responses:
-        '200':
-          description: The switch as it now stands
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Decorations'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
-  /v1/organizations/{org_id}/frame:
-    get:
-      operationId: getActiveFrame
-      summary: The one frame showing over the office on a date (any member)
-      description: |
-        Dates are the organization's time zone. The organization's own frame
-        wins over a platform frame; among platform frames, the one most
-        recently turned on. None when decorations are off or nothing is on.
-        Platform frame images are static paths the web app ships; the
-        organization's own are signed links good for an hour.
-      tags: [frames]
-      parameters:
-        - $ref: '#/components/parameters/OrgId'
-        - name: date
-          in: query
-          required: false
-          description: A calendar date, YYYY-MM-DD; today in the organization's time zone when left out.
-          schema:
-            type: string
-      responses:
-        '200':
-          description: The frame, or null
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActiveFrameResponse'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        default:
-          $ref: '#/components/responses/Error'
   /v1/internal/domains/{domain}/organization:
     get:
       operationId: getOrganizationByDomain
@@ -1201,7 +969,7 @@ components:
       enum: [free, team-50, team-200, team-500, enterprise]
     PlanLimits:
       type: object
-      required: [org_id, plan, users, offices, min_message_retention_seconds, max_message_retention_seconds, attachment_bytes, features]
+      required: [org_id, plan, users, attachment_bytes, features]
       properties:
         org_id:
           type: string
@@ -1211,13 +979,6 @@ components:
         users:
           type: integer
           description: Cap on active memberships. 0 means no cap in the product.
-        offices:
-          type: integer
-          description: Cap on active offices. 0 means no cap in the product.
-        min_message_retention_seconds:
-          type: integer
-        max_message_retention_seconds:
-          type: integer
         attachment_bytes:
           type: integer
           format: int64
@@ -1253,8 +1014,8 @@ components:
       type: string
       description: |
         IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-        the organization's zone: festival frames, scheduled switches, grace
-        periods and heat maps use it. A person's own zone is on their profile.
+        the organization's zone: scheduled switches and grace periods use
+        it. A person's own zone is on their profile.
       example: Asia/Kolkata
       maxLength: 64
     NewOrganization:
@@ -1269,7 +1030,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-          description: What people see in the office. Defaults to the name.
+          description: What people see in the product. Defaults to the name.
         domain:
           type: string
           minLength: 3
@@ -1355,12 +1116,6 @@ components:
           nullable: true
         time_zone:
           $ref: '#/components/schemas/TimeZone'
-        remote_control:
-          type: boolean
-          description: |
-            Whether people may give control of their screen during a share
-            (UO-216). Off refuses every new grant, however it is asked for;
-            one already running ends with its share.
     OrganizationStatus:
       type: string
       enum: [active, suspended, closing]
@@ -1382,7 +1137,7 @@ components:
             properties:
               class:
                 type: string
-                enum: [identity, audit, usage, messages, transient, backups]
+                enum: [identity, audit, transient, backups]
               kept:
                 type: string
                 description: How long, in words, the same every time for every org.
@@ -1455,9 +1210,6 @@ components:
           description: When everything in it is deleted; present while it is closing.
         time_zone:
           $ref: '#/components/schemas/TimeZone'
-        remote_control:
-          type: boolean
-          description: Whether people may give control of their screen during a share.
         owner_user_id:
           type: string
           format: uuid
@@ -1478,258 +1230,6 @@ components:
         next_cursor:
           type: string
           description: Present when there is another page.
-    CanvasShape:
-      type: string
-      description: A template canvas shape. Landscape is 16:9, square 1:1, portrait 3:4.
-      enum: [landscape, square, portrait]
-    PlatformFrameKey:
-      type: string
-      enum: [christmas, new_year, diwali, holi, eid, easter, halloween, celebration]
-    FrameVariant:
-      type: string
-      enum: [light, dark]
-    FrameImage:
-      type: object
-      required: [light]
-      properties:
-        light:
-          type: string
-          description: A static path (platform frames) or a signed link (the organization's own).
-        dark:
-          type: string
-          description: Absent when there is none; the light image is used in dark mode.
-    FrameImages:
-      type: object
-      required: [landscape, square, portrait]
-      properties:
-        landscape:
-          $ref: '#/components/schemas/FrameImage'
-        square:
-          $ref: '#/components/schemas/FrameImage'
-        portrait:
-          $ref: '#/components/schemas/FrameImage'
-    PlatformFrame:
-      type: object
-      required: [key, name, icon, enabled, customized, images]
-      properties:
-        key:
-          $ref: '#/components/schemas/PlatformFrameKey'
-        name:
-          type: string
-        icon:
-          type: string
-          description: An icon name from the web app's icon set.
-        enabled:
-          type: boolean
-          description: Whether it shows on its dates. An enabled frame always has dates.
-        customized:
-          type: boolean
-          description: Whether the organization has set its own dates.
-        default_start_md:
-          type: string
-          description: MM-DD. Absent for a frame with no default dates.
-        default_end_md:
-          type: string
-          description: MM-DD. Absent for a frame with no default dates.
-        start_md:
-          type: string
-          description: MM-DD, the dates in effect. Absent when it has none.
-        end_md:
-          type: string
-          description: MM-DD, the dates in effect. Absent when it has none.
-        enabled_at:
-          type: string
-          format: date-time
-          description: When the organization last turned it on; absent when it is on by default.
-        images:
-          $ref: '#/components/schemas/FrameImages'
-    PlatformFrameUpdate:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-        start_md:
-          type: string
-          nullable: true
-          description: MM-DD. Left out keeps the dates; null goes back to the default.
-        end_md:
-          type: string
-          nullable: true
-          description: MM-DD. Left out keeps the dates; null goes back to the default.
-    OrgFrame:
-      type: object
-      required: [id, name, icon, start_date, end_date, images, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        icon:
-          type: string
-        start_date:
-          type: string
-          format: date
-        end_date:
-          type: string
-          format: date
-        images:
-          $ref: '#/components/schemas/FrameImages'
-        created_at:
-          type: string
-          format: date-time
-    NewOrgFrameImage:
-      type: object
-      required: [light]
-      properties:
-        light:
-          type: string
-          description: The key of an upload from the uploads endpoint.
-        dark:
-          type: string
-    NewOrgFrame:
-      type: object
-      required: [name, start_date, end_date, images]
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 100
-        icon:
-          type: string
-          description: An icon name from the web app's icon set, lower-case letters, digits and dashes. confetti when left out.
-        start_date:
-          type: string
-          description: YYYY-MM-DD, in the organization's time zone.
-        end_date:
-          type: string
-          description: YYYY-MM-DD, included; on or after the start.
-        images:
-          type: object
-          required: [landscape, square, portrait]
-          properties:
-            landscape:
-              $ref: '#/components/schemas/NewOrgFrameImage'
-            square:
-              $ref: '#/components/schemas/NewOrgFrameImage'
-            portrait:
-              $ref: '#/components/schemas/NewOrgFrameImage'
-    FrameSettings:
-      type: object
-      required: [decorations_enabled, time_zone, platform_frames, org_frames]
-      properties:
-        decorations_enabled:
-          type: boolean
-        time_zone:
-          type: string
-          description: The organization's time zone, which every frame date is in.
-        platform_frames:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlatformFrame'
-        org_frames:
-          type: array
-          description: Newest first.
-          items:
-            $ref: '#/components/schemas/OrgFrame'
-    Decorations:
-      type: object
-      required: [enabled]
-      properties:
-        enabled:
-          type: boolean
-    FrameUploadFile:
-      type: object
-      required: [shape, variant, content_type, size]
-      properties:
-        shape:
-          $ref: '#/components/schemas/CanvasShape'
-        variant:
-          $ref: '#/components/schemas/FrameVariant'
-        content_type:
-          type: string
-          description: image/png or image/webp.
-        size:
-          type: integer
-          format: int64
-          description: Bytes, exactly, at most 5 MB; the upload must be this size.
-    FrameUploadRequest:
-      type: object
-      required: [files]
-      properties:
-        files:
-          type: array
-          description: 1 to 6 files, each shape and variant at most once.
-          items:
-            $ref: '#/components/schemas/FrameUploadFile'
-    FrameUpload:
-      type: object
-      required: [shape, variant, key, upload_url, content_type, expires_at]
-      properties:
-        shape:
-          $ref: '#/components/schemas/CanvasShape'
-        variant:
-          $ref: '#/components/schemas/FrameVariant'
-        key:
-          type: string
-          description: What to name in the new frame's images.
-        upload_url:
-          type: string
-          description: PUT the bytes here, with the Content-Type below.
-        content_type:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-    FrameUploads:
-      type: object
-      required: [uploads]
-      properties:
-        uploads:
-          type: array
-          items:
-            $ref: '#/components/schemas/FrameUpload'
-    ActiveFrame:
-      type: object
-      required: [kind, name, icon, start_date, end_date, images]
-      properties:
-        kind:
-          type: string
-          enum: [platform, organization]
-        key:
-          $ref: '#/components/schemas/PlatformFrameKey'
-        id:
-          type: string
-          format: uuid
-          description: The organization's own frame's id.
-        name:
-          type: string
-        icon:
-          type: string
-        start_date:
-          type: string
-          format: date
-          description: The first day of this showing.
-        end_date:
-          type: string
-          format: date
-          description: The last day of this showing.
-        images:
-          $ref: '#/components/schemas/FrameImages'
-    ActiveFrameResponse:
-      type: object
-      required: [date, frame]
-      properties:
-        date:
-          type: string
-          format: date
-          description: The date the answer is for, in the organization's time zone.
-        frame:
-          allOf:
-            - $ref: '#/components/schemas/ActiveFrame'
-          nullable: true
-          description: The frame showing, or null when none is.
     Error:
       type: object
       required: [code, message]

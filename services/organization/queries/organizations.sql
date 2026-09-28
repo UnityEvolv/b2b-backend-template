@@ -29,8 +29,7 @@ UPDATE organizations
 SET name          = coalesce(sqlc.narg('name'), name),
     display_name  = CASE WHEN @clear_display_name::boolean THEN NULL ELSE coalesce(sqlc.narg('display_name'), display_name) END,
     domain        = CASE WHEN @clear_domain::boolean THEN NULL ELSE coalesce(sqlc.narg('domain'), domain) END,
-    time_zone     = coalesce(sqlc.narg('time_zone'), time_zone),
-    remote_control = coalesce(sqlc.narg('remote_control'), remote_control)
+    time_zone     = coalesce(sqlc.narg('time_zone'), time_zone)
 WHERE org_id = @org_id
 RETURNING *;
 

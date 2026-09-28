@@ -258,18 +258,14 @@ func (s *Server) makeExport(ctx context.Context, e store.DataExport) error {
 		return fmt.Errorf("requester: %w", err)
 	}
 	var parts []orgdata.Part
-	orgName := "unityofis"
+	orgName := s.brand.Product
 	if e.Kind == kindOrg {
 		o, err := s.get(ctx, e.OrgID)
 		if err != nil {
 			return err
 		}
 		orgName = o.Name
-		frames, files, err := s.exportFrames(ctx, o)
-		if err != nil {
-			return err
-		}
-		own, err := orgdata.Marshal(orgdata.Caller, map[string]any{"organization": toAPI(o), "retention": retention(o), "frames": frames}, files)
+		own, err := orgdata.Marshal(orgdata.Caller, map[string]any{"organization": toAPI(o), "retention": retention(o)}, nil)
 		if err != nil {
 			return err
 		}
@@ -347,15 +343,14 @@ func (s *Server) makeExport(ctx context.Context, e store.DataExport) error {
 func (s *Server) writeArchive(ctx context.Context, w io.Writer, e store.DataExport, parts []orgdata.Part) error {
 	z := zip.NewWriter(w)
 	readme := []string{
-		"# unityofis data export",
+		"# " + s.brand.Product + " data export",
 		"",
 		fmt.Sprintf("Kind: %s. Made %s.", e.Kind, s.now().UTC().Format(time.RFC3339)),
 		"",
 		"One folder per service. Each has data.json, that service's records as JSON,",
 		"and files/ with the files that belong to them. Identifiers are UUIDs and",
 		"join across files. Secrets (credentials, tokens, password hashes) are never",
-		"exported. On a bring-your-own messaging provider, message text lives with",
-		"that provider and is not in this export.",
+		"exported.",
 		"",
 	}
 	for _, p := range parts {
@@ -449,7 +444,7 @@ func (s *Server) purge(ctx context.Context, org uuid.UUID) error {
 		if err := q.DeleteOrgSignups(ctx, pgtype.UUID{Bytes: org, Valid: true}); err != nil {
 			return err
 		}
-		for _, step := range []func(context.Context, uuid.UUID) error{q.DeleteOrgExports, q.DeleteOrgFrameSettings, q.DeleteOrgFrames, q.DeleteOrgDataKeys, q.DeleteOrganization} {
+		for _, step := range []func(context.Context, uuid.UUID) error{q.DeleteOrgExports, q.DeleteOrgDataKeys, q.DeleteOrganization} {
 			if err := step(ctx, org); err != nil {
 				return err
 			}

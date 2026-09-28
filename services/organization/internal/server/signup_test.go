@@ -209,14 +209,14 @@ func TestDomainClaimByTXTRecord(t *testing.T) {
 		}
 	}
 	status, claim := call(t, h, http.MethodPut, path, admin, map[string]any{"domain": "Initech.com"})
-	if status != http.StatusOK || claim["verified"] != false || claim["pending_domain"] != "initech.com" || claim["txt_name"] != "_unityofis.initech.com" || !strings.HasPrefix(claim["txt_value"].(string), "unityofis-verify=") {
+	if status != http.StatusOK || claim["verified"] != false || claim["pending_domain"] != "initech.com" || claim["txt_name"] != "_b2bapp-verify.initech.com" || !strings.HasPrefix(claim["txt_value"].(string), "b2bapp-verify=") {
 		t.Fatalf("pending claim: %d %v", status, claim)
 	}
 	// Not yet published: refused; published: claimed; sign-in by domain finds it.
 	if status, out := call(t, h, http.MethodPost, path+"/verify", admin, nil); status != http.StatusConflict || out["code"] != "domain.not_verified" {
 		t.Errorf("before the record: %d %v", status, out)
 	}
-	d.records["_unityofis.initech.com"] = claim["txt_value"].(string)
+	d.records["_b2bapp-verify.initech.com"] = claim["txt_value"].(string)
 	status, claimed := call(t, h, http.MethodPost, path+"/verify", admin, nil)
 	if status != http.StatusOK || claimed["verified"] != true || claimed["domain"] != "initech.com" || claimed["pending_domain"] != nil {
 		t.Fatalf("verify: %d %v", status, claimed)
@@ -243,7 +243,7 @@ func TestDomainClaimByTXTRecord(t *testing.T) {
 	// up is not claimed on the strength of the first one's record.
 	otherPath := "/v1/organizations/" + other["org_id"].(string) + "/domain"
 	_, proven := call(t, h, http.MethodPut, otherPath, otherToken, map[string]any{"domain": "proven.com"})
-	d.records["_unityofis.proven.com"] = proven["txt_value"].(string)
+	d.records["_b2bapp-verify.proven.com"] = proven["txt_value"].(string)
 	d.duringLookup = func() {
 		call(t, h, http.MethodPut, otherPath, otherToken, map[string]any{"domain": "unproven.com"})
 	}

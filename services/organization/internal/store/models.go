@@ -41,34 +41,6 @@ type OrgDataKey struct {
 	LastModifiedAt time.Time
 }
 
-type OrgFrame struct {
-	OrgID          uuid.UUID
-	ID             uuid.UUID
-	Name           string
-	Icon           string
-	StartDate      pgtype.Date
-	EndDate        pgtype.Date
-	Images         []byte
-	IdempotencyKey pgtype.Text
-	CreatedBy      string
-	CreatedAt      time.Time
-	LastModifiedBy string
-	LastModifiedAt time.Time
-}
-
-type OrgFrameSetting struct {
-	OrgID          uuid.UUID
-	FrameKey       string
-	Enabled        bool
-	StartMd        pgtype.Text
-	EndMd          pgtype.Text
-	EnabledAt      pgtype.Timestamptz
-	CreatedBy      string
-	CreatedAt      time.Time
-	LastModifiedBy string
-	LastModifiedAt time.Time
-}
-
 type Organization struct {
 	OrgID                   uuid.UUID
 	Name                    string
@@ -94,8 +66,6 @@ type Organization struct {
 	ClosedByUserID          pgtype.UUID
 	ReopenTokenHash         []byte
 	AuditMonths             int32
-	DecorationsOff          bool
-	RemoteControl           bool
 }
 
 type PurgedOrganization struct {

@@ -35,7 +35,9 @@ operator made) proves a domain with a DNS record:
 
 - `PUT /organization/v1/organizations/{org}/domain {domain}` (the settings
   permission) parks it as pending and answers with the record to publish:
-  a TXT at `_unityofis.<domain>` with value `unityofis-verify=<token>`.
+  a TXT at `_b2bapp-verify.<domain>` with value `b2bapp-verify=<token>`
+  (both names are configuration: `DOMAIN_TXT_PREFIX` and
+  `DOMAIN_TXT_VALUE_PREFIX`).
   Until it is found the domain counts for nothing: sign-in by address does
   not find the organization, and another organization may still claim it.
 - `POST …/domain/verify` looks the record up and claims the domain; the

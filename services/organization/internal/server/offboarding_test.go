@@ -285,7 +285,7 @@ func TestRetention(t *testing.T) {
 	path := "/v1/organizations/" + orgID + "/retention"
 
 	status, out := get(t, h, path, tokenForMember(t, issuer, orgID, admin))
-	if status != http.StatusOK || out["audit_months"] != float64(13) || out["audit_configurable"] != false || len(out["classes"].([]any)) != 6 {
+	if status != http.StatusOK || out["audit_months"] != float64(13) || out["audit_configurable"] != false || len(out["classes"].([]any)) != 4 {
 		t.Fatalf("schedule: %d %v", status, out)
 	}
 	if status, _ := get(t, h, path, tokenFor(t, issuer, orgID)); status != http.StatusForbidden {

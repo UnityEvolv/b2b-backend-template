@@ -31,10 +31,10 @@ type Server struct {
 	deps     Deps
 	// apps is each web app's origin, by name: where a signup link opens.
 	apps map[string]string
-	// off is what offboarding and exports call out to (UO-183, UO-184).
+	// brand is how the product names itself in exports and DNS records.
+	brand Branding
+	// off is what offboarding and exports call out to.
 	off Offboarding
-	// frames is where the org's own frame images are uploaded (UO-147).
-	frames FrameFiles
 }
 
 // WithOffboarding is s with the offboarding and export dependencies.
@@ -49,7 +49,36 @@ var _ api.StrictServerInterface = (*Server)(nil)
 // wrapper is the KMS master key that wraps each org's data key; deps are
 // the other services signup calls; apps is each web app's origin.
 func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, wrapper kms.Wrapper, checker authz.Checker, deps Deps, apps map[string]string) *Server {
-	return &Server{cluster: cluster, logger: logger, recorder: recorder, wrapper: wrapper, authz: checker, deps: deps, apps: apps}
+	return &Server{cluster: cluster, logger: logger, recorder: recorder, wrapper: wrapper, authz: checker, deps: deps, apps: apps, brand: DefaultBranding}
+}
+
+// Branding is how the product names itself here: as the author of a
+// personal data export, and in the DNS record that proves a domain.
+type Branding struct {
+	// Product is the product's name.
+	Product string
+	// TXTPrefix goes before the domain to name the verification record:
+	// "_b2bapp-verify." proves acme.com with a TXT at _b2bapp-verify.acme.com.
+	TXTPrefix string
+	// TXTValuePrefix goes before the token in that record's value.
+	TXTValuePrefix string
+}
+
+// DefaultBranding is the template's own names, for a product that sets none.
+var DefaultBranding = Branding{Product: "B2B App", TXTPrefix: "_b2bapp-verify.", TXTValuePrefix: "b2bapp-verify="}
+
+// WithBranding is s naming the product b; an empty field keeps the default.
+func (s *Server) WithBranding(b Branding) *Server {
+	if b.Product != "" {
+		s.brand.Product = b.Product
+	}
+	if b.TXTPrefix != "" {
+		s.brand.TXTPrefix = b.TXTPrefix
+	}
+	if b.TXTValuePrefix != "" {
+		s.brand.TXTValuePrefix = b.TXTValuePrefix
+	}
+	return s
 }
 
 // Wrapper is the KMS master key this service wraps org keys with. A test
@@ -79,14 +108,6 @@ var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations/{org_id}/domain":         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/domain":         ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/domain/verify": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	// Festival frames (UO-147).
-	"GET /v1/organizations/{org_id}/frames":                   ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"POST /v1/organizations/{org_id}/frames":                  ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"POST /v1/organizations/{org_id}/frames/uploads":          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/frames/{frame_key}":       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"DELETE /v1/organizations/{org_id}/frames/org/{frame_id}": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/decorations":              ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"GET /v1/organizations/{org_id}/frame":                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in the

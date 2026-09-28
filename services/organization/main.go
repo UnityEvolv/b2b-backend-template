@@ -86,6 +86,13 @@ func run() error {
 		notificationURL = env.Required("NOTIFICATION_URL")
 		// The web apps, by name (APP_NAMES), each at APP_ORIGIN_<NAME>.
 		apps = config.AppsFrom(env, baseHost)
+		// How the product names itself: in a personal export, and in the DNS
+		// record that proves a domain claim.
+		brand = server.Branding{
+			Product:        env.String("PRODUCT_NAME", server.DefaultBranding.Product),
+			TXTPrefix:      env.String("DOMAIN_TXT_PREFIX", server.DefaultBranding.TXTPrefix),
+			TXTValuePrefix: env.String("DOMAIN_TXT_VALUE_PREFIX", server.DefaultBranding.TXTValuePrefix),
+		}
 		// The KMS master key: "gcp" with the full crypto key name, or "file"
 		// with a path, which is for a laptop only.
 		kmsProvider = env.String("KMS_PROVIDER", "file")
@@ -181,8 +188,7 @@ func run() error {
 			Files:    files,
 			Services: dataOwners(notificationURL, billingURL, authorizationURL, identityURL, userURL, auditURL),
 		}).
-		// An org's own festival frames are uploaded to the same bucket (UO-147).
-		WithFrames(files)
+		WithBranding(brand)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// The daily tick: closing orgs purged and audit retention applied. No

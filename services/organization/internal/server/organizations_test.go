@@ -284,17 +284,6 @@ func TestUpdateOrganization(t *testing.T) {
 	if status, out := do(t, h, http.MethodPatch, path, operator, map[string]any{"domain": "acme.co.uk"}, ""); status != http.StatusOK || out["domain"] != "acme.co.uk" || out["name"] != "Acme Ltd" {
 		t.Errorf("operator patch: %d %v", status, out)
 	}
-	// Remote control (UO-216) is on until an Admin turns it off, and the
-	// internal record a service reads says so.
-	if out["remote_control"] != true {
-		t.Errorf("remote control by default: %v", out["remote_control"])
-	}
-	if status, out := do(t, h, http.MethodPatch, path, member, map[string]any{"remote_control": false}, ""); status != http.StatusOK || out["remote_control"] != false || out["name"] != "Acme Ltd" {
-		t.Errorf("turn remote control off: %d %v", status, out)
-	}
-	if status, out := do(t, h, http.MethodGet, "/v1/internal/organizations/"+acme, tokenForService(t, issuer, "identity"), nil, ""); status != http.StatusOK || out["remote_control"] != false {
-		t.Errorf("internal record after turning it off: %d %v", status, out)
-	}
 	// An org's own admin claims a domain by verifying it (UO-55), so the
 	// settings take one from an operator only.
 	if status, out := do(t, h, http.MethodPatch, path, member, map[string]any{"domain": nil}, ""); status != http.StatusForbidden || out["code"] != "domain.verify_first" {
@@ -345,7 +334,7 @@ func TestUpdateOrganization(t *testing.T) {
 			updates++
 		}
 	}
-	if updates != 7 {
+	if updates != 6 {
 		t.Errorf("organization.updated recorded %d times, want one per successful change", updates)
 	}
 }

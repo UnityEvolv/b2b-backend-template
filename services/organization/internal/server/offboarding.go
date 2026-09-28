@@ -272,7 +272,7 @@ func (s *Server) RequestReopenLink(ctx context.Context, req api.RequestReopenLin
 	return api.RequestReopenLink202Response{}, nil
 }
 
-// retentionClasses is the schedule, the same words for every org; only the
+// retention is the schedule, the same words for every org; only the
 // audit period varies.
 func retention(o store.Organization) api.Retention {
 	months := int(o.AuditMonths)
@@ -286,9 +286,7 @@ func retention(o store.Organization) api.Retention {
 		}{
 			{Class: api.Identity, Kept: "For as long as the membership lasts; 30 days after someone is deactivated or leaves, their name, email and directory details are removed. The membership stays as an id so records still add up."},
 			{Class: api.Audit, Kept: audit},
-			{Class: api.Usage, Kept: "Daily for 13 months, then as monthly totals for as long as the organization exists."},
-			{Class: api.Messages, Kept: "For the organization's message retention window on the built-in provider; deleted messages and files are removed daily."},
-			{Class: api.Transient, Kept: "Sessions, invites, tokens and presence: gone when they expire."},
+			{Class: api.Transient, Kept: "Sessions, invites and tokens: gone when they expire."},
 			{Class: api.Backups, Kept: "30 days rolling, so deleted data can survive in backups for up to 30 days."},
 		},
 	}

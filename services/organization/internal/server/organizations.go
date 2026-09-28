@@ -56,7 +56,6 @@ func toAPI(o store.Organization) api.Organization {
 	out := api.Organization{
 		OrgId: o.OrgID, Name: o.Name, Plan: api.Plan(o.Plan), TimeZone: o.TimeZone,
 		Status: api.OrganizationStatus(o.Status), CreatedAt: o.CreatedAt, LastModifiedAt: o.LastModifiedAt,
-		RemoteControl: &o.RemoteControl,
 	}
 	// The cap as the plan table says it now; read at the moment of asking.
 	if c := plan.For(plan.Band(o.Plan)).Users; c != plan.Unlimited {
@@ -365,10 +364,6 @@ func (s *Server) UpdateOrganization(ctx context.Context, req api.UpdateOrganizat
 				params.Domain = text(d)
 			}
 		}
-	}
-	if body.RemoteControl != nil {
-		params.RemoteControl = pgtype.Bool{Bool: *body.RemoteControl, Valid: true}
-		changed = append(changed, "remote_control")
 	}
 	if len(fields) > 0 {
 		return api.UpdateOrganization400JSONResponse{ErrorJSONResponse: invalid("Some fields are not valid.", fields)}, nil

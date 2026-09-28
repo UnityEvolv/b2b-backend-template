@@ -22,10 +22,8 @@ func toPlanLimits(o store.Organization) api.PlanLimits {
 		features = append(features, string(f))
 	}
 	return api.PlanLimits{
-		OrgId: o.OrgID, Plan: api.Plan(band), Users: l.Users, Offices: l.Offices,
-		MinMessageRetentionSeconds: int(l.MinMessageRetention.Seconds()),
-		MaxMessageRetentionSeconds: int(l.MaxMessageRetention.Seconds()),
-		AttachmentBytes:            l.AttachmentBytes, Features: features,
+		OrgId: o.OrgID, Plan: api.Plan(band), Users: l.Users,
+		AttachmentBytes: l.AttachmentBytes, Features: features,
 	}
 }
 

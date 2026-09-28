@@ -46,9 +46,7 @@ INSERT INTO purged_organizations (org_id, purged_at) VALUES (@org_id, @purged_at
 -- name: CountOrgRows :one
 SELECT (SELECT count(*) FROM organizations o WHERE o.org_id = @org_id)
      + (SELECT count(*) FROM org_data_keys k WHERE k.org_id = @org_id)
-     + (SELECT count(*) FROM data_exports e WHERE e.org_id = @org_id)
-     + (SELECT count(*) FROM org_frame_settings fs WHERE fs.org_id = @org_id)
-     + (SELECT count(*) FROM org_frames f WHERE f.org_id = @org_id) AS remaining;
+     + (SELECT count(*) FROM data_exports e WHERE e.org_id = @org_id) AS remaining;
 
 -- name: InsertExport :one
 INSERT INTO data_exports (org_id, id, kind, user_id, idempotency_key)

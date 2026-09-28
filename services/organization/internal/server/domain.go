@@ -16,20 +16,18 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// Domain verification for a claim (UO-55): an org that did not claim its
+// Domain verification for a claim: an org that did not claim its
 // domain at signup proves it with a TXT record. Until the record is found
 // the domain waits and counts for nothing: sign-in by address still does
 // not find the org, and another org may still claim it.
 
 const (
-	txtPrefix        = "_unityofis."
-	txtValuePrefix   = "unityofis-verify="
 	codeNotVerified  = "domain.not_verified"
 	codeNoPending    = "domain.none_pending"
 	codeDomainDirect = "domain.verify_first"
 )
 
-func toClaim(o store.Organization) api.DomainClaim {
+func toClaim(o store.Organization, brand Branding) api.DomainClaim {
 	out := api.DomainClaim{Verified: o.Domain.Valid}
 	if o.Domain.Valid {
 		out.Domain = &o.Domain.String
@@ -39,8 +37,8 @@ func toClaim(o store.Organization) api.DomainClaim {
 	}
 	if o.PendingDomain.Valid {
 		out.PendingDomain = &o.PendingDomain.String
-		name := txtPrefix + o.PendingDomain.String
-		value := txtValuePrefix + o.DomainVerificationToken.String
+		name := brand.TXTPrefix + o.PendingDomain.String
+		value := brand.TXTValuePrefix + o.DomainVerificationToken.String
 		out.TxtName, out.TxtValue = &name, &value
 	}
 	return out
@@ -65,7 +63,7 @@ func (s *Server) GetDomain(ctx context.Context, req api.GetDomainRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return api.GetDomain200JSONResponse(toClaim(org)), nil
+	return api.GetDomain200JSONResponse(toClaim(org, s.brand)), nil
 }
 
 // SetDomain starts a claim: the domain waits for its record.
@@ -86,7 +84,7 @@ func (s *Server) SetDomain(ctx context.Context, req api.SetDomainRequestObject) 
 		if err != nil {
 			return nil, err
 		}
-		return api.SetDomain200JSONResponse(toClaim(org)), nil
+		return api.SetDomain200JSONResponse(toClaim(org, s.brand)), nil
 	}
 	token := make([]byte, 16)
 	if _, err := rand.Read(token); err != nil {
@@ -101,7 +99,7 @@ func (s *Server) SetDomain(ctx context.Context, req api.SetDomainRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return api.SetDomain200JSONResponse(toClaim(org)), nil
+	return api.SetDomain200JSONResponse(toClaim(org, s.brand)), nil
 }
 
 // VerifyDomain looks for the record and claims the domain when it is there.
@@ -116,7 +114,7 @@ func (s *Server) VerifyDomain(ctx context.Context, req api.VerifyDomainRequestOb
 	if !org.PendingDomain.Valid {
 		return api.VerifyDomain404JSONResponse{Code: codeNoPending, Message: "No domain is waiting to be verified."}, nil
 	}
-	found, err := s.deps.DNS.HasTXT(ctx, txtPrefix+org.PendingDomain.String, txtValuePrefix+org.DomainVerificationToken.String)
+	found, err := s.deps.DNS.HasTXT(ctx, s.brand.TXTPrefix+org.PendingDomain.String, s.brand.TXTValuePrefix+org.DomainVerificationToken.String)
 	if err != nil {
 		s.logger.Warn("domain lookup failed", "error", err, "org_id", org.OrgID)
 		return api.VerifyDomain409JSONResponse{Code: codeNotVerified, Message: "The domain could not be looked up right now. Try again in a moment."}, nil
@@ -148,7 +146,7 @@ func (s *Server) VerifyDomain(ctx context.Context, req api.VerifyDomainRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return api.VerifyDomain200JSONResponse(toClaim(claimed)), nil
+	return api.VerifyDomain200JSONResponse(toClaim(claimed, s.brand)), nil
 }
 
 // mayEditDomainDirectly is whether a caller may set the domain in the

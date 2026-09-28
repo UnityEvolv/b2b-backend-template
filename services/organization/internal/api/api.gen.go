@@ -19,45 +19,6 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for ActiveFrameKind.
-const (
-	ActiveFrameKindOrganization ActiveFrameKind = "organization"
-	ActiveFrameKindPlatform     ActiveFrameKind = "platform"
-)
-
-// Valid indicates whether the value is a known member of the ActiveFrameKind enum.
-func (e ActiveFrameKind) Valid() bool {
-	switch e {
-	case ActiveFrameKindOrganization:
-		return true
-	case ActiveFrameKindPlatform:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CanvasShape.
-const (
-	Landscape CanvasShape = "landscape"
-	Portrait  CanvasShape = "portrait"
-	Square    CanvasShape = "square"
-)
-
-// Valid indicates whether the value is a known member of the CanvasShape enum.
-func (e CanvasShape) Valid() bool {
-	switch e {
-	case Landscape:
-		return true
-	case Portrait:
-		return true
-	case Square:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for DataExportKind.
 const (
 	DataExportKindOrganization DataExportKind = "organization"
@@ -94,24 +55,6 @@ func (e DataExportStatus) Valid() bool {
 	case Pending:
 		return true
 	case Ready:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for FrameVariant.
-const (
-	Dark  FrameVariant = "dark"
-	Light FrameVariant = "light"
-)
-
-// Valid indicates whether the value is a known member of the FrameVariant enum.
-func (e FrameVariant) Valid() bool {
-	switch e {
-	case Dark:
-		return true
-	case Light:
 		return true
 	default:
 		return false
@@ -166,50 +109,12 @@ func (e Plan) Valid() bool {
 	}
 }
 
-// Defines values for PlatformFrameKey.
-const (
-	Celebration PlatformFrameKey = "celebration"
-	Christmas   PlatformFrameKey = "christmas"
-	Diwali      PlatformFrameKey = "diwali"
-	Easter      PlatformFrameKey = "easter"
-	Eid         PlatformFrameKey = "eid"
-	Halloween   PlatformFrameKey = "halloween"
-	Holi        PlatformFrameKey = "holi"
-	NewYear     PlatformFrameKey = "new_year"
-)
-
-// Valid indicates whether the value is a known member of the PlatformFrameKey enum.
-func (e PlatformFrameKey) Valid() bool {
-	switch e {
-	case Celebration:
-		return true
-	case Christmas:
-		return true
-	case Diwali:
-		return true
-	case Easter:
-		return true
-	case Eid:
-		return true
-	case Halloween:
-		return true
-	case Holi:
-		return true
-	case NewYear:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RetentionClassesClass.
 const (
 	Audit     RetentionClassesClass = "audit"
 	Backups   RetentionClassesClass = "backups"
 	Identity  RetentionClassesClass = "identity"
-	Messages  RetentionClassesClass = "messages"
 	Transient RetentionClassesClass = "transient"
-	Usage     RetentionClassesClass = "usage"
 )
 
 // Valid indicates whether the value is a known member of the RetentionClassesClass enum.
@@ -221,11 +126,7 @@ func (e RetentionClassesClass) Valid() bool {
 		return true
 	case Identity:
 		return true
-	case Messages:
-		return true
 	case Transient:
-		return true
-	case Usage:
 		return true
 	default:
 		return false
@@ -298,38 +199,6 @@ func (e ListOrganizationsParamsOrder) Valid() bool {
 	}
 }
 
-// ActiveFrame defines model for ActiveFrame.
-type ActiveFrame struct {
-	// EndDate The last day of this showing.
-	EndDate openapi_types.Date `json:"end_date"`
-	Icon    string             `json:"icon"`
-
-	// Id The organization's own frame's id.
-	Id     *openapi_types.UUID `json:"id,omitempty"`
-	Images FrameImages         `json:"images"`
-	Key    *PlatformFrameKey   `json:"key,omitempty"`
-	Kind   ActiveFrameKind     `json:"kind"`
-	Name   string              `json:"name"`
-
-	// StartDate The first day of this showing.
-	StartDate openapi_types.Date `json:"start_date"`
-}
-
-// ActiveFrameKind defines model for ActiveFrame.Kind.
-type ActiveFrameKind string
-
-// ActiveFrameResponse defines model for ActiveFrameResponse.
-type ActiveFrameResponse struct {
-	// Date The date the answer is for, in the organization's time zone.
-	Date openapi_types.Date `json:"date"`
-
-	// Frame The frame showing, or null when none is.
-	Frame nullable.Nullable[ActiveFrame] `json:"frame"`
-}
-
-// CanvasShape A template canvas shape. Landscape is 16:9, square 1:1, portrait 3:4.
-type CanvasShape string
-
 // DataExport defines model for DataExport.
 type DataExport struct {
 	// DownloadUrl While ready, a link that works for an hour. The same link is emailed for 7 days.
@@ -351,11 +220,6 @@ type DataExportStatus string
 // DataExportList defines model for DataExportList.
 type DataExportList struct {
 	Exports []DataExport `json:"exports"`
-}
-
-// Decorations defines model for Decorations.
-type Decorations struct {
-	Enabled bool `json:"enabled"`
 }
 
 // DomainClaim defines model for DomainClaim.
@@ -387,106 +251,9 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-// FrameImage defines model for FrameImage.
-type FrameImage struct {
-	// Dark Absent when there is none; the light image is used in dark mode.
-	Dark *string `json:"dark,omitempty"`
-
-	// Light A static path (platform frames) or a signed link (the organization's own).
-	Light string `json:"light"`
-}
-
-// FrameImages defines model for FrameImages.
-type FrameImages struct {
-	Landscape FrameImage `json:"landscape"`
-	Portrait  FrameImage `json:"portrait"`
-	Square    FrameImage `json:"square"`
-}
-
-// FrameSettings defines model for FrameSettings.
-type FrameSettings struct {
-	DecorationsEnabled bool `json:"decorations_enabled"`
-
-	// OrgFrames Newest first.
-	OrgFrames      []OrgFrame      `json:"org_frames"`
-	PlatformFrames []PlatformFrame `json:"platform_frames"`
-
-	// TimeZone The organization's time zone, which every frame date is in.
-	TimeZone string `json:"time_zone"`
-}
-
-// FrameUpload defines model for FrameUpload.
-type FrameUpload struct {
-	ContentType string    `json:"content_type"`
-	ExpiresAt   time.Time `json:"expires_at"`
-
-	// Key What to name in the new frame's images.
-	Key string `json:"key"`
-
-	// Shape A template canvas shape. Landscape is 16:9, square 1:1, portrait 3:4.
-	Shape CanvasShape `json:"shape"`
-
-	// UploadUrl PUT the bytes here, with the Content-Type below.
-	UploadUrl string       `json:"upload_url"`
-	Variant   FrameVariant `json:"variant"`
-}
-
-// FrameUploadFile defines model for FrameUploadFile.
-type FrameUploadFile struct {
-	// ContentType image/png or image/webp.
-	ContentType string `json:"content_type"`
-
-	// Shape A template canvas shape. Landscape is 16:9, square 1:1, portrait 3:4.
-	Shape CanvasShape `json:"shape"`
-
-	// Size Bytes, exactly, at most 5 MB; the upload must be this size.
-	Size    int64        `json:"size"`
-	Variant FrameVariant `json:"variant"`
-}
-
-// FrameUploadRequest defines model for FrameUploadRequest.
-type FrameUploadRequest struct {
-	// Files 1 to 6 files, each shape and variant at most once.
-	Files []FrameUploadFile `json:"files"`
-}
-
-// FrameUploads defines model for FrameUploads.
-type FrameUploads struct {
-	Uploads []FrameUpload `json:"uploads"`
-}
-
-// FrameVariant defines model for FrameVariant.
-type FrameVariant string
-
-// NewOrgFrame defines model for NewOrgFrame.
-type NewOrgFrame struct {
-	// EndDate YYYY-MM-DD, included; on or after the start.
-	EndDate string `json:"end_date"`
-
-	// Icon An icon name from the web app's icon set, lower-case letters, digits and dashes. confetti when left out.
-	Icon   *string `json:"icon,omitempty"`
-	Images struct {
-		Landscape NewOrgFrameImage `json:"landscape"`
-		Portrait  NewOrgFrameImage `json:"portrait"`
-		Square    NewOrgFrameImage `json:"square"`
-	} `json:"images"`
-	Name string `json:"name"`
-
-	// StartDate YYYY-MM-DD, in the organization's time zone.
-	StartDate string `json:"start_date"`
-}
-
-// NewOrgFrameImage defines model for NewOrgFrameImage.
-type NewOrgFrameImage struct {
-	Dark *string `json:"dark,omitempty"`
-
-	// Light The key of an upload from the uploads endpoint.
-	Light string `json:"light"`
-}
-
 // NewOrganization defines model for NewOrganization.
 type NewOrganization struct {
-	// DisplayName What people see in the office. Defaults to the name.
+	// DisplayName What people see in the product. Defaults to the name.
 	DisplayName *string `json:"display_name,omitempty"`
 
 	// Domain The email domain the organization claims, such as acme.com. One organization per domain.
@@ -497,8 +264,8 @@ type NewOrganization struct {
 	OwnerUserId *openapi_types.UUID `json:"owner_user_id,omitempty"`
 
 	// TimeZone IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-	// the organization's zone: festival frames, scheduled switches, grace
-	// periods and heat maps use it. A person's own zone is on their profile.
+	// the organization's zone: scheduled switches and grace periods use
+	// it. A person's own zone is on their profile.
 	//
 	//
 	// Example: Asia/Kolkata
@@ -514,23 +281,12 @@ type NewSignup struct {
 	OrgName string `json:"org_name"`
 
 	// TimeZone IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-	// the organization's zone: festival frames, scheduled switches, grace
-	// periods and heat maps use it. A person's own zone is on their profile.
+	// the organization's zone: scheduled switches and grace periods use
+	// it. A person's own zone is on their profile.
 	//
 	//
 	// Example: Asia/Kolkata
 	TimeZone TimeZone `json:"time_zone"`
-}
-
-// OrgFrame defines model for OrgFrame.
-type OrgFrame struct {
-	CreatedAt time.Time          `json:"created_at"`
-	EndDate   openapi_types.Date `json:"end_date"`
-	Icon      string             `json:"icon"`
-	Id        openapi_types.UUID `json:"id"`
-	Images    FrameImages        `json:"images"`
-	Name      string             `json:"name"`
-	StartDate openapi_types.Date `json:"start_date"`
 }
 
 // Organization defines model for Organization.
@@ -551,17 +307,14 @@ type Organization struct {
 	Plan Plan `json:"plan"`
 
 	// PurgeAfter When everything in it is deleted; present while it is closing.
-	PurgeAfter *time.Time `json:"purge_after,omitempty"`
-
-	// RemoteControl Whether people may give control of their screen during a share.
-	RemoteControl    *bool              `json:"remote_control,omitempty"`
+	PurgeAfter       *time.Time         `json:"purge_after,omitempty"`
 	Status           OrganizationStatus `json:"status"`
 	SuspendedAt      *time.Time         `json:"suspended_at,omitempty"`
 	SuspensionReason *string            `json:"suspension_reason,omitempty"`
 
 	// TimeZone IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-	// the organization's zone: festival frames, scheduled switches, grace
-	// periods and heat maps use it. A person's own zone is on their profile.
+	// the organization's zone: scheduled switches and grace periods use
+	// it. A person's own zone is on their profile.
 	//
 	//
 	// Example: Asia/Kolkata
@@ -584,14 +337,9 @@ type OrganizationSettings struct {
 	Domain      nullable.Nullable[string] `json:"domain,omitempty"`
 	Name        *string                   `json:"name,omitempty"`
 
-	// RemoteControl Whether people may give control of their screen during a share
-	// (UO-216). Off refuses every new grant, however it is asked for;
-	// one already running ends with its share.
-	RemoteControl *bool `json:"remote_control,omitempty"`
-
 	// TimeZone IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-	// the organization's zone: festival frames, scheduled switches, grace
-	// periods and heat maps use it. A person's own zone is on their profile.
+	// the organization's zone: scheduled switches and grace periods use
+	// it. A person's own zone is on their profile.
 	//
 	//
 	// Example: Asia/Kolkata
@@ -628,63 +376,14 @@ type PlanLimits struct {
 	AttachmentBytes int64 `json:"attachment_bytes"`
 
 	// Features The gated features this plan includes. Everything not gated is on every plan.
-	Features                   []string `json:"features"`
-	MaxMessageRetentionSeconds int      `json:"max_message_retention_seconds"`
-	MinMessageRetentionSeconds int      `json:"min_message_retention_seconds"`
-
-	// Offices Cap on active offices. 0 means no cap in the product.
-	Offices int                `json:"offices"`
-	OrgId   openapi_types.UUID `json:"org_id"`
+	Features []string           `json:"features"`
+	OrgId    openapi_types.UUID `json:"org_id"`
 
 	// Plan The plan band. What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
 
 	// Users Cap on active memberships. 0 means no cap in the product.
 	Users int `json:"users"`
-}
-
-// PlatformFrame defines model for PlatformFrame.
-type PlatformFrame struct {
-	// Customized Whether the organization has set its own dates.
-	Customized bool `json:"customized"`
-
-	// DefaultEndMd MM-DD. Absent for a frame with no default dates.
-	DefaultEndMd *string `json:"default_end_md,omitempty"`
-
-	// DefaultStartMd MM-DD. Absent for a frame with no default dates.
-	DefaultStartMd *string `json:"default_start_md,omitempty"`
-
-	// Enabled Whether it shows on its dates. An enabled frame always has dates.
-	Enabled bool `json:"enabled"`
-
-	// EnabledAt When the organization last turned it on; absent when it is on by default.
-	EnabledAt *time.Time `json:"enabled_at,omitempty"`
-
-	// EndMd MM-DD, the dates in effect. Absent when it has none.
-	EndMd *string `json:"end_md,omitempty"`
-
-	// Icon An icon name from the web app's icon set.
-	Icon   string           `json:"icon"`
-	Images FrameImages      `json:"images"`
-	Key    PlatformFrameKey `json:"key"`
-	Name   string           `json:"name"`
-
-	// StartMd MM-DD, the dates in effect. Absent when it has none.
-	StartMd *string `json:"start_md,omitempty"`
-}
-
-// PlatformFrameKey defines model for PlatformFrameKey.
-type PlatformFrameKey string
-
-// PlatformFrameUpdate defines model for PlatformFrameUpdate.
-type PlatformFrameUpdate struct {
-	Enabled bool `json:"enabled"`
-
-	// EndMd MM-DD. Left out keeps the dates; null goes back to the default.
-	EndMd nullable.Nullable[string] `json:"end_md,omitempty"`
-
-	// StartMd MM-DD. Left out keeps the dates; null goes back to the default.
-	StartMd nullable.Nullable[string] `json:"start_md,omitempty"`
 }
 
 // Retention defines model for Retention.
@@ -718,8 +417,8 @@ type SignupCompleted struct {
 }
 
 // TimeZone IANA time zone name, such as Asia/Kolkata. Never an offset. This is
-// the organization's zone: festival frames, scheduled switches, grace
-// periods and heat maps use it. A person's own zone is on their profile.
+// the organization's zone: scheduled switches and grace periods use
+// it. A person's own zone is on their profile.
 //
 // Example: Asia/Kolkata
 type TimeZone = string
@@ -811,20 +510,6 @@ type CreateOrgExportParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
-// GetActiveFrameParams defines parameters for GetActiveFrame.
-type GetActiveFrameParams struct {
-	// Date A calendar date, YYYY-MM-DD; today in the organization's time zone when left out.
-	Date *string `form:"date,omitempty" json:"date,omitempty"`
-}
-
-// CreateOrgFrameParams defines parameters for CreateOrgFrame.
-type CreateOrgFrameParams struct {
-	// IdempotencyKey A key the client makes up once per intended create and reuses on
-	// every retry of it. A second request with the same key returns what
-	// the first one made.
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
 // ChangePlanJSONBody defines parameters for ChangePlan.
 type ChangePlanJSONBody struct {
 	// Plan The plan band. What each band allows is read at the moment of every action.
@@ -870,20 +555,8 @@ type UpdateOrganizationJSONRequestBody = OrganizationSettings
 // CloseOrganizationJSONRequestBody defines body for CloseOrganization for application/json ContentType.
 type CloseOrganizationJSONRequestBody CloseOrganizationJSONBody
 
-// SetDecorationsJSONRequestBody defines body for SetDecorations for application/json ContentType.
-type SetDecorationsJSONRequestBody = Decorations
-
 // SetDomainJSONRequestBody defines body for SetDomain for application/json ContentType.
 type SetDomainJSONRequestBody SetDomainJSONBody
-
-// CreateOrgFrameJSONRequestBody defines body for CreateOrgFrame for application/json ContentType.
-type CreateOrgFrameJSONRequestBody = NewOrgFrame
-
-// CreateFrameUploadsJSONRequestBody defines body for CreateFrameUploads for application/json ContentType.
-type CreateFrameUploadsJSONRequestBody = FrameUploadRequest
-
-// SetPlatformFrameJSONRequestBody defines body for SetPlatformFrame for application/json ContentType.
-type SetPlatformFrameJSONRequestBody = PlatformFrameUpdate
 
 // ChangePlanJSONRequestBody defines body for ChangePlan for application/json ContentType.
 type ChangePlanJSONRequestBody ChangePlanJSONBody
@@ -947,9 +620,6 @@ type ServerInterface interface {
 	// CloseOrganization Close the organization; it is deleted 30 days later (the Owner, or a platform operator with a reason)
 	// (POST /v1/organizations/{org_id}/close)
 	CloseOrganization(w http.ResponseWriter, r *http.Request, orgId OrgId)
-	// SetDecorations Turn every frame on or off for the organization (Admins, Owners)
-	// (PUT /v1/organizations/{org_id}/decorations)
-	SetDecorations(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// GetDomain The organization's domain claim and how to prove a pending one
 	// (GET /v1/organizations/{org_id}/domain)
 	GetDomain(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -965,24 +635,6 @@ type ServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(w http.ResponseWriter, r *http.Request, orgId OrgId, params CreateOrgExportParams)
-	// GetActiveFrame The one frame showing over the office on a date (any member)
-	// (GET /v1/organizations/{org_id}/frame)
-	GetActiveFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, params GetActiveFrameParams)
-	// GetFrameSettings The organization's festival frames and how each is set (Admins, Owners)
-	// (GET /v1/organizations/{org_id}/frames)
-	GetFrameSettings(w http.ResponseWriter, r *http.Request, orgId OrgId)
-	// CreateOrgFrame Add one of the organization's own frames (Admins, Owners)
-	// (POST /v1/organizations/{org_id}/frames)
-	CreateOrgFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, params CreateOrgFrameParams)
-	// DeleteOrgFrame Remove one of the organization's own frames and its images (Admins, Owners)
-	// (DELETE /v1/organizations/{org_id}/frames/org/{frame_id})
-	DeleteOrgFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, frameId openapi_types.UUID)
-	// CreateFrameUploads Links to upload the images of a new frame (Admins, Owners)
-	// (POST /v1/organizations/{org_id}/frames/uploads)
-	CreateFrameUploads(w http.ResponseWriter, r *http.Request, orgId OrgId)
-	// SetPlatformFrame Turn a platform frame on or off, or change its yearly dates (Admins, Owners)
-	// (PUT /v1/organizations/{org_id}/frames/{frame_key})
-	SetPlatformFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, frameKey string)
 	// ChangePlan Move the organization to another plan (platform operators, until billing)
 	// (PUT /v1/organizations/{org_id}/plan)
 	ChangePlan(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1505,32 +1157,6 @@ func (siw *ServerInterfaceWrapper) CloseOrganization(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
-// SetDecorations operation middleware
-func (siw *ServerInterfaceWrapper) SetDecorations(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetDecorations(w, r, orgId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // GetDomain operation middleware
 func (siw *ServerInterfaceWrapper) GetDomain(w http.ResponseWriter, r *http.Request) {
 
@@ -1680,224 +1306,6 @@ func (siw *ServerInterfaceWrapper) CreateOrgExport(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateOrgExport(w, r, orgId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetActiveFrame operation middleware
-func (siw *ServerInterfaceWrapper) GetActiveFrame(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetActiveFrameParams
-
-	// ------------- Optional query parameter "date" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "date", r.URL.Query(), &params.Date, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "date"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetActiveFrame(w, r, orgId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetFrameSettings operation middleware
-func (siw *ServerInterfaceWrapper) GetFrameSettings(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetFrameSettings(w, r, orgId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateOrgFrame operation middleware
-func (siw *ServerInterfaceWrapper) CreateOrgFrame(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateOrgFrameParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateOrgFrame(w, r, orgId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteOrgFrame operation middleware
-func (siw *ServerInterfaceWrapper) DeleteOrgFrame(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "frame_id" -------------
-	var frameId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "frame_id", r.PathValue("frame_id"), &frameId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "frame_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteOrgFrame(w, r, orgId, frameId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateFrameUploads operation middleware
-func (siw *ServerInterfaceWrapper) CreateFrameUploads(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateFrameUploads(w, r, orgId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetPlatformFrame operation middleware
-func (siw *ServerInterfaceWrapper) SetPlatformFrame(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org_id" -------------
-	var orgId OrgId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "frame_key" -------------
-	var frameKey string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "frame_key", r.PathValue("frame_key"), &frameKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "frame_key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetPlatformFrame(w, r, orgId, frameKey)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2274,13 +1682,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/domain", wrapper.GetDomain)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/domain", wrapper.SetDomain)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/domain/verify", wrapper.VerifyDomain)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/frames", wrapper.GetFrameSettings)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/frames", wrapper.CreateOrgFrame)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/frames/uploads", wrapper.CreateFrameUploads)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/frames/{frame_key}", wrapper.SetPlatformFrame)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/frames/org/{frame_id}", wrapper.DeleteOrgFrame)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/decorations", wrapper.SetDecorations)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/frame", wrapper.GetActiveFrame)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/domains/{domain}/organization", wrapper.GetOrganizationByDomain)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}", wrapper.GetOrganizationInternal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/plan", wrapper.GetPlan)
@@ -3530,102 +2931,6 @@ func (response CloseOrganizationdefaultJSONResponse) VisitCloseOrganizationRespo
 	return err
 }
 
-type SetDecorationsRequestObject struct {
-	OrgId OrgId `json:"org_id"`
-	Body  *SetDecorationsJSONRequestBody
-}
-
-type SetDecorationsResponseObject interface {
-	VisitSetDecorationsResponse(w http.ResponseWriter) error
-}
-
-type SetDecorations200JSONResponse Decorations
-
-func (response SetDecorations200JSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDecorations400JSONResponse struct{ ErrorJSONResponse }
-
-func (response SetDecorations400JSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDecorations401JSONResponse Error
-
-func (response SetDecorations401JSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDecorations403JSONResponse Error
-
-func (response SetDecorations403JSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDecorations404JSONResponse Error
-
-func (response SetDecorations404JSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDecorationsdefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response SetDecorationsdefaultJSONResponse) VisitSetDecorationsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type GetDomainRequestObject struct {
 	OrgId OrgId `json:"org_id"`
 }
@@ -4050,535 +3355,6 @@ type CreateOrgExportdefaultJSONResponse struct {
 }
 
 func (response CreateOrgExportdefaultJSONResponse) VisitCreateOrgExportResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFrameRequestObject struct {
-	OrgId  OrgId `json:"org_id"`
-	Params GetActiveFrameParams
-}
-
-type GetActiveFrameResponseObject interface {
-	VisitGetActiveFrameResponse(w http.ResponseWriter) error
-}
-
-type GetActiveFrame200JSONResponse ActiveFrameResponse
-
-func (response GetActiveFrame200JSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFrame400JSONResponse struct{ ErrorJSONResponse }
-
-func (response GetActiveFrame400JSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFrame401JSONResponse Error
-
-func (response GetActiveFrame401JSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFrame403JSONResponse Error
-
-func (response GetActiveFrame403JSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFrame404JSONResponse Error
-
-func (response GetActiveFrame404JSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetActiveFramedefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response GetActiveFramedefaultJSONResponse) VisitGetActiveFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetFrameSettingsRequestObject struct {
-	OrgId OrgId `json:"org_id"`
-}
-
-type GetFrameSettingsResponseObject interface {
-	VisitGetFrameSettingsResponse(w http.ResponseWriter) error
-}
-
-type GetFrameSettings200JSONResponse FrameSettings
-
-func (response GetFrameSettings200JSONResponse) VisitGetFrameSettingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetFrameSettings401JSONResponse struct{ ErrorJSONResponse }
-
-func (response GetFrameSettings401JSONResponse) VisitGetFrameSettingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetFrameSettings403JSONResponse Error
-
-func (response GetFrameSettings403JSONResponse) VisitGetFrameSettingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetFrameSettings404JSONResponse Error
-
-func (response GetFrameSettings404JSONResponse) VisitGetFrameSettingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetFrameSettingsdefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response GetFrameSettingsdefaultJSONResponse) VisitGetFrameSettingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFrameRequestObject struct {
-	OrgId  OrgId `json:"org_id"`
-	Params CreateOrgFrameParams
-	Body   *CreateOrgFrameJSONRequestBody
-}
-
-type CreateOrgFrameResponseObject interface {
-	VisitCreateOrgFrameResponse(w http.ResponseWriter) error
-}
-
-type CreateOrgFrame201JSONResponse OrgFrame
-
-func (response CreateOrgFrame201JSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFrame400JSONResponse struct{ ErrorJSONResponse }
-
-func (response CreateOrgFrame400JSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFrame401JSONResponse Error
-
-func (response CreateOrgFrame401JSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFrame403JSONResponse Error
-
-func (response CreateOrgFrame403JSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFrame409JSONResponse Error
-
-func (response CreateOrgFrame409JSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateOrgFramedefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response CreateOrgFramedefaultJSONResponse) VisitCreateOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteOrgFrameRequestObject struct {
-	OrgId   OrgId              `json:"org_id"`
-	FrameId openapi_types.UUID `json:"frame_id"`
-}
-
-type DeleteOrgFrameResponseObject interface {
-	VisitDeleteOrgFrameResponse(w http.ResponseWriter) error
-}
-
-type DeleteOrgFrame204Response struct {
-}
-
-func (response DeleteOrgFrame204Response) VisitDeleteOrgFrameResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteOrgFrame401JSONResponse struct{ ErrorJSONResponse }
-
-func (response DeleteOrgFrame401JSONResponse) VisitDeleteOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteOrgFrame403JSONResponse Error
-
-func (response DeleteOrgFrame403JSONResponse) VisitDeleteOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteOrgFrame404JSONResponse Error
-
-func (response DeleteOrgFrame404JSONResponse) VisitDeleteOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type DeleteOrgFramedefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response DeleteOrgFramedefaultJSONResponse) VisitDeleteOrgFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateFrameUploadsRequestObject struct {
-	OrgId OrgId `json:"org_id"`
-	Body  *CreateFrameUploadsJSONRequestBody
-}
-
-type CreateFrameUploadsResponseObject interface {
-	VisitCreateFrameUploadsResponse(w http.ResponseWriter) error
-}
-
-type CreateFrameUploads200JSONResponse FrameUploads
-
-func (response CreateFrameUploads200JSONResponse) VisitCreateFrameUploadsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateFrameUploads400JSONResponse struct{ ErrorJSONResponse }
-
-func (response CreateFrameUploads400JSONResponse) VisitCreateFrameUploadsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateFrameUploads401JSONResponse Error
-
-func (response CreateFrameUploads401JSONResponse) VisitCreateFrameUploadsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateFrameUploads403JSONResponse Error
-
-func (response CreateFrameUploads403JSONResponse) VisitCreateFrameUploadsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateFrameUploadsdefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response CreateFrameUploadsdefaultJSONResponse) VisitCreateFrameUploadsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFrameRequestObject struct {
-	OrgId    OrgId  `json:"org_id"`
-	FrameKey string `json:"frame_key"`
-	Body     *SetPlatformFrameJSONRequestBody
-}
-
-type SetPlatformFrameResponseObject interface {
-	VisitSetPlatformFrameResponse(w http.ResponseWriter) error
-}
-
-type SetPlatformFrame200JSONResponse PlatformFrame
-
-func (response SetPlatformFrame200JSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFrame400JSONResponse struct{ ErrorJSONResponse }
-
-func (response SetPlatformFrame400JSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFrame401JSONResponse Error
-
-func (response SetPlatformFrame401JSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFrame403JSONResponse Error
-
-func (response SetPlatformFrame403JSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFrame404JSONResponse Error
-
-func (response SetPlatformFrame404JSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetPlatformFramedefaultJSONResponse struct {
-	Body       Error
-	StatusCode int
-}
-
-func (response SetPlatformFramedefaultJSONResponse) VisitSetPlatformFrameResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5359,9 +4135,6 @@ type StrictServerInterface interface {
 	// CloseOrganization Close the organization; it is deleted 30 days later (the Owner, or a platform operator with a reason)
 	// (POST /v1/organizations/{org_id}/close)
 	CloseOrganization(ctx context.Context, request CloseOrganizationRequestObject) (CloseOrganizationResponseObject, error)
-	// SetDecorations Turn every frame on or off for the organization (Admins, Owners)
-	// (PUT /v1/organizations/{org_id}/decorations)
-	SetDecorations(ctx context.Context, request SetDecorationsRequestObject) (SetDecorationsResponseObject, error)
 	// GetDomain The organization's domain claim and how to prove a pending one
 	// (GET /v1/organizations/{org_id}/domain)
 	GetDomain(ctx context.Context, request GetDomainRequestObject) (GetDomainResponseObject, error)
@@ -5377,24 +4150,6 @@ type StrictServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(ctx context.Context, request CreateOrgExportRequestObject) (CreateOrgExportResponseObject, error)
-	// GetActiveFrame The one frame showing over the office on a date (any member)
-	// (GET /v1/organizations/{org_id}/frame)
-	GetActiveFrame(ctx context.Context, request GetActiveFrameRequestObject) (GetActiveFrameResponseObject, error)
-	// GetFrameSettings The organization's festival frames and how each is set (Admins, Owners)
-	// (GET /v1/organizations/{org_id}/frames)
-	GetFrameSettings(ctx context.Context, request GetFrameSettingsRequestObject) (GetFrameSettingsResponseObject, error)
-	// CreateOrgFrame Add one of the organization's own frames (Admins, Owners)
-	// (POST /v1/organizations/{org_id}/frames)
-	CreateOrgFrame(ctx context.Context, request CreateOrgFrameRequestObject) (CreateOrgFrameResponseObject, error)
-	// DeleteOrgFrame Remove one of the organization's own frames and its images (Admins, Owners)
-	// (DELETE /v1/organizations/{org_id}/frames/org/{frame_id})
-	DeleteOrgFrame(ctx context.Context, request DeleteOrgFrameRequestObject) (DeleteOrgFrameResponseObject, error)
-	// CreateFrameUploads Links to upload the images of a new frame (Admins, Owners)
-	// (POST /v1/organizations/{org_id}/frames/uploads)
-	CreateFrameUploads(ctx context.Context, request CreateFrameUploadsRequestObject) (CreateFrameUploadsResponseObject, error)
-	// SetPlatformFrame Turn a platform frame on or off, or change its yearly dates (Admins, Owners)
-	// (PUT /v1/organizations/{org_id}/frames/{frame_key})
-	SetPlatformFrame(ctx context.Context, request SetPlatformFrameRequestObject) (SetPlatformFrameResponseObject, error)
 	// ChangePlan Move the organization to another plan (platform operators, until billing)
 	// (PUT /v1/organizations/{org_id}/plan)
 	ChangePlan(ctx context.Context, request ChangePlanRequestObject) (ChangePlanResponseObject, error)
@@ -5854,39 +4609,6 @@ func (sh *strictHandler) CloseOrganization(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// SetDecorations operation middleware
-func (sh *strictHandler) SetDecorations(w http.ResponseWriter, r *http.Request, orgId OrgId) {
-	var request SetDecorationsRequestObject
-
-	request.OrgId = orgId
-
-	var body SetDecorationsJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetDecorations(ctx, request.(SetDecorationsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetDecorations")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetDecorationsResponseObject); ok {
-		if err := validResponse.VisitSetDecorationsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // GetDomain operation middleware
 func (sh *strictHandler) GetDomain(w http.ResponseWriter, r *http.Request, orgId OrgId) {
 	var request GetDomainRequestObject
@@ -6018,187 +4740,6 @@ func (sh *strictHandler) CreateOrgExport(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateOrgExportResponseObject); ok {
 		if err := validResponse.VisitCreateOrgExportResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetActiveFrame operation middleware
-func (sh *strictHandler) GetActiveFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, params GetActiveFrameParams) {
-	var request GetActiveFrameRequestObject
-
-	request.OrgId = orgId
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetActiveFrame(ctx, request.(GetActiveFrameRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetActiveFrame")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetActiveFrameResponseObject); ok {
-		if err := validResponse.VisitGetActiveFrameResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetFrameSettings operation middleware
-func (sh *strictHandler) GetFrameSettings(w http.ResponseWriter, r *http.Request, orgId OrgId) {
-	var request GetFrameSettingsRequestObject
-
-	request.OrgId = orgId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetFrameSettings(ctx, request.(GetFrameSettingsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetFrameSettings")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetFrameSettingsResponseObject); ok {
-		if err := validResponse.VisitGetFrameSettingsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateOrgFrame operation middleware
-func (sh *strictHandler) CreateOrgFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, params CreateOrgFrameParams) {
-	var request CreateOrgFrameRequestObject
-
-	request.OrgId = orgId
-	request.Params = params
-
-	var body CreateOrgFrameJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateOrgFrame(ctx, request.(CreateOrgFrameRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateOrgFrame")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateOrgFrameResponseObject); ok {
-		if err := validResponse.VisitCreateOrgFrameResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteOrgFrame operation middleware
-func (sh *strictHandler) DeleteOrgFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, frameId openapi_types.UUID) {
-	var request DeleteOrgFrameRequestObject
-
-	request.OrgId = orgId
-	request.FrameId = frameId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteOrgFrame(ctx, request.(DeleteOrgFrameRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteOrgFrame")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteOrgFrameResponseObject); ok {
-		if err := validResponse.VisitDeleteOrgFrameResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateFrameUploads operation middleware
-func (sh *strictHandler) CreateFrameUploads(w http.ResponseWriter, r *http.Request, orgId OrgId) {
-	var request CreateFrameUploadsRequestObject
-
-	request.OrgId = orgId
-
-	var body CreateFrameUploadsJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateFrameUploads(ctx, request.(CreateFrameUploadsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateFrameUploads")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateFrameUploadsResponseObject); ok {
-		if err := validResponse.VisitCreateFrameUploadsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SetPlatformFrame operation middleware
-func (sh *strictHandler) SetPlatformFrame(w http.ResponseWriter, r *http.Request, orgId OrgId, frameKey string) {
-	var request SetPlatformFrameRequestObject
-
-	request.OrgId = orgId
-	request.FrameKey = frameKey
-
-	var body SetPlatformFrameJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetPlatformFrame(ctx, request.(SetPlatformFrameRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetPlatformFrame")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetPlatformFrameResponseObject); ok {
-		if err := validResponse.VisitSetPlatformFrameResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

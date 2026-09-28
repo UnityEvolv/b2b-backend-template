@@ -100,7 +100,7 @@ func TestServicesReadThePlanAtTheMomentOfTheAction(t *testing.T) {
 	path := "/v1/internal/organizations/" + orgID + "/plan"
 
 	status, out := get(t, h, path, tokenForService(t, issuer, "user"))
-	if status != http.StatusOK || out["plan"] != "free" || out["users"] != float64(10) || out["offices"] != float64(5) || out["attachment_bytes"] != float64(10<<20) {
+	if status != http.StatusOK || out["plan"] != "free" || out["users"] != float64(10) || out["attachment_bytes"] != float64(10<<20) {
 		t.Fatalf("free limits: %d %v", status, out)
 	}
 	if features := out["features"].([]any); len(features) != 0 {

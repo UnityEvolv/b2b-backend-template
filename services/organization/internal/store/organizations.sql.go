@@ -16,7 +16,7 @@ const claimPendingDomain = `-- name: ClaimPendingDomain :one
 UPDATE organizations
 SET domain = pending_domain, domain_verified_at = now(), pending_domain = NULL, domain_verification_token = NULL
 WHERE org_id = $1 AND pending_domain = $2 AND domain_verification_token = $3
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type ClaimPendingDomainParams struct {
@@ -57,14 +57,12 @@ func (q *Queries) ClaimPendingDomain(ctx context.Context, arg ClaimPendingDomain
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
 
 const getOrganization = `-- name: GetOrganization :one
-SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 FROM organizations
 WHERE org_id = $1
 `
@@ -97,14 +95,12 @@ func (q *Queries) GetOrganization(ctx context.Context, orgID uuid.UUID) (Organiz
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
 
 const getOrganizationByDomain = `-- name: GetOrganizationByDomain :one
-SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control FROM organizations WHERE domain = $1
+SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months FROM organizations WHERE domain = $1
 `
 
 // global: a domain is claimed once across the platform.
@@ -136,8 +132,6 @@ func (q *Queries) GetOrganizationByDomain(ctx context.Context, domain pgtype.Tex
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
@@ -146,7 +140,7 @@ const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO organizations (org_id, name, display_name, domain, time_zone, owner_user_id, idempotency_key)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type InsertOrganizationParams struct {
@@ -198,8 +192,6 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
@@ -208,7 +200,7 @@ const insertSelfServeOrganization = `-- name: InsertSelfServeOrganization :one
 INSERT INTO organizations (org_id, name, domain, domain_verified_at, time_zone, idempotency_key)
 VALUES ($1, $2, $3, CASE WHEN $3::text IS NULL THEN NULL ELSE now() END, $4, $5)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type InsertSelfServeOrganizationParams struct {
@@ -256,14 +248,12 @@ func (q *Queries) InsertSelfServeOrganization(ctx context.Context, arg InsertSel
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
 
 const listOrganizationsByCreated = `-- name: ListOrganizationsByCreated :many
-SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 FROM organizations
 WHERE ($1::text IS NULL OR plan = $1::text)
   AND ($2::text IS NULL OR status = $2::text)
@@ -335,8 +325,6 @@ func (q *Queries) ListOrganizationsByCreated(ctx context.Context, arg ListOrgani
 			&i.ClosedByUserID,
 			&i.ReopenTokenHash,
 			&i.AuditMonths,
-			&i.DecorationsOff,
-			&i.RemoteControl,
 		); err != nil {
 			return nil, err
 		}
@@ -349,7 +337,7 @@ func (q *Queries) ListOrganizationsByCreated(ctx context.Context, arg ListOrgani
 }
 
 const listOrganizationsByName = `-- name: ListOrganizationsByName :many
-SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 FROM organizations
 WHERE ($1::text IS NULL OR plan = $1::text)
   AND ($2::text IS NULL OR status = $2::text)
@@ -421,8 +409,6 @@ func (q *Queries) ListOrganizationsByName(ctx context.Context, arg ListOrganizat
 			&i.ClosedByUserID,
 			&i.ReopenTokenHash,
 			&i.AuditMonths,
-			&i.DecorationsOff,
-			&i.RemoteControl,
 		); err != nil {
 			return nil, err
 		}
@@ -435,7 +421,7 @@ func (q *Queries) ListOrganizationsByName(ctx context.Context, arg ListOrganizat
 }
 
 const organizationByIdempotencyKey = `-- name: OrganizationByIdempotencyKey :one
-SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+SELECT org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 FROM organizations
 WHERE created_by = $1 AND idempotency_key = $2
 `
@@ -474,8 +460,6 @@ func (q *Queries) OrganizationByIdempotencyKey(ctx context.Context, arg Organiza
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
@@ -498,7 +482,7 @@ SET status            = $1,
     suspended_at      = CASE WHEN $1 = 'suspended' THEN coalesce(suspended_at, now()) ELSE NULL END,
     suspension_reason = CASE WHEN $1 = 'suspended' THEN $2 ELSE NULL END
 WHERE org_id = $3
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type SetOrganizationStatusParams struct {
@@ -536,8 +520,6 @@ func (q *Queries) SetOrganizationStatus(ctx context.Context, arg SetOrganization
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
@@ -557,7 +539,7 @@ func (q *Queries) SetOwner(ctx context.Context, arg SetOwnerParams) error {
 }
 
 const setPendingDomain = `-- name: SetPendingDomain :one
-UPDATE organizations SET pending_domain = $1, domain_verification_token = $2 WHERE org_id = $3 RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+UPDATE organizations SET pending_domain = $1, domain_verification_token = $2 WHERE org_id = $3 RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type SetPendingDomainParams struct {
@@ -595,8 +577,6 @@ func (q *Queries) SetPendingDomain(ctx context.Context, arg SetPendingDomainPara
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
@@ -606,10 +586,9 @@ UPDATE organizations
 SET name          = coalesce($1, name),
     display_name  = CASE WHEN $2::boolean THEN NULL ELSE coalesce($3, display_name) END,
     domain        = CASE WHEN $4::boolean THEN NULL ELSE coalesce($5, domain) END,
-    time_zone     = coalesce($6, time_zone),
-    remote_control = coalesce($7, remote_control)
-WHERE org_id = $8
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+    time_zone     = coalesce($6, time_zone)
+WHERE org_id = $7
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type UpdateOrganizationParams struct {
@@ -619,7 +598,6 @@ type UpdateOrganizationParams struct {
 	ClearDomain      bool
 	Domain           pgtype.Text
 	TimeZone         pgtype.Text
-	RemoteControl    pgtype.Bool
 	OrgID            uuid.UUID
 }
 
@@ -633,7 +611,6 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.ClearDomain,
 		arg.Domain,
 		arg.TimeZone,
-		arg.RemoteControl,
 		arg.OrgID,
 	)
 	var i Organization
@@ -662,15 +639,13 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }
 
 const updateOrganizationPlan = `-- name: UpdateOrganizationPlan :one
 UPDATE organizations SET plan = $1 WHERE org_id = $2
-RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, decorations_off, remote_control
+RETURNING org_id, name, time_zone, created_by, created_at, last_modified_by, last_modified_at, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months
 `
 
 type UpdateOrganizationPlanParams struct {
@@ -706,8 +681,6 @@ func (q *Queries) UpdateOrganizationPlan(ctx context.Context, arg UpdateOrganiza
 		&i.ClosedByUserID,
 		&i.ReopenTokenHash,
 		&i.AuditMonths,
-		&i.DecorationsOff,
-		&i.RemoteControl,
 	)
 	return i, err
 }

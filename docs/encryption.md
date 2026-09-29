@@ -22,7 +22,7 @@ with another's key, and no human has a path to the plaintext.
    │   data key ──AES-256-GCM──► secret        │   every decrypt is in the cloud audit log
    └──────────────────────────────────────────┘
                               ▲
-   Cloud KMS master key (HSM, never exported): projects/unityofis/locations/europe-west2/keyRings/unityofis/cryptoKeys/org-data-keys
+   Cloud KMS master key (HSM, never exported): projects/example-project/locations/europe-west2/keyRings/b2bapp/cryptoKeys/org-data-keys
 ```
 
 - **Master key:** Google Cloud KMS, HSM protection level, 90-day automatic

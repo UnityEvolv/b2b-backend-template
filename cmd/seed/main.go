@@ -64,12 +64,12 @@ func run(ctx context.Context) error {
 		identity:     os.Getenv("SEED_IDENTITY_URL"),
 		organization: os.Getenv("SEED_ORGANIZATION_URL"),
 		mail:         os.Getenv("SEED_MAIL_URL"),
-		password:     env("SEED_PASSWORD", "unityofis-demo-password"),
+		password:     env("SEED_PASSWORD", "demo-password-change-me"),
 	}
 	if cfg.identity == "" || cfg.organization == "" || cfg.mail == "" {
 		return errors.New("SEED_IDENTITY_URL, SEED_ORGANIZATION_URL and SEED_MAIL_URL are required")
 	}
-	domain := env("SEED_DOMAIN", "demo.unityofis.test")
+	domain := env("SEED_DOMAIN", "demo.example.test")
 	people := []person{
 		{Email: "owner@" + domain, Name: "Olivia Owner", Role: "owner", Password: cfg.password},
 		{Email: "colleague@" + domain, Name: "Colin Colleague", Role: "user", Password: cfg.password},

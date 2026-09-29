@@ -55,7 +55,7 @@ session, not audited: nobody did it.
 ## The push
 
 The identity service publishes every revocation on the Redis pub/sub
-channel `unityofis:host-events`; the realtime service listens and feeds the
+channel `<prefix>:host-events` (`REDIS_PREFIX`, the product id by default); a listener feeds the
 engine's event bus. No broker: Redis pub/sub is the only bus, and a message
 nobody is listening for is dropped, which is right for "close this socket
 now". A Redis that is down is logged, not fatal: the session is already

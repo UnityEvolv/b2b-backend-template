@@ -5,23 +5,18 @@ import (
 	"encoding/json"
 
 	"github.com/redis/go-redis/v9"
-
-	"github.com/UnityEvolv/b2b-backend-template/pkg/hostevents"
 )
 
-// HostEventsChannel is the Redis pub/sub channel the realtime service
-// listens on for things the host wants pushed into a running office. The
-// engine's event bus is the other end; there is no broker between them.
-// The realtime service names the same channel.
-const HostEventsChannel = hostevents.Channel
+// Host events go out on config.Redis.HostEvents: things pushed into a
+// running client from outside it. There is no broker between them.
 
 // AccessRevoked is the one event this service publishes: a person's access
 // in an org has ended right now, and any socket they have open there must
 // be told and closed rather than left working until its token expires.
 type AccessRevoked struct {
 	Type string `json:"type"` // always "access.revoked"
-	// Whose access, and where. The realtime service matches the user; the
-	// org says which office it concerns once offices belong to orgs.
+	// Whose access, and where. A listener matches the user; the org narrows
+	// it to their connections in that org.
 	UserID    string `json:"user_id"`
 	OrgID     string `json:"org_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
@@ -46,8 +41,11 @@ type Publisher interface {
 	Publish(ctx context.Context, ev AccessRevoked) error
 }
 
-// RedisPublisher publishes over Redis pub/sub.
-type RedisPublisher struct{ Client *redis.Client }
+// RedisPublisher publishes over Redis pub/sub, on Channel.
+type RedisPublisher struct {
+	Client  *redis.Client
+	Channel string
+}
 
 // Publish is the event, as JSON, on the host events channel.
 func (p RedisPublisher) Publish(ctx context.Context, ev AccessRevoked) error {
@@ -56,7 +54,7 @@ func (p RedisPublisher) Publish(ctx context.Context, ev AccessRevoked) error {
 	if err != nil {
 		return err
 	}
-	return p.Client.Publish(ctx, HostEventsChannel, raw).Err()
+	return p.Client.Publish(ctx, p.Channel, raw).Err()
 }
 
 // The reasons a session ends, as stable codes. The client keeps the words.

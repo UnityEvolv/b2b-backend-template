@@ -84,11 +84,11 @@ func newAPIAudited(t *testing.T) (http.Handler, *db.Cluster, *stubissuer.Issuer,
 		t.Fatal(err)
 	}
 
-	issuer, err := stubissuer.New("test", "unityofis")
+	issuer, err := stubissuer.New("test", "b2bapp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 
 	// Wired exactly as main.go wires it: health public, the API behind auth.
 	cluster := db.SingleShard(pool)
@@ -205,7 +205,7 @@ func TestRouteLimitsApply(t *testing.T) {
 	limiter := ratelimit.New(rdb, logger)
 
 	_, cluster, issuer := newAPI(t)
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	api := server.New(cluster, logger, audit.Discard{}, testWrapper(t), authz.Static{}, server.Deps{}, nil).Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 	h := limiter.Wrap(ratelimit.On(ratelimit.PerAddress, ratelimit.ByIP), auth.Require(verifier, api))
 

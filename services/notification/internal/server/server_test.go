@@ -97,8 +97,8 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 
-	issuer, _ := stubissuer.New("test", "unityofis")
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	issuer, _ := stubissuer.New("test", "b2bapp")
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	cluster := db.SingleShard(pool)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	hook, err := webhook.New(cluster, webhookSecret, logger)
@@ -149,7 +149,7 @@ func (f *fixture) queue(t *testing.T, to string) string {
 }
 
 func newSender(f *fixture, tr transport.Transport) *sender.Sender {
-	return sender.New(f.cluster, tr, "unityofis <no-reply@test.invalid>", slog.New(slog.NewTextHandler(io.Discard, nil))).
+	return sender.New(f.cluster, tr, "b2bapp <no-reply@test.invalid>", slog.New(slog.NewTextHandler(io.Discard, nil))).
 		WithBackoff([]time.Duration{10 * time.Millisecond, 10 * time.Millisecond})
 }
 

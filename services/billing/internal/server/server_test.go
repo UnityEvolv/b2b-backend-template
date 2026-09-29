@@ -216,8 +216,8 @@ func newAPI(t *testing.T) *fixture {
 	if _, err := migrator.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	issuer, _ := stubissuer.New("test", "unityofis")
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	issuer, _ := stubissuer.New("test", "b2bapp")
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	f := &fixture{issuer: issuer, grants: authz.Static{}, orgs: &orgs{bands: map[uuid.UUID]plan.Band{}}, notices: &notices{},
 		pay: &fake{subs: map[string]provider.Subscription{}}, clock: &clock{}, org: uuid.Must(uuid.NewV7())}
 	f.srv = server.New(db.SingleShard(pool), slog.New(slog.NewTextHandler(io.Discard, nil)), recorder{}, f.grants, f.orgs, f.orgs, f.notices, f.pay, "https://admin.test/billing").WithClock(f.clock.now)

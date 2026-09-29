@@ -30,10 +30,10 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, password func(Service) (str
 	// Two runs against one database at once (two deploys) would alter the same
 	// catalog rows and one would fail, so they take turns. The lock is per
 	// database; retryConcurrentUpdate covers the roles, which are server-wide.
-	if _, err := admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('unityofis.dbinit'))"); err != nil {
+	if _, err := admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('db.bootstrap'))"); err != nil {
 		return fmt.Errorf("lock: %w", err)
 	}
-	defer admin.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock(hashtext('unityofis.dbinit'))")
+	defer admin.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock(hashtext('db.bootstrap'))")
 
 	// Nobody gets anything by default: not the public schema, not the right to
 	// connect, not the right to create a schema of their own.

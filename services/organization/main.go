@@ -58,13 +58,15 @@ func run() error {
 
 	env := &config.Env{}
 	var (
-		port        = env.Int("PORT", 8080)
-		logLevel    = env.String("LOG_LEVEL", "info")
-		dbURL       = env.Required("DATABASE_URL")
-		migrateUp   = env.Bool("MIGRATE_ON_START", false)
-		grace       = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
-		issuer      = env.Required("AUTH_ISSUER")
-		audience    = env.String("AUTH_AUDIENCE", "unityofis")
+		port      = env.Int("PORT", 8080)
+		logLevel  = env.String("LOG_LEVEL", "info")
+		dbURL     = env.Required("DATABASE_URL")
+		migrateUp = env.Bool("MIGRATE_ON_START", false)
+		grace     = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
+		issuer    = env.Required("AUTH_ISSUER")
+		// The product's name and id; the id is the default token audience.
+		brand       = config.BrandFrom(env)
+		audience    = env.String("AUTH_AUDIENCE", brand.ID)
 		jwksURL     = env.Required("AUTH_JWKS_URL")
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
@@ -72,7 +74,7 @@ func run() error {
 		// The one base hostname every product host derives from (empty on a
 		// laptop), plus the dev servers and desktop scheme named explicitly.
 		baseHost = env.String("BASE_HOSTNAME", "")
-		origins  = config.AppOrigins(baseHost, env.List("ALLOWED_ORIGINS"))
+		origins  = config.AllowedOrigins(env, baseHost)
 		// The audit service, and the issuer this service gets its own token from.
 		auditURL = env.Required("AUDIT_URL")
 		tokenURL = env.Required("SERVICE_TOKEN_URL")
@@ -88,10 +90,10 @@ func run() error {
 		apps = config.AppsFrom(env, baseHost)
 		// How the product names itself: in a personal export, and in the DNS
 		// record that proves a domain claim.
-		brand = server.Branding{
-			Product:        env.String("PRODUCT_NAME", server.DefaultBranding.Product),
-			TXTPrefix:      env.String("DOMAIN_TXT_PREFIX", server.DefaultBranding.TXTPrefix),
-			TXTValuePrefix: env.String("DOMAIN_TXT_VALUE_PREFIX", server.DefaultBranding.TXTValuePrefix),
+		branding = server.Branding{
+			Product:        brand.Name,
+			TXTPrefix:      env.String("DOMAIN_TXT_PREFIX", "_"+brand.ID+"-verify."),
+			TXTValuePrefix: env.String("DOMAIN_TXT_VALUE_PREFIX", brand.ID+"-verify="),
 		}
 		// The KMS master key: "gcp" with the full crypto key name, or "file"
 		// with a path, which is for a laptop only.
@@ -188,7 +190,7 @@ func run() error {
 			Files:    files,
 			Services: dataOwners(notificationURL, billingURL, authorizationURL, identityURL, userURL, auditURL),
 		}).
-		WithBranding(brand)
+		WithBranding(branding)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// The daily tick: closing orgs purged and audit retention applied. No

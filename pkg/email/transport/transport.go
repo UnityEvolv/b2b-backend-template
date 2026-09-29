@@ -64,7 +64,7 @@ type SMTP struct {
 // Send delivers over SMTP as a two-part message.
 func (s SMTP) Send(ctx context.Context, m Outgoing) (string, error) {
 	id := fmt.Sprintf("%d@local", time.Now().UnixNano())
-	boundary := "unityofis-" + strings.ReplaceAll(id, "@", "-")
+	boundary := "part-" + strings.ReplaceAll(id, "@", "-")
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMessage-ID: <%s>\r\nMIME-Version: 1.0\r\n", m.From, m.To, m.Subject, id)
 	for k, v := range m.Headers() {

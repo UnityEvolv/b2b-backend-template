@@ -369,7 +369,7 @@ paths:
     post:
       operationId: emitEvent
       summary: Something happened that people may be told about (services only)
-      description: The same intake as the Redis channel unityofis:notify.
+      description: The same intake as the Redis channel <prefix>:notify.
       tags: [internal]
       requestBody:
         required: true

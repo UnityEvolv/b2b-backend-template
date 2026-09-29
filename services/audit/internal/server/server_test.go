@@ -68,11 +68,11 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 
-	issuer, err := stubissuer.New("test", "unityofis")
+	issuer, err := stubissuer.New("test", "b2bapp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	cluster := db.SingleShard(pool)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	root := http.NewServeMux()

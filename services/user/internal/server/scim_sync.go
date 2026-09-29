@@ -69,8 +69,12 @@ type Notifier interface {
 	Notify(ctx context.Context, n Notice) error
 }
 
-// RedisNotifier publishes on the notification service's channel.
-type RedisNotifier struct{ Client *redis.Client }
+// RedisNotifier publishes on the notification service's channel,
+// config.Redis.Notify.
+type RedisNotifier struct {
+	Client  *redis.Client
+	Channel string
+}
 
 // Notify publishes n.
 func (r RedisNotifier) Notify(ctx context.Context, n Notice) error {
@@ -78,7 +82,7 @@ func (r RedisNotifier) Notify(ctx context.Context, n Notice) error {
 	if err != nil {
 		return err
 	}
-	return r.Client.Publish(ctx, "unityofis:notify", raw).Err()
+	return r.Client.Publish(ctx, r.Channel, raw).Err()
 }
 
 // WithNotifier is s, telling admins what SCIM needs them for.

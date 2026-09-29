@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 )
 
 // StripeVersion pins the API's shapes, so a Stripe release never changes
@@ -30,6 +32,8 @@ type Stripe struct {
 	bands  map[string]Band
 	http   *http.Client
 	now    func() time.Time
+	// source marks the subscriptions this product made, in their metadata.
+	source string
 }
 
 // NewStripe is Stripe at base (its API origin, from config) with a secret
@@ -42,7 +46,13 @@ func NewStripe(base, key, webhookSecret string, prices map[Band]string, client *
 	for b, p := range prices {
 		bands[p] = b
 	}
-	return &Stripe{base: strings.TrimRight(base, "/"), key: key, webhookSecret: webhookSecret, prices: prices, bands: bands, http: client, now: time.Now}
+	return &Stripe{base: strings.TrimRight(base, "/"), key: key, webhookSecret: webhookSecret, prices: prices, bands: bands, http: client, now: time.Now, source: config.DefaultBrand.ID}
+}
+
+// WithSource is s marking its subscriptions as made by source, the product's id.
+func (s *Stripe) WithSource(source string) *Stripe {
+	s.source = source
+	return s
 }
 
 // ParsePrices reads "team-50=price_a,team-200=price_b".
@@ -209,7 +219,7 @@ func (s *Stripe) Subscribe(ctx context.Context, customer string, band Band, tria
 		"items[0][price]":        {price},
 		"automatic_tax[enabled]": {"true"},
 		"payment_behavior":       {"error_if_incomplete"},
-		"metadata[source]":       {"unityofis"},
+		"metadata[source]":       {s.source},
 	}
 	if trialEnd != nil && trialEnd.After(s.now()) {
 		form.Set("trial_end", strconv.FormatInt(trialEnd.Unix(), 10))

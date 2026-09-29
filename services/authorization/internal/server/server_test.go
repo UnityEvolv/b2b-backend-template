@@ -152,11 +152,11 @@ func newAPI(t *testing.T) *fixture {
 	if _, err := migrator.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	issuer, err := stubissuer.New("test", "unityofis")
+	issuer, err := stubissuer.New("test", "b2bapp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	people := &fakeMemberships{rows: map[string]server.MembershipInfo{}}
 	recorder := &memoryRecorder{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

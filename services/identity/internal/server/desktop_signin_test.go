@@ -35,7 +35,7 @@ func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
 	to := f.signIn(browser, "/v1/sign-in/start?email=ada@acme.com&next=/offices/1&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge,
 		person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"})
 	u, err := url.Parse(to)
-	if err != nil || u.Scheme != "unityofis" || u.Host != "auth" || u.Path != "/callback" {
+	if err != nil || u.Scheme != "b2bapp" || u.Host != "auth" || u.Path != "/callback" {
 		t.Fatalf("handed back to %s", to)
 	}
 	code := u.Query().Get("code")
@@ -101,7 +101,7 @@ func TestDesktopSignInRefusalGoesBackToTheApp(t *testing.T) {
 	state := mustQuery(t, rec.Header().Get("Location"), "state")
 	rec = b.do(http.MethodGet, "/v1/sign-in/callback?error=access_denied&state="+state, "", nil)
 	to := rec.Header().Get("Location")
-	if !strings.HasPrefix(to, "unityofis://auth/callback?") || !strings.Contains(to, "error=provider_refused") {
+	if !strings.HasPrefix(to, "b2bapp://auth/callback?") || !strings.Contains(to, "error=provider_refused") {
 		t.Errorf("refusal went to %s", to)
 	}
 }
@@ -125,7 +125,7 @@ func TestMobileSignInUsesTheSameHandOff(t *testing.T) {
 	to := f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&next=/offices&app=account&client=mobile&code_challenge_method=S256&code_challenge="+challenge,
 		person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"})
 	u, err := url.Parse(to)
-	if err != nil || u.Scheme != "unityofis" || u.Query().Get("code") == "" {
+	if err != nil || u.Scheme != "b2bapp" || u.Query().Get("code") == "" {
 		t.Fatalf("handed back to %s", to)
 	}
 	app := f.browser()

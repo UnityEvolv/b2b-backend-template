@@ -71,8 +71,8 @@ func TestVerifyWindowAndReplay(t *testing.T) {
 
 func TestURIAndEncoding(t *testing.T) {
 	secret := []byte("12345678901234567890")
-	uri := totp.URI(secret, "unityofis", "ada@example.com")
-	want := "otpauth://totp/unityofis:ada@example.com?algorithm=SHA1&digits=6&issuer=unityofis&period=30&secret=" + totp.Encode(secret)
+	uri := totp.URI(secret, "b2bapp", "ada@example.com")
+	want := "otpauth://totp/b2bapp:ada@example.com?algorithm=SHA1&digits=6&issuer=b2bapp&period=30&secret=" + totp.Encode(secret)
 	if uri != want {
 		t.Errorf("uri:\n%s\n%s", uri, want)
 	}

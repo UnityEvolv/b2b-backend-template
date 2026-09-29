@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
@@ -111,11 +112,22 @@ type Router struct {
 	links   Links
 	logger  *slog.Logger
 	now     func() time.Time
+	// product is the name emails are sent as; names the Redis channels and
+	// keys shared with the other services.
+	product string
+	names   config.Redis
 }
 
-// NewRouter is the router.
+// NewRouter is the router, under the template's default brand.
 func NewRouter(cluster *db.Cluster, rdb redis.Cmdable, people Directory, pushers Pushers, live Live, links Links, logger *slog.Logger) *Router {
-	return &Router{cluster: cluster, redis: rdb, people: people, pushers: pushers, live: live, links: links, logger: logger, now: time.Now}
+	return &Router{cluster: cluster, redis: rdb, people: people, pushers: pushers, live: live, links: links, logger: logger, now: time.Now,
+		product: config.DefaultBrand.Name, names: config.DefaultRedis}
+}
+
+// WithBrand is r sending emails as product, with the Redis names in names.
+func (r *Router) WithBrand(product string, names config.Redis) *Router {
+	r.product, r.names = product, names
+	return r
 }
 
 // WithClock is r reading the time from now: tests.
@@ -135,8 +147,12 @@ func batchKey(org, to uuid.UUID, group string) string {
 
 // FocusKey is a hash, socket => what that socket is showing ("" when the app
 // is in the background). SeenKey is when the person last had the app open.
-func FocusKey(org, to uuid.UUID) string { return fmt.Sprintf("unityofis:focus:%s:%s", org, to) }
-func SeenKey(org, to uuid.UUID) string  { return fmt.Sprintf("unityofis:seen:%s:%s", org, to) }
+func FocusKey(n config.Redis, org, to uuid.UUID) string {
+	return n.Key("focus", org.String(), to.String())
+}
+func SeenKey(n config.Redis, org, to uuid.UUID) string {
+	return n.Key("seen", org.String(), to.String())
+}
 
 const dedupeFor = 10 * time.Minute
 
@@ -257,12 +273,12 @@ func (r *Router) settings(ctx context.Context, org, to uuid.UUID, zone *time.Loc
 // looking is whether any of the person's apps is showing what the event is
 // about right now, and how long since any was open.
 func (r *Router) looking(ctx context.Context, org, to uuid.UUID, group string, now time.Time) (bool, time.Duration, error) {
-	shown, err := r.redis.HVals(ctx, FocusKey(org, to)).Result()
+	shown, err := r.redis.HVals(ctx, FocusKey(r.names, org, to)).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return false, 0, err
 	}
 	away := 365 * 24 * time.Hour
-	if seen, err := r.redis.Get(ctx, SeenKey(org, to)).Result(); err == nil {
+	if seen, err := r.redis.Get(ctx, SeenKey(r.names, org, to)).Result(); err == nil {
 		if ms, err := strconv.ParseInt(seen, 10, 64); err == nil {
 			away = now.Sub(time.UnixMilli(ms))
 		}
@@ -517,7 +533,7 @@ func (r *Router) queueEmail(ctx context.Context, org, to uuid.UUID, person Perso
 	token := UnsubscribeToken(r.links.Key, org, to, category)
 	data["preferences"] = strings.TrimRight(r.links.App, "/") + "/settings/notifications?unsubscribe=" + token
 	unsubscribe := strings.TrimRight(r.links.API, "/") + "/v1/unsubscribe/" + token
-	rendered, err := email.Render(template, orgName, data)
+	rendered, err := email.Render(template, r.product, orgName, data)
 	if err != nil {
 		return err
 	}

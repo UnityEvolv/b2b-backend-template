@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
@@ -29,13 +30,22 @@ type Server struct {
 	cluster *db.Cluster
 	logger  *slog.Logger
 	n       *Notifications
+	// product is the name emails are sent as.
+	product string
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
 
-// New is the API on cluster.
+// New is the API on cluster, sending emails as the template's default
+// product name.
 func New(cluster *db.Cluster, logger *slog.Logger) *Server {
-	return &Server{cluster: cluster, logger: logger}
+	return &Server{cluster: cluster, logger: logger, product: config.DefaultBrand.Name}
+}
+
+// WithProduct is s sending emails as product.
+func (s *Server) WithProduct(product string) *Server {
+	s.product = product
+	return s
 }
 
 // Limits is this API's rate limits: the outbox endpoints are for services,
@@ -99,7 +109,7 @@ func (s *Server) QueueEmail(ctx context.Context, req api.QueueEmailRequestObject
 	if in.Data != nil {
 		data = *in.Data
 	}
-	rendered, err := email.Render(in.Template, in.OrgName, data)
+	rendered, err := email.Render(in.Template, s.product, in.OrgName, data)
 	if err != nil {
 		fields["data"] = "does not fit the template"
 		return api.QueueEmail400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "The template could not be rendered.", Fields: &fields}}, nil

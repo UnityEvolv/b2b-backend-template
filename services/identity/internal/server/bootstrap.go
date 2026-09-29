@@ -23,14 +23,11 @@ import (
 // next start sends a fresh one. The operator then signs in with a password
 // and, because the platform org always demands it, a second factor.
 
-// platformName is what emails sent on the platform org's behalf call it.
-// The platform org has no record in the organization service to ask.
-const platformName = "unityofis"
-
-// orgName is the org's name for an email on its behalf.
+// orgName is the org's name for an email on its behalf. The platform org
+// has no record in the organization service to ask; it is the product.
 func (s *Server) orgName(ctx context.Context, orgID uuid.UUID) (string, error) {
 	if strings.EqualFold(orgID.String(), auth.PlatformOrg) {
-		return platformName, nil
+		return s.cfg.Product, nil
 	}
 	return s.orgs.Name(ctx, orgID)
 }

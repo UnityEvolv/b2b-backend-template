@@ -5,6 +5,7 @@ package repocheck
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,5 +122,45 @@ func TestQueriesAreOrgScoped(t *testing.T) {
 				t.Errorf("%s: %s does not name org_id; scope it to an org or mark it -- global: <reason>", filepath.ToSlash(rel), name)
 			}
 		}
+	}
+}
+
+// productWord is a name of the product this template was carved from, or
+// the product word "ofis" on its own. Neither belongs in the template: the
+// product's name comes from config (pkg/config.Brand), and code names it
+// nowhere.
+var productWord = regexp.MustCompile(`(?i)unityofis|\bofis\b`)
+
+// The product's name is configuration, never a literal. Tests may still use
+// a made-up one.
+func TestNoProductNameInCode(t *testing.T) {
+	root := repoRoot(t)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if name := d.Name(); name == ".git" || name == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if productWord.MatchString(line) {
+				rel, _ := filepath.Rel(root, path)
+				t.Errorf("%s:%d: names the product; read it from config instead", filepath.ToSlash(rel), i+1)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

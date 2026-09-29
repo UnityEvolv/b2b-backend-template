@@ -46,11 +46,12 @@ type Notifier interface {
 	Notify(ctx context.Context, n Notice) error
 }
 
-// RedisNotifier publishes on the notification service's channel.
-type RedisNotifier struct{ Client *redis.Client }
-
-// NotifyChannel is where the notification service takes events.
-const NotifyChannel = "unityofis:notify"
+// RedisNotifier publishes on the notification service's channel,
+// config.Redis.Notify.
+type RedisNotifier struct {
+	Client  *redis.Client
+	Channel string
+}
 
 // Notify publishes n.
 func (r RedisNotifier) Notify(ctx context.Context, n Notice) error {
@@ -58,7 +59,7 @@ func (r RedisNotifier) Notify(ctx context.Context, n Notice) error {
 	if err != nil {
 		return err
 	}
-	return r.Client.Publish(ctx, NotifyChannel, raw).Err()
+	return r.Client.Publish(ctx, r.Channel, raw).Err()
 }
 
 // Services is Orgs and Members over HTTP, with this service's own token.

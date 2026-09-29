@@ -83,9 +83,9 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8081/v1/organizations/<uuid>
 Or outside Docker, bringing its own schema up to date on start:
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/unityofis?sslmode=disable" \
+DATABASE_URL="postgres://localhost:5432/b2bapp?sslmode=disable" \
 DB_LOCAL_PASSWORDS=true MIGRATE_ON_START=true PORT=8081 \
-AUTH_ISSUER=unityofis-local AUTH_JWKS_URL=http://localhost:8093/v1/jwks \
+AUTH_ISSUER=b2bapp-local AUTH_JWKS_URL=http://localhost:8093/v1/jwks \
   go run ./services/organization
 ```
 

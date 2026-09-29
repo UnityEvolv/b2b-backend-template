@@ -219,7 +219,7 @@ func (s *Server) scimLog(ctx context.Context, org uuid.UUID, operation string, m
 // ---- Users ----------------------------------------------------------------
 
 // userResource is a membership as a SCIM user: what the provider last sent,
-// with what unityofis owns (id, active, meta) laid over it.
+// with what this service owns (id, active, meta) laid over it.
 func (s *Server) userResource(m store.Membership, u store.User) map[string]any {
 	res := map[string]any{}
 	if len(m.Scim) > 0 {
@@ -313,9 +313,9 @@ func (s *Server) setActive(ctx context.Context, q *store.Queries, m store.Member
 	case !active && m.Status == string(api.Active):
 		// An Owner is never the directory's to remove: SCIM needs only the
 		// settings permission, so an Admin's token could otherwise do what the
-		// role rules refuse an Admin. Owners are changed by Owners, in unityofis.
+		// role rules refuse an Admin. Owners are changed by Owners, in the product.
 		if m.Role == string(authz.Owner) {
-			return m, nil, nil, &scimProblem{status: http.StatusConflict, scimType: "mutability", detail: "An Owner cannot be deactivated through SCIM. Another Owner changes their role in unityofis first."}
+			return m, nil, nil, &scimProblem{status: http.StatusConflict, scimType: "mutability", detail: "An Owner cannot be deactivated through SCIM. Another Owner changes their role in the admin app first."}
 		}
 		after, err := q.SetMembershipStatus(ctx, store.SetMembershipStatusParams{Status: string(api.Deactivated), OrgID: m.OrgID, ID: m.ID})
 		return after, &statusChange{m.Status, after.Status}, nil, err
@@ -435,7 +435,7 @@ func (s *Server) scimUser(ctx context.Context, org uuid.UUID, rawID string) (sto
 	return row, err
 }
 
-// scimCreateUser is a person the provider assigned to unityofis: a
+// scimCreateUser is a person the provider assigned to the product: a
 // membership with the User role, or, for an address that already has an
 // account, a membership added to it. Sign-in is still through the org's
 // identity provider.

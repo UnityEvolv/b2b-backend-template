@@ -56,7 +56,7 @@ func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
 }
 
 func TestCORSAllowsOnlyTheConfiguredOrigins(t *testing.T) {
-	h := httpx.CORS([]string{"https://unityofis.example", "http://localhost:5173"}, ok)
+	h := httpx.CORS([]string{"https://b2bapp.example", "http://localhost:5173"}, ok)
 
 	send := func(method, origin, preflightFor string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/v1/things", nil)
@@ -72,8 +72,8 @@ func TestCORSAllowsOnlyTheConfiguredOrigins(t *testing.T) {
 	}
 
 	// A known origin gets exactly itself back, never a wildcard.
-	rec := send(http.MethodGet, "https://unityofis.example", "")
-	if rec.Header().Get("Access-Control-Allow-Origin") != "https://unityofis.example" {
+	rec := send(http.MethodGet, "https://b2bapp.example", "")
+	if rec.Header().Get("Access-Control-Allow-Origin") != "https://b2bapp.example" {
 		t.Errorf("known origin: Allow-Origin %q", rec.Header().Get("Access-Control-Allow-Origin"))
 	}
 	if rec.Header().Get("Access-Control-Allow-Credentials") != "true" {
@@ -93,7 +93,7 @@ func TestCORSAllowsOnlyTheConfiguredOrigins(t *testing.T) {
 	}
 
 	// An unknown origin: no permission, and its preflight is refused outright.
-	for _, origin := range []string{"https://evil.example", "https://unityofis.example.evil", "HTTPS://UNITYOFIS.EXAMPLE/"} {
+	for _, origin := range []string{"https://evil.example", "https://b2bapp.example.evil", "HTTPS://B2BAPP.EXAMPLE/"} {
 		rec = send(http.MethodGet, origin, "")
 		if rec.Header().Get("Access-Control-Allow-Origin") != "" {
 			t.Errorf("%s was allowed", origin)

@@ -56,7 +56,7 @@ decoded server-side; the office background story sanitises it.
 
 | where | store | configuration |
 | --- | --- | --- |
-| a laptop | RustFS from `docker compose`, console at `localhost:9001/rustfs/console/` | `S3_ENDPOINT=http://s3:9000`, `S3_PUBLIC_ENDPOINT=http://localhost:9000`, `S3_PATH_STYLE=true`, bucket `unityofis`, keys `unityofis` / `unityofis-local` |
+| a laptop | RustFS from `docker compose`, console at `localhost:9001/rustfs/console/` | `S3_ENDPOINT=http://s3:9000`, `S3_PUBLIC_ENDPOINT=http://localhost:9000`, `S3_PATH_STYLE=true`, bucket `b2bapp`, keys `b2bapp` / `b2bapp-local` |
 | CI | a RustFS container started in the workflow | `TEST_S3_*` in [go.yml](../.github/workflows/go.yml) |
 | deployed | a Google Cloud Storage bucket through its S3-compatible endpoint, HMAC key per service | `S3_ENDPOINT=https://storage.googleapis.com`, `S3_REGION=europe-west2`; the key is in the secret manager |
 
@@ -64,8 +64,8 @@ The bucket is private with uniform access; nothing is served from it directly.
 Running the storage tests locally:
 
 ```sh
-TEST_S3_ENDPOINT=http://localhost:9000 TEST_S3_BUCKET=unityofis \
-TEST_S3_ACCESS_KEY=unityofis TEST_S3_SECRET_KEY=unityofis-local go test ./pkg/storage/...
+TEST_S3_ENDPOINT=http://localhost:9000 TEST_S3_BUCKET=b2bapp \
+TEST_S3_ACCESS_KEY=b2bapp TEST_S3_SECRET_KEY=b2bapp-local go test ./pkg/storage/...
 ```
 
 Without `TEST_S3_ENDPOINT` they skip.

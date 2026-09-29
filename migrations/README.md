@@ -56,7 +56,7 @@ Run them locally with `docker compose -f deploy/docker-compose.yml up` (the
 `migrate` step runs after `dbinit` on every start), or directly:
 
 ```sh
-DATABASE_URL="postgres://localhost:5432/unityofis?sslmode=disable" DB_LOCAL_PASSWORDS=true \
+DATABASE_URL="postgres://localhost:5432/b2bapp?sslmode=disable" DB_LOCAL_PASSWORDS=true \
   go run ./cmd/migrate up
 go run ./cmd/migrate status
 go run ./cmd/migrate down -service billing  # one service, one migration

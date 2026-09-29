@@ -17,7 +17,7 @@ var (
 )
 
 func base() csp.Policy {
-	return csp.Base([]string{"https://api.unityofis.example", "wss://rt.unityofis.example"}, []string{csp.ScriptHash("console.log(1)")})
+	return csp.Base([]string{"https://api.b2bapp.example", "wss://live.b2bapp.example"}, []string{csp.ScriptHash("console.log(1)")})
 }
 
 func TestFreeOrgPolicyNamesNoProvider(t *testing.T) {
@@ -28,7 +28,7 @@ func TestFreeOrgPolicyNamesNoProvider(t *testing.T) {
 			t.Errorf("free org policy names %s: %s", forbidden, s)
 		}
 	}
-	if !slices.Equal(p.Sources("connect-src"), []string{"'self'", "https://api.unityofis.example", "wss://rt.unityofis.example"}) {
+	if !slices.Equal(p.Sources("connect-src"), []string{"'self'", "https://api.b2bapp.example", "wss://live.b2bapp.example"}) {
 		t.Errorf("connect-src %v", p.Sources("connect-src"))
 	}
 }

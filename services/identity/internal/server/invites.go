@@ -163,7 +163,6 @@ func (s *Server) sendInvite(ctx context.Context, row store.Invite, raw string) e
 	origin, _ := s.appOrigin(row.App)
 	data := map[string]any{
 		"link":  origin + "/accept-invite?token=" + raw,
-		"what":  "to join them",
 		"until": row.ExpiresAt.UTC().Format("2 January 2006 15:04 UTC"),
 	}
 	_, err = s.email.Send(ctx, email.Message{OrgID: row.OrgID.String(), OrgName: orgName, To: row.Email, Template: "invite", Data: data})

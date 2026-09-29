@@ -24,11 +24,8 @@ import (
 // Entra users get their second factor from Microsoft and never come here.
 
 const (
-	challengeTTL = 5 * time.Minute
-	enrollTTL    = 15 * time.Minute
-	// What the authenticator app shows above the code.
-	totpIssuer = "unityofis"
-
+	challengeTTL  = 5 * time.Minute
+	enrollTTL     = 15 * time.Minute
 	kindChallenge = "challenge"
 	kindEnroll    = "enroll"
 
@@ -124,7 +121,7 @@ func (s *Server) beginEnrolment(ctx context.Context, userID uuid.UUID) (api.Totp
 	if err != nil {
 		return api.TotpEnrolment{}, "", err
 	}
-	return api.TotpEnrolment{Secret: totp.Encode(secret), OtpauthUri: totp.URI(secret, totpIssuer, account.Email)}, "", nil
+	return api.TotpEnrolment{Secret: totp.Encode(secret), OtpauthUri: totp.URI(secret, s.cfg.Product, account.Email)}, "", nil
 }
 
 // confirmEnrolment turns the unconfirmed secret on with a first code and

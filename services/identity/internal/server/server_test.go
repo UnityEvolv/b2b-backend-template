@@ -420,11 +420,11 @@ func newAPI(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sig, err := signer.Load(ctx, cluster, wrapper, "identity-test", "unityofis")
+	sig, err := signer.Load(ctx, cluster, wrapper, "identity-test", "b2bapp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("identity-test", "unityofis", sig.PublicKeys())
+	verifier := auth.NewStaticVerifier("identity-test", "b2bapp", sig.PublicKeys())
 
 	idp := newFakeIdP(t)
 	oidcClient, err := oidc.New(ctx, idp.srv.Client())
@@ -461,7 +461,7 @@ func newAPI(t *testing.T) *fixture {
 	}
 	logger := slog.New(slog.NewTextHandler(logOut, nil))
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, envelope.New(&memoryKeys{wrapper: wrapper, keys: map[string]envelope.WrappedKey{}}, wrapper),
-		users, orgs, grants, events, mail, limiter, wrapper, server.Config{PublicURL: identityURL, Apps: apps, AccessTTL: time.Minute, SecureCookies: false, EntraAuthority: idp.srv.URL, DesktopScheme: "unityofis"})
+		users, orgs, grants, events, mail, limiter, wrapper, server.Config{PublicURL: identityURL, Apps: apps, AccessTTL: time.Minute, SecureCookies: false, EntraAuthority: idp.srv.URL, DesktopScheme: "b2bapp"})
 	api := srv.Handler(httpx.NewMux())
 
 	root := http.NewServeMux()

@@ -43,6 +43,10 @@ type Config struct {
 	// MainApp is the app a sign-in or a link opens when nothing names
 	// another; "account" when empty.
 	MainApp string
+	// Product is the product's name: what the authenticator app shows above
+	// the code, and the platform org's name in its emails. The template's
+	// default when empty.
+	Product string
 	// AccessTTL is how long an access token lives. How long a session lives
 	// is the org's policy (policy.go), not configuration.
 	AccessTTL time.Duration
@@ -91,6 +95,9 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	}
 	if cfg.MainApp == "" {
 		cfg.MainApp = config.DefaultApps[0]
+	}
+	if cfg.Product == "" {
+		cfg.Product = config.DefaultBrand.Name
 	}
 	return &Server{cluster: cluster, logger: logger, recorder: recorder, signer: sig, oidc: oidcClient, keyring: keyring, users: users, orgs: orgs, authz: checker, events: events, email: sender, limiter: limiter, kms: wrapper, cfg: cfg}
 }

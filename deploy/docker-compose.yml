@@ -5,15 +5,15 @@
 # Every value below is a local-only default. Nothing here is used outside a
 # laptop; real secrets live in the cloud secret manager.
 
-name: unityofis
+name: b2bapp
 
 services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: unityofis
-      POSTGRES_USER: unityofis
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unityofis-local}
+      POSTGRES_DB: b2bapp
+      POSTGRES_USER: b2bapp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-b2bapp-local}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
@@ -21,7 +21,7 @@ services:
       # Runs once, on an empty volume. Schemas and roles come from dbinit below.
       - ./local/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U unityofis -d unityofis']
+      test: ['CMD-SHELL', 'pg_isready -U b2bapp -d b2bapp']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -36,7 +36,7 @@ services:
         - extra_ca
     command: ['dbinit']
     environment:
-      DATABASE_ADMIN_URL: postgres://unityofis:${POSTGRES_PASSWORD:-unityofis-local}@postgres:5432/unityofis?sslmode=disable
+      DATABASE_ADMIN_URL: postgres://b2bapp:${POSTGRES_PASSWORD:-b2bapp-local}@postgres:5432/b2bapp?sslmode=disable
       # Each service connects as svc_<schema> with password svc_<schema>-local.
       DB_LOCAL_PASSWORDS: 'true'
     depends_on:
@@ -54,7 +54,7 @@ services:
     command: ['migrate', 'up']
     environment:
       # Host and database only: each service connects as svc_<schema>.
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
     depends_on:
       dbinit:
@@ -77,13 +77,13 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       REDIS_URL: redis://redis:6379/0
       AUDIT_URL: http://audit:8080
       USER_URL: http://user:8080
@@ -123,14 +123,14 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Error tracking is off unless deploy/.env names a DSN.
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       # Where this service records audit entries, and where it gets the
@@ -153,9 +153,9 @@ services:
       S3_ENDPOINT: http://s3:9000
       S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
       S3_PATH_STYLE: 'true'
-      S3_BUCKET: ${S3_BUCKET:-unityofis}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      S3_BUCKET: ${S3_BUCKET:-b2bapp}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
       # The master key. A file on a laptop, created on first start; Cloud KMS
       # everywhere else (KMS_PROVIDER=gcp, KMS_KEY_NAME=projects/...).
       KMS_PROVIDER: file
@@ -184,13 +184,13 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       AUDIT_URL: http://audit:8080
@@ -206,9 +206,9 @@ services:
       S3_ENDPOINT: http://s3:9000
       S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
       S3_PATH_STYLE: 'true'
-      S3_BUCKET: ${S3_BUCKET:-unityofis}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      S3_BUCKET: ${S3_BUCKET:-b2bapp}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
     ports:
       - '${USER_PORT:-8084}:8080'
     depends_on:
@@ -228,13 +228,13 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       AUDIT_URL: http://audit:8080
@@ -264,14 +264,14 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Error tracking is off unless deploy/.env names a DSN.
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       # Who may read an org's log, asked with this service's own token (UO-85).
@@ -297,19 +297,19 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
       EMAIL_TRANSPORT: smtp
       SMTP_ADDR: mailpit:1025
-      EMAIL_FROM: unityofis <no-reply@unityofis.local>
+      EMAIL_FROM: b2bapp <no-reply@b2bapp.local>
       # Notifications (UO-175 to UO-179): who people are, links into the
       # apps, the unsubscribe key, and web push with a local VAPID key from
       # deploy/.env (push is off without one).
@@ -323,7 +323,7 @@ services:
       NOTIFICATION_PUBLIC_URL: http://localhost:${NOTIFICATION_PORT:-8083}
       NOTIFICATION_LINK_KEY: local-notification-link-key
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_SUBJECT: mailto:no-reply@unityofis.local
+      VAPID_SUBJECT: mailto:no-reply@b2bapp.local
       NOTIFY_POLL: 10s
     ports:
       - '${NOTIFICATION_PORT:-8083}:8080'
@@ -363,8 +363,8 @@ services:
     image: rustfs/rustfs:1.0.0
     command: ['/data']
     environment:
-      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-unityofis}
-      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
       RUSTFS_CONSOLE_ENABLE: 'true'
       RUSTFS_CONSOLE_ADDRESS: ':9001'
     ports:
@@ -389,10 +389,10 @@ services:
       /bin/sh -c "aws --endpoint-url http://s3:9000 s3api head-bucket --bucket $${BUCKET} 2>/dev/null
       || aws --endpoint-url http://s3:9000 s3 mb s3://$${BUCKET}"
     environment:
-      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-unityofis}
-      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-unityofis-local}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-b2bapp}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-b2bapp-local}
       AWS_DEFAULT_REGION: us-east-1
-      BUCKET: ${S3_BUCKET:-unityofis}
+      BUCKET: ${S3_BUCKET:-b2bapp}
 
   billing:
     build:
@@ -403,13 +403,13 @@ services:
       secrets:
         - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/unityofis?sslmode=disable
+      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
       DB_LOCAL_PASSWORDS: 'true'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
       ENVIRONMENT: local
-      AUTH_ISSUER: unityofis-local
-      AUTH_AUDIENCE: unityofis
+      AUTH_ISSUER: b2bapp-local
+      AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
       ORGANIZATION_URL: http://organization:8080

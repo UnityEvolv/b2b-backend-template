@@ -53,13 +53,17 @@ func run() error {
 
 	env := &config.Env{}
 	var (
-		port        = env.Int("PORT", 8080)
-		logLevel    = env.String("LOG_LEVEL", "info")
-		dbURL       = env.Required("DATABASE_URL")
-		migrateUp   = env.Bool("MIGRATE_ON_START", false)
-		grace       = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
-		issuer      = env.Required("AUTH_ISSUER")
-		audience    = env.String("AUTH_AUDIENCE", "unityofis")
+		port      = env.Int("PORT", 8080)
+		logLevel  = env.String("LOG_LEVEL", "info")
+		dbURL     = env.Required("DATABASE_URL")
+		migrateUp = env.Bool("MIGRATE_ON_START", false)
+		grace     = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
+		issuer    = env.Required("AUTH_ISSUER")
+		// The product's name and id; the id is the default token audience.
+		brand    = config.BrandFrom(env)
+		audience = env.String("AUTH_AUDIENCE", brand.ID)
+		// The Redis channels shared with the other services, under one prefix.
+		redisNames  = config.RedisFrom(env, brand)
 		jwksURL     = env.Required("AUTH_JWKS_URL")
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
@@ -67,7 +71,7 @@ func run() error {
 		// The one base hostname every product host derives from (empty on a
 		// laptop), plus the dev servers and desktop scheme named explicitly.
 		baseHost = env.String("BASE_HOSTNAME", "")
-		origins  = config.AppOrigins(baseHost, env.List("ALLOWED_ORIGINS"))
+		origins  = config.AllowedOrigins(env, baseHost)
 		// Where mail goes: "smtp" to the local catcher, "resend" everywhere else.
 		transportKind = env.String("EMAIL_TRANSPORT", "smtp")
 		smtpAddr      = env.String("SMTP_ADDR", "")
@@ -185,8 +189,9 @@ func run() error {
 		pushers["android"] = notify.NewFCM(fcmBase, fcmProject, source, nil)
 	}
 	router := notify.NewRouter(cluster, rdb, notify.Services{User: userURL, Organization: organizationURL, Tokens: tokens}, pushers,
-		notify.RedisLive{Client: rdb}, notify.Links{App: apps.Origins[apps.Main()], Admin: adminOrigin(apps), API: publicURL, Key: []byte(linkKey)}, logger)
-	srv := server.New(cluster, logger).WithNotifications(server.Notifications{
+		notify.RedisLive{Client: rdb, Channel: redisNames.ToMembers()}, notify.Links{App: apps.Origins[apps.Main()], Admin: adminOrigin(apps), API: publicURL, Key: []byte(linkKey)}, logger).
+		WithBrand(brand.Name, redisNames)
+	srv := server.New(cluster, logger).WithProduct(brand.Name).WithNotifications(server.Notifications{
 		Router: router, Authz: authz.Client(authorizationURL, tokens, nil), VAPIDPublic: vapidPublic, LinkKey: []byte(linkKey),
 	})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))

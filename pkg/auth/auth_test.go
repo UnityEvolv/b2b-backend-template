@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	issuerName = "unityofis-test"
-	audience   = "unityofis"
+	issuerName = "b2bapp-test"
+	audience   = "b2bapp"
 	user       = "01922b5e-0000-7000-8000-0000000000d1"
 	org        = "01922b5e-0000-7000-8000-0000000000d2"
 	member     = "01922b5e-0000-7000-8000-0000000000d3"

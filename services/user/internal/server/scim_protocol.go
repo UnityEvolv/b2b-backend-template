@@ -571,7 +571,7 @@ func applyFiltered(container map[string]any, p scimPath, op patchOp) error {
 
 // ---- Users ----------------------------------------------------------------
 
-// userFields is what unityofis keeps from a user resource.
+// userFields is what this service keeps from a user resource.
 type userFields struct {
 	userName, externalID, email, name string
 	active                            *bool

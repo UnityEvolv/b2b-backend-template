@@ -14,9 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Channel is the Redis pub/sub channel. The realtime service names the same.
-const Channel = "unityofis:host-events"
-
 // The event types the realtime service understands.
 const (
 	// TypeAccessChanged: may this person, or everyone in an office, still be
@@ -52,16 +49,20 @@ type Publisher interface {
 	Publish(ctx context.Context, ev Event) error
 }
 
-// Redis publishes over Redis pub/sub.
-type Redis struct{ Client *redis.Client }
+// Redis publishes over Redis pub/sub, on Channel: config.Redis.HostEvents,
+// which the realtime service names the same.
+type Redis struct {
+	Client  *redis.Client
+	Channel string
+}
 
-// Publish is the event, as JSON, on Channel.
+// Publish is the event, as JSON, on the channel.
 func (p Redis) Publish(ctx context.Context, ev Event) error {
 	raw, err := json.Marshal(ev)
 	if err != nil {
 		return err
 	}
-	return p.Client.Publish(ctx, Channel, raw).Err()
+	return p.Client.Publish(ctx, p.Channel, raw).Err()
 }
 
 // Discard publishes nothing: a service with no Redis, and tests.

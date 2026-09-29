@@ -37,9 +37,11 @@ func run() error {
 	var (
 		localOnly = env.Bool("STUB_ISSUER_LOCAL_ONLY", false)
 		port      = env.Int("PORT", 8090)
-		issuer    = env.String("AUTH_ISSUER", "unityofis-local-stub")
-		audience  = env.String("AUTH_AUDIENCE", "unityofis")
-		origins   = env.String("ALLOWED_ORIGINS", "")
+		// The product's name and id; the id is the default token audience.
+		brand    = config.BrandFrom(env)
+		issuer   = env.String("AUTH_ISSUER", brand.ID+"-local-stub")
+		audience = env.String("AUTH_AUDIENCE", brand.ID)
+		origins  = env.String("ALLOWED_ORIGINS", "")
 	)
 	if err := env.Err(); err != nil {
 		return err

@@ -55,7 +55,7 @@ func Words(kind string, data map[string]any, count int) (string, string) {
 	case "test":
 		return "Notifications are working", "This is the test you asked for."
 	}
-	return str(data, "heading", "Something needs your attention"), str(data, "line", "Open unityofis to see it.")
+	return str(data, "heading", "Something needs your attention"), str(data, "line", "Open the app to see it.")
 }
 
 // UnsubscribeToken is a link that turns off one category's email for one

@@ -24,6 +24,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth/stubissuer"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
@@ -135,8 +136,8 @@ func newNotify(t *testing.T) *notifyFixture {
 	if _, err := migrator.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	issuer, _ := stubissuer.New("test", "unityofis")
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	issuer, _ := stubissuer.New("test", "b2bapp")
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	cluster := db.SingleShard(pool)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	f := &notifyFixture{rdb: rdb, pool: pool, issuer: issuer, people: &people{persons: map[uuid.UUID]notify.Person{}},
@@ -205,11 +206,11 @@ func (f *notifyFixture) device(t *testing.T, token, platform string) {
 func (f *notifyFixture) looking(t *testing.T, id uuid.UUID, group string, seen time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	f.rdb.Del(ctx, notify.FocusKey(f.org, id))
+	f.rdb.Del(ctx, notify.FocusKey(config.DefaultRedis, f.org, id))
 	if group != "-" {
-		f.rdb.HSet(ctx, notify.FocusKey(f.org, id), "socket-1", group)
+		f.rdb.HSet(ctx, notify.FocusKey(config.DefaultRedis, f.org, id), "socket-1", group)
 	}
-	f.rdb.Set(ctx, notify.SeenKey(f.org, id), strconv.FormatInt(seen.UnixMilli(), 10), time.Hour)
+	f.rdb.Set(ctx, notify.SeenKey(config.DefaultRedis, f.org, id), strconv.FormatInt(seen.UnixMilli(), 10), time.Hour)
 }
 
 func (f *notifyFixture) emit(t *testing.T, ev notify.Event) {

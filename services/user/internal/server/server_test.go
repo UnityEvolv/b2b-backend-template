@@ -142,11 +142,11 @@ func newAPI(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 
-	issuer, err := stubissuer.New("test", "unityofis")
+	issuer, err := stubissuer.New("test", "b2bapp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("test", "unityofis", issuer.PublicKeys())
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	recorder := &memoryRecorder{}
 	sessions := &memorySessions{}
 	// Who may do what, by "org/membership"; a test adds an Owner or an Admin.

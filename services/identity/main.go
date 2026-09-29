@@ -58,21 +58,25 @@ func run() error {
 
 	env := &config.Env{}
 	var (
-		port        = env.Int("PORT", 8080)
-		logLevel    = env.String("LOG_LEVEL", "info")
-		dbURL       = env.Required("DATABASE_URL")
-		migrateUp   = env.Bool("MIGRATE_ON_START", false)
-		grace       = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
-		issuer      = env.Required("AUTH_ISSUER")
-		audience    = env.String("AUTH_AUDIENCE", "unityofis")
+		port      = env.Int("PORT", 8080)
+		logLevel  = env.String("LOG_LEVEL", "info")
+		dbURL     = env.Required("DATABASE_URL")
+		migrateUp = env.Bool("MIGRATE_ON_START", false)
+		grace     = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
+		issuer    = env.Required("AUTH_ISSUER")
+		// The product's name and id; the id is the default token audience.
+		brand    = config.BrandFrom(env)
+		audience = env.String("AUTH_AUDIENCE", brand.ID)
+		// The Redis channels shared with the other services, under one prefix.
+		redisNames  = config.RedisFrom(env, brand)
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
 		environment = env.String("ENVIRONMENT", "local")
 		baseHost    = env.String("BASE_HOSTNAME", "")
-		origins     = config.AppOrigins(baseHost, env.List("ALLOWED_ORIGINS"))
+		origins     = config.AllowedOrigins(env, baseHost)
 		// The desktop app's URL scheme: where a sign-in it started in
 		// the system browser is handed back. Empty turns desktop sign-in off.
-		desktopScheme = env.String("DESKTOP_SCHEME", "unityofis")
+		desktopScheme = env.String("DESKTOP_SCHEME", brand.ID)
 		hosts         = config.HostsFor(baseHost)
 		// The other services this one calls.
 		auditURL         = env.Required("AUDIT_URL")
@@ -173,8 +177,8 @@ func run() error {
 	keyring := envelope.New(envelope.OrgKeys(organizationURL, tokens, nil), wrapper)
 	recorder := audit.NewClient(auditURL, tokens, nil)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
-		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), server.RedisPublisher{Client: rdb}, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
-		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
+		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), server.RedisPublisher{Client: rdb, Channel: redisNames.HostEvents()}, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
+		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

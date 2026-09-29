@@ -8,7 +8,7 @@ import (
 )
 
 func TestNoticeRendersBothBodiesWithTheOrgName(t *testing.T) {
-	r, err := email.Render("notice", "Acme", map[string]any{
+	r, err := email.Render("notice", "B2B App", "Acme", map[string]any{
 		"heading": "You have been invited",
 		"lines":   []string{"Click the link.", "It expires <soon>."},
 	})
@@ -19,7 +19,7 @@ func TestNoticeRendersBothBodiesWithTheOrgName(t *testing.T) {
 		t.Errorf("subject %q", r.Subject)
 	}
 	for _, body := range []string{r.HTML, r.Text} {
-		if !strings.Contains(body, "on behalf of Acme") || !strings.Contains(body, "Click the link.") {
+		if !strings.Contains(body, "Sent by B2B App on behalf of Acme") || !strings.Contains(body, "Click the link.") {
 			t.Errorf("body lacks the org or the lines: %q", body)
 		}
 	}
@@ -30,7 +30,7 @@ func TestNoticeRendersBothBodiesWithTheOrgName(t *testing.T) {
 }
 
 func TestUnknownTemplateAndBadMessages(t *testing.T) {
-	if _, err := email.Render("no-such-template", "Acme", nil); err == nil {
+	if _, err := email.Render("no-such-template", "B2B App", "Acme", nil); err == nil {
 		t.Error("unknown template rendered")
 	}
 	for _, m := range []email.Message{
@@ -50,7 +50,7 @@ func TestUnknownTemplateAndBadMessages(t *testing.T) {
 // Every template has a subject, both bodies, and shows the org's name.
 func TestEveryTemplateShowsTheOrg(t *testing.T) {
 	for name := range email.Templates {
-		r, err := email.Render(name, "Acme Ltd", map[string]any{"heading": "h", "lines": []string{"l"}})
+		r, err := email.Render(name, "B2B App", "Acme Ltd", map[string]any{"heading": "h", "lines": []string{"l"}})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

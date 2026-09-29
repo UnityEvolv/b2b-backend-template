@@ -50,19 +50,23 @@ func run() error {
 
 	env := &config.Env{}
 	var (
-		port        = env.Int("PORT", 8080)
-		logLevel    = env.String("LOG_LEVEL", "info")
-		dbURL       = env.Required("DATABASE_URL")
-		migrateUp   = env.Bool("MIGRATE_ON_START", false)
-		grace       = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
-		issuer      = env.Required("AUTH_ISSUER")
-		audience    = env.String("AUTH_AUDIENCE", "unityofis")
+		port      = env.Int("PORT", 8080)
+		logLevel  = env.String("LOG_LEVEL", "info")
+		dbURL     = env.Required("DATABASE_URL")
+		migrateUp = env.Bool("MIGRATE_ON_START", false)
+		grace     = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
+		issuer    = env.Required("AUTH_ISSUER")
+		// The product's name and id; the id is the default token audience.
+		brand    = config.BrandFrom(env)
+		audience = env.String("AUTH_AUDIENCE", brand.ID)
+		// The Redis channels shared with the other services, under one prefix.
+		redisNames  = config.RedisFrom(env, brand)
 		jwksURL     = env.Required("AUTH_JWKS_URL")
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
 		environment = env.String("ENVIRONMENT", "local")
 		baseHost    = env.String("BASE_HOSTNAME", "")
-		origins     = config.AppOrigins(baseHost, env.List("ALLOWED_ORIGINS"))
+		origins     = config.AllowedOrigins(env, baseHost)
 		// The audit service, the organization service (for the plan an org
 		// is on), and the issuer this service gets its own token from.
 		auditURL         = env.Required("AUDIT_URL")
@@ -155,7 +159,7 @@ func run() error {
 	}
 	// SCIM groups are stored and grant nothing until a product carries them to
 	// what they grant, with srv.WithGroupSync.
-	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb}).WithSCIM(scimBase)
+	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase)
 	var mail email.Sender
 	var forgetters []server.Forgetter
 	// The services that keep something personal under a membership. A product

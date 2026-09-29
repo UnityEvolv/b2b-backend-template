@@ -164,12 +164,12 @@ func (s Services) OrgName(ctx context.Context, org uuid.UUID) (string, error) {
 	return o.Name, nil
 }
 
-// ToMembersChannel is the Redis channel the realtime service delivers
-// per-person socket events from. Named in the realtime service too.
-const ToMembersChannel = "unityofis:to-members"
-
-// RedisLive tells open apps over the realtime service.
-type RedisLive struct{ Client redis.Cmdable }
+// RedisLive tells open apps over Redis, on Channel: config.Redis.ToMembers,
+// the channel per-person live events go out on.
+type RedisLive struct {
+	Client  redis.Cmdable
+	Channel string
+}
 
 // Feed says a new entry arrived; each app reads its feed and count again.
 func (l RedisLive) Feed(ctx context.Context, org uuid.UUID, recipients []uuid.UUID) error {
@@ -181,5 +181,5 @@ func (l RedisLive) Feed(ctx context.Context, org uuid.UUID, recipients []uuid.UU
 	if err != nil {
 		return err
 	}
-	return l.Client.Publish(ctx, ToMembersChannel, raw).Err()
+	return l.Client.Publish(ctx, l.Channel, raw).Err()
 }

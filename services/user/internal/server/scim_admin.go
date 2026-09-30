@@ -26,11 +26,10 @@ import (
 // the API refuses it the same way the page does.
 
 const (
-	scimTokenPrefix = "uoscim_"
-	scimTokenGrace  = 7 * 24 * time.Hour
-	codeNotHalted   = "scim.not_halted"
-	codeNoGroup     = "scim.group_not_found"
-	codeNoToken     = "scim.token_not_found"
+	scimTokenGrace = 7 * 24 * time.Hour
+	codeNotHalted  = "scim.not_halted"
+	codeNoGroup    = "scim.group_not_found"
+	codeNoToken    = "scim.token_not_found"
 )
 
 // scimAllowed is nil when the caller may see the org's SCIM settings, and,
@@ -143,7 +142,8 @@ func (s *Server) CreateScimToken(ctx context.Context, req api.CreateScimTokenReq
 	if _, err := rand.Read(secret); err != nil {
 		return nil, err
 	}
-	raw := scimTokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
+	prefix := s.scimTokenPrefix()
+	raw := prefix + base64.RawURLEncoding.EncodeToString(secret)
 	id, err := uuid.NewV7()
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func (s *Server) CreateScimToken(ctx context.Context, req api.CreateScimTokenReq
 			return err
 		}
 		var err error
-		t, err = q.InsertScimToken(ctx, store.InsertScimTokenParams{OrgID: req.OrgId, ID: id, Prefix: raw[:len(scimTokenPrefix)+6], Hash: hashToken(raw)})
+		t, err = q.InsertScimToken(ctx, store.InsertScimTokenParams{OrgID: req.OrgId, ID: id, Prefix: raw[:len(prefix)+6], Hash: hashToken(raw)})
 		return err
 	})
 	if err != nil {

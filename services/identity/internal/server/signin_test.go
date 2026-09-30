@@ -25,13 +25,13 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 	if to != "http://account.test/offices/1" {
 		t.Fatalf("landed at %s", to)
 	}
-	if _, ok := b.cookies["uo_session"]; !ok {
+	if _, ok := b.cookies[sessionName]; !ok {
 		t.Fatal("no session cookie")
 	}
-	if !b.cookies["uo_session"].HttpOnly {
+	if !b.cookies[sessionName].HttpOnly {
 		t.Error("session cookie is readable by scripts")
 	}
-	if _, still := b.cookies["uo_signin"]; still {
+	if _, still := b.cookies[signInName]; still {
 		t.Error("attempt cookie was not cleared")
 	}
 	// The user service was told who signed in, with the directory claims.
@@ -58,13 +58,13 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 		t.Errorf("authenticated read: %d %s", rec.Code, rec.Body.String())
 	}
 	// The refresh token rotated: the old cookie value is dead.
-	first := b.cookies["uo_session"].Value
+	first := b.cookies[sessionName].Value
 	b.do(http.MethodPost, "/v1/session/refresh", "", nil)
-	if b.cookies["uo_session"].Value == first {
+	if b.cookies[sessionName].Value == first {
 		t.Error("refresh token did not rotate")
 	}
 	stale := f.browser()
-	stale.cookies["uo_session"] = &http.Cookie{Name: "uo_session", Value: first}
+	stale.cookies[sessionName] = &http.Cookie{Name: sessionName, Value: first}
 	if rec := stale.do(http.MethodPost, "/v1/session/refresh", "", nil); rec.Code != http.StatusUnauthorized {
 		t.Errorf("stale refresh token accepted: %d", rec.Code)
 	}
@@ -344,7 +344,7 @@ func TestRefreshNoticesAnEndedMembership(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized || body(t, rec)["code"] != "session.no_membership" {
 		t.Errorf("no membership left: %d %s", rec.Code, rec.Body.String())
 	}
-	if _, still := b.cookies["uo_session"]; still {
+	if _, still := b.cookies[sessionName]; still {
 		t.Error("session cookie survived")
 	}
 }
@@ -390,7 +390,7 @@ func TestAProviderCannotAssertAnotherOrgsAddresses(t *testing.T) {
 		if !strings.Contains(to, "error=provider_refused") {
 			t.Errorf("globex's provider asserting %s landed at %s", email, to)
 		}
-		if _, ok := b.cookies["uo_session"]; ok {
+		if _, ok := b.cookies[sessionName]; ok {
 			t.Errorf("a session was started for %s", email)
 		}
 	}

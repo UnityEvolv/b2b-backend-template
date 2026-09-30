@@ -72,3 +72,53 @@ func (r Redis) LiveEvents() string { return r.Key("live-events") }
 
 // ToMembers is the channel per-person live events go out on.
 func (r Redis) ToMembers() string { return r.Key("to-members") }
+
+// Cookies is the names of the cookies the identity service sets on the API
+// host: the session's refresh token, and the sign-in attempt that binds an
+// identity provider's callback to the browser that started it.
+type Cookies struct {
+	Session string
+	SignIn  string
+}
+
+// cookiePrefix is what a cookie name may start with: letters, digits,
+// hyphens and underscores.
+var cookiePrefix = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
+
+// CookiesFor is the cookie names under prefix: "<prefix>_session" and
+// "<prefix>_signin", with any hyphen in the prefix as an underscore.
+func CookiesFor(prefix string) Cookies {
+	p := strings.ReplaceAll(prefix, "-", "_")
+	return Cookies{Session: p + "_session", SignIn: p + "_signin"}
+}
+
+// DefaultCookies is the cookie names under the default brand.
+var DefaultCookies = CookiesFor(DefaultBrand.ID)
+
+// CookiesFrom reads COOKIE_PREFIX, the brand's id when unset.
+func CookiesFrom(e *Env, b Brand) Cookies {
+	prefix := e.String("COOKIE_PREFIX", b.ID)
+	if !cookiePrefix.MatchString(prefix) {
+		e.problems = append(e.problems, fmt.Sprintf("COOKIE_PREFIX: %q is not letters, digits, hyphens and underscores", prefix))
+		prefix = b.ID
+	}
+	return CookiesFor(prefix)
+}
+
+// SCIMTokenPrefixFor is the start of every SCIM bearer token minted under
+// the brand id: "<id>_scim_", with any hyphen as an underscore, so a secret
+// scanner, or a person, can tell what a leaked one is.
+func SCIMTokenPrefixFor(id string) string { return strings.ReplaceAll(id, "-", "_") + "_scim_" }
+
+// DefaultSCIMTokenPrefix is the SCIM token prefix under the default brand.
+var DefaultSCIMTokenPrefix = SCIMTokenPrefixFor(DefaultBrand.ID)
+
+// SCIMTokenPrefixFrom reads SCIM_TOKEN_PREFIX, "<id>_scim_" when unset.
+func SCIMTokenPrefixFrom(e *Env, b Brand) string {
+	prefix := e.String("SCIM_TOKEN_PREFIX", SCIMTokenPrefixFor(b.ID))
+	if !cookiePrefix.MatchString(prefix) {
+		e.problems = append(e.problems, fmt.Sprintf("SCIM_TOKEN_PREFIX: %q is not letters, digits, hyphens and underscores", prefix))
+		prefix = SCIMTokenPrefixFor(b.ID)
+	}
+	return prefix
+}

@@ -297,7 +297,7 @@ func TestSessionPolicyAppliesToNewSessions(t *testing.T) {
 // age makes a browser's session look unused for d.
 func (f *fixture) age(t *testing.T, b *browser, d time.Duration) {
 	t.Helper()
-	raw := b.cookies["uo_session"].Value
+	raw := b.cookies[sessionName].Value
 	ctx := context.Background()
 	tx, err := f.pool.Begin(ctx)
 	if err != nil {

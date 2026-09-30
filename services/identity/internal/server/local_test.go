@@ -85,7 +85,7 @@ func TestLocalAccountVerifiesSetsPasswordSignsInAndResets(t *testing.T) {
 	if code != http.StatusOK || tok["org_id"] != acme.String() || tok["membership_id"] != m.ID.String() || tok["choose_organization"] != false {
 		t.Fatalf("sign-in: %d %v", code, tok)
 	}
-	if _, ok := b.cookies["uo_session"]; !ok {
+	if _, ok := b.cookies[sessionName]; !ok {
 		t.Fatal("no session cookie")
 	}
 	if c, err := f.verifier.Verify(tok["access_token"].(string)); err != nil || c.UserID != m.User.ID.String() || c.OrgID != acme.String() {

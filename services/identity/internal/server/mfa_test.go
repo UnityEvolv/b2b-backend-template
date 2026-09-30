@@ -100,7 +100,7 @@ func TestMfaEnrolChallengeRecoverAndReset(t *testing.T) {
 	if code != http.StatusAccepted || out["mfa"] != "challenge" || challenge == "" {
 		t.Fatalf("challenged: %d %v", code, out)
 	}
-	if _, ok := phone.cookies["uo_session"]; ok {
+	if _, ok := phone.cookies[sessionName]; ok {
 		t.Error("a session before the code")
 	}
 	mfa := func(b *browser, challenge, code string) (int, map[string]any) {
@@ -117,7 +117,7 @@ func TestMfaEnrolChallengeRecoverAndReset(t *testing.T) {
 	if code != http.StatusOK || tok["org_id"] != acme.String() {
 		t.Fatalf("right code: %d %v", code, tok)
 	}
-	if _, ok := phone.cookies["uo_session"]; !ok {
+	if _, ok := phone.cookies[sessionName]; !ok {
 		t.Error("no session after the code")
 	}
 	if code, _ := mfa(phone, challenge, authn.code(1)); code != http.StatusUnauthorized {

@@ -215,6 +215,9 @@ var brandLiterals = []brandRule{
 	{"a MIME boundary that names something; keep it neutral", regexp.MustCompile(`boundary\s*:?=\s*"`), regexp.MustCompile(`boundary\s*:?=\s*"part-"`)},
 	{"an advisory lock named for a product; name the job", regexp.MustCompile(`pg_advisory_(un)?lock\(hashtext\('[^'.]*(ofis|unity|b2b)`), nil},
 	{"the realtime or TURN subdomain; a product declares its own app origins", regexp.MustCompile(`Subdomain(Realtime|TURN)\b|"(rt|turn)\."`), nil},
+	{"a fixed session or sign-in cookie name; use config.Cookies (COOKIE_PREFIX)", regexp.MustCompile(`"[A-Za-z0-9-]*_(session|signin)"`), nil},
+	{"a fixed SCIM token prefix; use config.SCIMTokenPrefixFrom (SCIM_TOKEN_PREFIX)", regexp.MustCompile(`"[A-Za-z0-9-]+_?scim_`), nil},
+	{"a fixed web app name; APP_NAMES names them and config.DefaultApps is the default", regexp.MustCompile(`(MainApp|PlatformApp|DefaultApps)\s*(:|=|:=)\s*(\[\]string\{)?"[a-z]`), nil},
 }
 
 // B2B-19's audit items stay configuration: this fails when one of them is
@@ -249,6 +252,11 @@ func TestBrandingRulesCatchTheOldLiterals(t *testing.T) {
 		`admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('b2bapp.dbinit'))")`,
 		`SubdomainRealtime = "rt"`,
 		`source: "b2bapp",`,
+		`sessionCookie = "uo_session"`,
+		`attemptCookie = "uo_signin"`,
+		`scimTokenPrefix = "uoscim_"`,
+		`cfg.MainApp = "office"`,
+		`MainApp: "office",`,
 	}
 	for _, line := range old {
 		caught := false
@@ -264,6 +272,10 @@ func TestBrandingRulesCatchTheOldLiterals(t *testing.T) {
 		`admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('db.bootstrap'))")`,
 		`TXTPrefix: env.String("DOMAIN_TXT_PREFIX", "_"+brand.ID+"-verify."),`,
 		`audience = env.String("AUTH_AUDIENCE", brand.ID)`,
+		`cookieNames = config.CookiesFor(prefix)`,
+		`prefix := s.scimTokenPrefix()`,
+		`cfg.MainApp = config.DefaultApps[0]`,
+		`s.notifyAdmins(ctx, org, "scim-cap:"+day, "scim_cap_reached", data)`,
 	} {
 		for _, l := range brandLiterals {
 			if l.caught(line) {

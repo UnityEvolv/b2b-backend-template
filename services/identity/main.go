@@ -93,6 +93,9 @@ func run() error {
 		apps          = config.AppsFrom(env, baseHost)
 		accessTTL     = env.Duration("ACCESS_TOKEN_TTL", 15*time.Minute)
 		secureCookies = env.Bool("SECURE_COOKIES", true)
+		// The session and sign-in cookies' names, from COOKIE_PREFIX or the
+		// product id: <prefix>_session and <prefix>_signin.
+		cookieNames = config.CookiesFrom(env, brand)
 		// Local only: mint service tokens for any service that asks, as the
 		// stub issuer did. Deployed, a service proves who it is first.
 		localServiceTokens = env.Bool("LOCAL_SERVICE_TOKENS", false)
@@ -187,7 +190,7 @@ func run() error {
 	bus := livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
 		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), bus, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
-		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
+		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, Cookies: cookieNames, DesktopScheme: desktopScheme})
 	srv.WithLive(bus)
 	// Security and membership notices, on the notification service's channel.
 	srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()})

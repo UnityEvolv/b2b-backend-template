@@ -5,6 +5,20 @@ expiring on their own (UO-77). Revocation is pushed, not waited for: a
 person whose access has gone is told and disconnected, never left clicking
 controls that quietly do nothing.
 
+## Cookies
+
+A browser session is two HTTP-only, SameSite Lax cookies on the API host,
+never a parent domain, named from `COOKIE_PREFIX` (the product id,
+`PRODUCT_ID`, by default; a hyphen becomes an underscore):
+
+| cookie | holds |
+| --- | --- |
+| `<prefix>_session` (`b2bapp_session` by default) | the session's refresh token |
+| `<prefix>_signin` (`b2bapp_signin` by default) | the sign-in attempt, binding an identity provider's callback to the browser that started it; cleared once used |
+
+Pages never read them: the web apps call the refresh endpoint with
+credentials and get an access token back.
+
 ## Lifetime
 
 Two clocks, both fixed at sign-in from the organization's policy at that

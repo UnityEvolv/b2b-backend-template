@@ -56,6 +56,9 @@ type Config struct {
 	AccessTTL time.Duration
 	// SecureCookies is off only on a laptop over plain http.
 	SecureCookies bool
+	// Cookies is the names of the session and sign-in attempt cookies;
+	// config.DefaultCookies when empty.
+	Cookies config.Cookies
 	// EntraAuthority is where Entra tenants live; a test points it at a fake.
 	EntraAuthority string
 	// DesktopScheme is the desktop app's URL scheme: where a sign-in it
@@ -107,6 +110,9 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	}
 	if cfg.PlatformApp == "" {
 		cfg.PlatformApp = cfg.MainApp
+	}
+	if cfg.Cookies.Session == "" || cfg.Cookies.SignIn == "" {
+		cfg.Cookies = config.DefaultCookies
 	}
 	if cfg.Product == "" {
 		cfg.Product = config.DefaultBrand.Name
@@ -171,7 +177,7 @@ func (s *Server) Handler(mux *http.ServeMux, middlewares ...api.MiddlewareFunc) 
 	})
 	return api.HandlerWithOptions(strict, api.StdHTTPServerOptions{
 		BaseRouter:  mux,
-		Middlewares: append([]api.MiddlewareFunc{withCookies(s.cfg.SecureCookies)}, middlewares...),
+		Middlewares: append([]api.MiddlewareFunc{withCookies(s.cfg.SecureCookies, s.cfg.Cookies)}, middlewares...),
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			httpx.WriteError(w, http.StatusBadRequest, httpx.CodeInvalidRequest, "The request is not valid.")
 		},

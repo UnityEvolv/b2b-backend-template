@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/server"
 )
 
@@ -169,7 +170,7 @@ func TestSCIMUsers(t *testing.T) {
 	}
 
 	code, tok := f.do(t, http.MethodPost, "/v1/organizations/"+initech.String()+"/scim/tokens", ownerToken, nil)
-	if code != http.StatusCreated || !strings.HasPrefix(id(t, tok, "token"), "uoscim_") {
+	if code != http.StatusCreated || !strings.HasPrefix(id(t, tok, "token"), config.DefaultSCIMTokenPrefix) {
 		t.Fatalf("token: %d %v", code, tok)
 	}
 	token := id(t, tok, "token")
@@ -178,7 +179,7 @@ func TestSCIMUsers(t *testing.T) {
 	if code, _ := f.scim(t, http.MethodGet, base+"/Users", "", nil); code != http.StatusUnauthorized {
 		t.Errorf("no token: %d", code)
 	}
-	if code, _ := f.scim(t, http.MethodGet, base+"/Users", "uoscim_wrong", nil); code != http.StatusUnauthorized {
+	if code, _ := f.scim(t, http.MethodGet, base+"/Users", config.DefaultSCIMTokenPrefix+"wrong", nil); code != http.StatusUnauthorized {
 		t.Errorf("wrong token: %d", code)
 	}
 	if code, _ := f.scim(t, http.MethodGet, "/scim/v2/"+acme.String()+"/Users", token, nil); code != http.StatusUnauthorized {
@@ -468,5 +469,26 @@ func TestSCIMGroups(t *testing.T) {
 	}
 	if got := f.groups.members(groupID); len(got) != 0 {
 		t.Errorf("after the group went: %v", got)
+	}
+}
+
+// A SCIM token starts with the configured prefix, which names no product
+// unless the product configures it to.
+func TestSCIMTokensCarryTheConfiguredPrefix(t *testing.T) {
+	f := newAPI(t)
+	f.srv.WithSCIMTokenPrefix("acme_scim_")
+	code, owner := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "organization"), map[string]any{"org_id": initech, "email": "owner@initech.test", "source": "owner"})
+	if code != http.StatusCreated {
+		t.Fatalf("owner: %d %v", code, owner)
+	}
+	ownerID := id(t, owner, "id")
+	f.grants[initech.String()+"/"+ownerID] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())}
+	ownerToken := f.person(t, id(t, owner, "user", "id"), initech.String(), ownerID)
+	code, tok := f.do(t, http.MethodPost, "/v1/organizations/"+initech.String()+"/scim/tokens", ownerToken, nil)
+	if code != http.StatusCreated || !strings.HasPrefix(id(t, tok, "token"), "acme_scim_") || !strings.HasPrefix(id(t, tok, "prefix"), "acme_scim_") {
+		t.Fatalf("token: %d %v", code, tok)
+	}
+	if code, _ := f.scim(t, http.MethodGet, "/scim/v2/"+initech.String()+"/Users", id(t, tok, "token"), nil); code != http.StatusOK {
+		t.Errorf("the token is refused: %d", code)
 	}
 }

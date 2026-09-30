@@ -29,6 +29,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
@@ -393,6 +394,12 @@ type fixture struct {
 }
 
 const identityURL = "http://identity.test"
+
+// The cookies' names under the default product id.
+var (
+	sessionName = config.DefaultCookies.Session
+	signInName  = config.DefaultCookies.SignIn
+)
 
 // The whole path against a real Postgres, a fake provider, an in-memory
 // user service, and the same auth mounting as main.

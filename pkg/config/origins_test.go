@@ -69,3 +69,40 @@ func TestBrand(t *testing.T) {
 		t.Fatal("a bad PRODUCT_ID was taken")
 	}
 }
+
+// The identity service's cookies and the SCIM token prefix come from the
+// product's id, or their own settings; none names a product of its own.
+func TestCookiesAndTokenPrefixFollowTheBrand(t *testing.T) {
+	t.Setenv("COOKIE_PREFIX", "")
+	t.Setenv("SCIM_TOKEN_PREFIX", "")
+	env := &config.Env{}
+	if c := config.CookiesFrom(env, config.DefaultBrand); c != config.DefaultCookies || c.Session != "b2bapp_session" || c.SignIn != "b2bapp_signin" {
+		t.Fatalf("default cookies: %+v", c)
+	}
+	if p := config.SCIMTokenPrefixFrom(env, config.DefaultBrand); p != config.DefaultSCIMTokenPrefix || p != "b2bapp_scim_" {
+		t.Fatalf("default SCIM prefix: %q", p)
+	}
+	acme := config.Brand{Name: "Acme Cloud", ID: "acme-cloud"}
+	if c := config.CookiesFrom(env, acme); c.Session != "acme_cloud_session" || c.SignIn != "acme_cloud_signin" {
+		t.Errorf("cookies under the product id: %+v", c)
+	}
+	if p := config.SCIMTokenPrefixFrom(env, acme); p != "acme_cloud_scim_" {
+		t.Errorf("SCIM prefix under the product id: %q", p)
+	}
+	t.Setenv("COOKIE_PREFIX", "ac")
+	t.Setenv("SCIM_TOKEN_PREFIX", "acs_")
+	if c := config.CookiesFrom(env, acme); c.Session != "ac_session" {
+		t.Errorf("configured cookies: %+v", c)
+	}
+	if p := config.SCIMTokenPrefixFrom(env, acme); p != "acs_" {
+		t.Errorf("configured SCIM prefix: %q", p)
+	}
+	if env.Err() != nil {
+		t.Fatal(env.Err())
+	}
+	t.Setenv("COOKIE_PREFIX", "a b;c")
+	config.CookiesFrom(env, acme)
+	if env.Err() == nil {
+		t.Fatal("a bad COOKIE_PREFIX was taken")
+	}
+}

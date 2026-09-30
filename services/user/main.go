@@ -62,7 +62,9 @@ func run() error {
 		brand    = config.BrandFrom(env)
 		audience = env.String("AUTH_AUDIENCE", brand.ID)
 		// The Redis channels shared with the other services, under one prefix.
-		redisNames  = config.RedisFrom(env, brand)
+		redisNames = config.RedisFrom(env, brand)
+		// What every SCIM token starts with: SCIM_TOKEN_PREFIX, or <id>_scim_.
+		scimPrefix  = config.SCIMTokenPrefixFrom(env, brand)
 		jwksURL     = env.Required("AUTH_JWKS_URL")
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
@@ -168,7 +170,7 @@ func run() error {
 	}
 	// SCIM groups are stored and grant nothing until a product carries them to
 	// what they grant, with srv.WithGroupSync.
-	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase).
+	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase).WithSCIMTokenPrefix(scimPrefix).
 		WithLive(livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger))
 	// The data owners that keep something personal under a membership forget
 	// it when the person's account is deleted: every eraser in the registry.

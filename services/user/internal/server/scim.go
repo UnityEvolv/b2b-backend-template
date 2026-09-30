@@ -15,6 +15,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
@@ -716,4 +717,19 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request, org uuid
 	s.scimLog(ctx, org, "delete user", &id, nil, "ok", "", map[string]any{"deactivated": true})
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+// WithSCIMTokenPrefix is s minting SCIM tokens that start with prefix
+// (config.SCIMTokenPrefixFrom); config.DefaultSCIMTokenPrefix otherwise.
+func (s *Server) WithSCIMTokenPrefix(prefix string) *Server {
+	s.scimPrefix = prefix
+	return s
+}
+
+// scimTokenPrefix is what every SCIM token this service mints starts with.
+func (s *Server) scimTokenPrefix() string {
+	if s.scimPrefix == "" {
+		return config.DefaultSCIMTokenPrefix
+	}
+	return s.scimPrefix
 }

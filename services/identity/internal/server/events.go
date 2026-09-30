@@ -57,7 +57,7 @@ func (s *Server) SessionEvents() http.Handler {
 			httpx.WriteError(w, http.StatusNotImplemented, "session.events_unavailable", "Live events are not available here.")
 			return
 		}
-		c := &cookies{in: map[string]string{}}
+		c := &cookies{in: map[string]string{}, names: s.cfg.Cookies}
 		for _, cookie := range r.Cookies() {
 			c.in[cookie.Name] = cookie.Value
 		}
@@ -67,7 +67,7 @@ func (s *Server) SessionEvents() http.Handler {
 			httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternal, "Something went wrong.")
 			return
 		}
-		if !live && c.in[sessionCookie] == "" {
+		if !live && c.in[c.name(sessionCookie)] == "" {
 			httpx.WriteError(w, http.StatusUnauthorized, codeNoSession, "Not signed in.")
 			return
 		}

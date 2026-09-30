@@ -43,7 +43,7 @@ func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
 		t.Fatalf("hand-back: %s", to)
 	}
 	// The system browser holds no session.
-	if _, ok := browser.cookies["uo_session"]; ok {
+	if _, ok := browser.cookies[sessionName]; ok {
 		t.Error("the system browser got the session")
 	}
 
@@ -65,7 +65,7 @@ func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
 	if rec.Code != http.StatusOK || tok["org_id"] != acme.String() || tok["access_token"] == nil {
 		t.Fatalf("exchange: %d %v", rec.Code, tok)
 	}
-	if _, ok := app.cookies["uo_session"]; !ok {
+	if _, ok := app.cookies[sessionName]; !ok {
 		t.Fatal("the app got no session cookie")
 	}
 	// The session is a real one: it refreshes.

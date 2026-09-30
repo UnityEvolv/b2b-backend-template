@@ -41,6 +41,7 @@ type Server struct {
 	capacity Capacity
 	// SCIM.
 	scimPublic   string
+	scimPrefix   string
 	groupSync    GroupSync
 	notices      Notifier
 	live         livebus.Publisher

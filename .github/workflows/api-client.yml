@@ -1,0 +1,97 @@
+# When a contract changes on main, regenerate the frontend's API client and
+# open (or update) a pull request on b2b-frontend-template with it.
+#
+# The frontend's own sync does the work: it copies api/*.yaml from this
+# checkout into packages/api/specs and regenerates packages/api/src/generated
+# (packages/api/README.md there). The pull request is an ordinary one: the
+# frontend's CI checks it, and code the new types break is fixed on its
+# branch before it merges; a later contract change adds a commit on top of
+# those fixes rather than replacing them.
+#
+# FRONTEND_SYNC_TOKEN is a fine-grained token with contents and pull
+# requests write on b2b-frontend-template only (CONTRIBUTING.md). It lives
+# only in this repository's secrets, reaches only this job, and the job runs
+# only on the upstream repository from main: a fork or a pull request skips
+# it (internal/repocheck, TestWorkflowsAreForkSafe).
+
+name: api-client
+
+on:
+  push:
+    branches: [main]
+    paths: ['api/*.yaml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-client
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'UnityEvolv/b2b-backend-template' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FRONTEND: UnityEvolv/b2b-frontend-template
+      BRANCH: api-sync/backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: backend
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: UnityEvolv/b2b-frontend-template
+          path: frontend
+          token: ${{ secrets.FRONTEND_SYNC_TOKEN }}
+          fetch-depth: 0
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 22
+      - name: Start from the open pull request's branch, if there is one
+        working-directory: frontend
+        env:
+          GH_TOKEN: ${{ secrets.FRONTEND_SYNC_TOKEN }}
+        run: |
+          open="$(gh pr list --repo "$FRONTEND" --head "$BRANCH" --state open --json number --jq 'length')"
+          if [ "$open" != "0" ]; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -B "$BRANCH" origin/main
+          fi
+          echo "OPEN_PR=$open" >> "$GITHUB_ENV"
+      # No install scripts: the frontend checkout holds the token.
+      - name: Sync the contracts and regenerate
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run sync -w @b2b-template/api -- "$GITHUB_WORKSPACE/backend"
+      - name: Commit and open or update the pull request
+        working-directory: frontend
+        env:
+          GH_TOKEN: ${{ secrets.FRONTEND_SYNC_TOKEN }}
+          SHA: ${{ github.sha }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          git add packages/api/specs packages/api/src/generated
+          if git diff --cached --quiet; then
+            echo "The client already matches these contracts."
+            exit 0
+          fi
+          short="${SHA:0:7}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(api): sync contracts from b2b-backend-template@$short"
+          body="Contracts and the generated client from $SERVER/$REPO/commit/$SHA. Fix any code the new types break on this branch before merging."
+          if [ "$OPEN_PR" != "0" ]; then
+            git push origin "HEAD:$BRANCH"
+            gh pr comment "$BRANCH" --repo "$FRONTEND" --body "Synced again: $SERVER/$REPO/commit/$SHA"
+          else
+            git push --force origin "HEAD:$BRANCH"
+            gh pr create --repo "$FRONTEND" --base main --head "$BRANCH" \
+              --title "chore(api): sync contracts from b2b-backend-template" --body "$body"
+          fi

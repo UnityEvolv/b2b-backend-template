@@ -153,6 +153,19 @@ mistake never reaches a request.
   `if: github.repository == 'UnityEvolv/b2b-backend-template' && github.ref == 'refs/heads/main'`.
   A product built on the template changes `upstream` in
   `internal/repocheck/workflows_test.go` to its own repository.
+- The one secret today is `FRONTEND_SYNC_TOKEN`, used by
+  [api-client.yml](.github/workflows/api-client.yml): when an `api/*.yaml`
+  contract changes on `main`, it checks out b2b-frontend-template, runs that
+  repository's `npm run sync -w @b2b-template/api -- <this checkout>` (which
+  copies the contracts and regenerates the client), and opens a pull request
+  there on the branch `api-sync/backend`, or adds a commit to the one already
+  open. The token is a fine-grained personal access token (or a GitHub App
+  token) with **Contents: read and write** and **Pull requests: read and
+  write** on `UnityEvolv/b2b-frontend-template` only, stored as a repository
+  secret here and nowhere else; the frontend needs no secret for it. Without
+  it the job fails at the frontend checkout, and a fork skips the job
+  altogether. A product built on the template sets its own, or deletes the
+  workflow.
 - `internal/repocheck` (`TestWorkflowsAreForkSafe`) enforces these rules, and
   actionlint checks the workflows' syntax. The security workflow scans the
   full history for secrets with gitleaks, refuses GPL, AGPL, SSPL and unknown

@@ -91,6 +91,13 @@ type Billing struct {
 	// Band A plan band, one of the bands the deployment registers.
 	Band Band `json:"band"`
 
+	// Bands Every band the billing page may offer, lowest first: the lowest
+	// band, which has no price (a move to it is a downgrade at the
+	// period's end, or the end of a trial), then every self-serve band.
+	// Contractual bands are never listed. Labels and what each allows are
+	// at the organization service's GET /v1/plans.
+	Bands []Band `json:"bands"`
+
 	// CanManageAutoUpgrade Whether the caller is an Owner, who alone may change it.
 	CanManageAutoUpgrade bool `json:"can_manage_auto_upgrade"`
 	Card                 *struct {
@@ -108,8 +115,10 @@ type Billing struct {
 	NextBand *Band `json:"next_band,omitempty"`
 
 	// PendingBand A plan band, one of the bands the deployment registers.
-	PendingBand    *Band            `json:"pending_band,omitempty"`
-	PeriodEnd      *time.Time       `json:"period_end,omitempty"`
+	PendingBand *Band      `json:"pending_band,omitempty"`
+	PeriodEnd   *time.Time `json:"period_end,omitempty"`
+
+	// Prices The price of each band the payment provider sells, by band. A band in bands with no entry here costs nothing.
 	Prices         map[string]Price `json:"prices"`
 	State          BillingState     `json:"state"`
 	TrialAvailable bool             `json:"trial_available"`

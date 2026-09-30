@@ -106,6 +106,47 @@ lost, and whatever consequences the product registered. The rule behind every
 line: **nothing is deleted and nobody is removed**. The plan closes doors
 going forward.
 
+## Reading the plans from a browser
+
+The plans and billing pages render what the registry holds; they keep no
+list of bands, limits or features of their own.
+
+`GET /organization/v1/plans`, to anyone signed in (it is the same in every
+org), is the catalogue: every band, lowest first, and every limit and
+feature, each with its label.
+
+```json
+{"bands":[{"name":"free","label":"Free","contractual":false,"limits":{"users":10,"projects":3},"features":[]},
+          {"name":"enterprise","label":"Enterprise","contractual":true,"limits":{"users":0,"projects":0},"features":["audit_export","scim"]}],
+ "limits":[{"key":"users","label":"users"},{"key":"projects","label":"projects"}],
+ "features":[{"key":"scim","label":"SCIM provisioning"},{"key":"audit_export","label":"audit export"}]}
+```
+
+A cap of 0 is no cap. A band's `limits` has every registered limit;
+`features` are the gated ones it includes, and anything not in the catalogue's
+`features` is on every plan.
+
+`GET /organization/v1/organizations/{org_id}/plan`, to the org's own members
+and to platform operators (as the downgrade checklist is), is the org's band
+with the same fields, and what it uses now of the limits the template counts
+itself:
+
+```json
+{"org_id":"…","plan":"team","label":"Team","contractual":false,
+ "limits":{"users":50,"projects":25},"features":[],"usage":{"users":12}}
+```
+
+`usage.users` is the org's active members, asked of the user service at the
+moment of the request; it is left out if the user service cannot answer. A
+product's own limits have no usage here: the product counts them. Nothing is
+cached, and the page is not the gate: the action reads the plan again.
+
+The billing account (`GET /billing/v1/organizations/{org_id}/billing`) lists
+in `bands` every band the billing page may offer, lowest first: the lowest,
+which has no price (moving to it is a downgrade at the period's end, a
+cancellation at the payment provider), then every self-serve band. `prices`
+has a price for each sold band; a band in `bands` without one costs nothing.
+
 ## Reading the plan from a service
 
 `GET /v1/internal/organizations/{org_id}/plan` (services only) is the band,

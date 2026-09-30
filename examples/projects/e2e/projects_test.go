@@ -28,6 +28,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 )
 
 // The example product through every seam, against the template's services
@@ -196,6 +197,27 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 		preview := s.call(http.MethodGet, s.url("organization")+"/v1/organizations/"+acme.String()+"/plan-change?plan=free", owner.token, nil)
 		if preview.status != http.StatusOK || !strings.Contains(string(preview.raw), `"code":"projects_over_cap_kept"`) {
 			t.Errorf("the downgrade checklist: %s", preview)
+		}
+		// And what a browser reads: the catalogue, with the limit labelled
+		// and capped on every band, and the org's own plan with its usage.
+		catalogue := s.call(http.MethodGet, s.url("organization")+"/v1/plans", colleague.token, nil)
+		if catalogue.status != http.StatusOK || !strings.Contains(string(catalogue.raw), `{"key":"projects","label":"projects"}`) {
+			t.Errorf("the plan catalogue: %s", catalogue)
+		}
+		bands, _ := catalogue.body["bands"].([]any)
+		for _, x := range bands {
+			b, _ := x.(map[string]any)
+			limits, _ := b["limits"].(map[string]any)
+			if name, _ := b["name"].(string); b["label"] == "" || limits["projects"] != float64(product.Caps[plan.Band(name)]) {
+				t.Errorf("the catalogue's %s: %v", name, b)
+			}
+		}
+		mine := s.call(http.MethodGet, s.url("organization")+"/v1/organizations/"+acme.String()+"/plan", colleague.token, nil)
+		limits, _ := mine.body["limits"].(map[string]any)
+		usage, _ := mine.body["usage"].(map[string]any)
+		if mine.status != http.StatusOK || mine.str("plan") != "team" || mine.str("label") != "Team" ||
+			limits["projects"] != float64(product.Caps["team"]) || usage["users"] != float64(3) {
+			t.Errorf("the org's plan: %s", mine)
 		}
 	})
 

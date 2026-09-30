@@ -432,7 +432,7 @@ components:
           type: string
     Billing:
       type: object
-      required: [band, state, auto_upgrade, trial_available, invoiced, prices, active_members, users_cap, can_manage_auto_upgrade]
+      required: [band, state, auto_upgrade, trial_available, invoiced, bands, prices, active_members, users_cap, can_manage_auto_upgrade]
       properties:
         band:
           $ref: '#/components/schemas/Band'
@@ -475,8 +475,19 @@ components:
           description: 0 means no cap.
         next_band:
           $ref: '#/components/schemas/Band'
+        bands:
+          type: array
+          description: |
+            Every band the billing page may offer, lowest first: the lowest
+            band, which has no price (a move to it is a downgrade at the
+            period's end, or the end of a trial), then every self-serve band.
+            Contractual bands are never listed. Labels and what each allows are
+            at the organization service's GET /v1/plans.
+          items:
+            $ref: '#/components/schemas/Band'
         prices:
           type: object
+          description: The price of each band the payment provider sells, by band. A band in bands with no entry here costs nothing.
           additionalProperties:
             $ref: '#/components/schemas/Price'
     BandPreview:

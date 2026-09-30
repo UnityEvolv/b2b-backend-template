@@ -173,7 +173,59 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/plans:
+    get:
+      operationId: listPlans
+      summary: The plan catalogue, for the plans and billing pages to render
+      description: |
+        Every band registered in this deployment, the template's or the
+        product's, lowest first, with its label, whether it is contractual,
+        its cap on every registered limit (0 means no cap) and the gated
+        features it includes; and every registered limit and feature with
+        its label. The same for every org; any signed-in caller may read it.
+        Read from the registry at the moment of the request, never cached.
+      tags: [plans]
+      responses:
+        '200':
+          description: The catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanCatalogue'
+        '401':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/organizations/{org_id}/plan:
+    get:
+      operationId: getOrganizationPlan
+      summary: The org's plan, what it allows, and what the org uses now (its members, platform operators)
+      description: |
+        The band the org is on, with its label, whether it is contractual,
+        its cap on every registered limit (0 means no cap) and the gated
+        features it includes, and the org's current usage of the limits the
+        template counts itself (users: active members). A product's own
+        limits have no usage here; the product counts them. Everything is
+        read at the moment of the request, never cached; the gate is the
+        action itself, which reads the plan again.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The plan and the usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPlan'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       operationId: changePlan
       summary: Move the organization to another plan (platform operators, until billing)
@@ -988,6 +1040,94 @@ components:
           description: The gated features this plan includes. Everything not gated is on every plan.
           items:
             type: string
+    PlanCatalogue:
+      type: object
+      required: [bands, limits, features]
+      properties:
+        bands:
+          type: array
+          description: Every registered band, lowest first.
+          items:
+            $ref: '#/components/schemas/PlanBand'
+        limits:
+          type: array
+          description: Every registered limit, in registration order (users first).
+          items:
+            $ref: '#/components/schemas/PlanLimitInfo'
+        features:
+          type: array
+          description: Every gated feature, in registration order. Anything not listed is on every plan.
+          items:
+            $ref: '#/components/schemas/PlanFeatureInfo'
+    PlanBand:
+      type: object
+      required: [name, label, contractual, limits, features]
+      properties:
+        name:
+          $ref: '#/components/schemas/Plan'
+        label:
+          type: string
+          description: What a page calls the band, such as Team.
+        contractual:
+          type: boolean
+          description: Sold by contract rather than self-serve; billing never moves an organization into or out of it.
+        limits:
+          type: object
+          description: Every registered limit's cap on this band, by key. 0 means no cap.
+          additionalProperties:
+            type: integer
+        features:
+          type: array
+          description: The gated features this band includes, by key.
+          items:
+            type: string
+    PlanLimitInfo:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+          description: The plural noun a message uses, such as users.
+    PlanFeatureInfo:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+          description: What a message calls it, such as SCIM provisioning.
+    OrganizationPlan:
+      type: object
+      required: [org_id, plan, label, contractual, limits, features, usage]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        plan:
+          $ref: '#/components/schemas/Plan'
+        label:
+          type: string
+          description: The band's label.
+        contractual:
+          type: boolean
+        limits:
+          type: object
+          description: Every registered limit's cap on this plan, by key. 0 means no cap.
+          additionalProperties:
+            type: integer
+        features:
+          type: array
+          description: The gated features this plan includes, by key.
+          items:
+            type: string
+        usage:
+          type: object
+          description: What the org uses now of each limit the template counts, by key (users, its active members). A product's own limits are absent; the product counts them.
+          additionalProperties:
+            type: integer
     PlanChange:
       type: object
       required: [from, to, downgrade, consequences]

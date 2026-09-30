@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -153,5 +154,143 @@ func TestBillingSetsThePlan(t *testing.T) {
 	do(t, h, http.MethodPut, "/v1/organizations/"+orgID+"/plan", operator, map[string]any{"plan": "enterprise"}, "")
 	if status, _ := do(t, h, http.MethodPut, path, billing, map[string]any{"plan": "free", "reason": "payment_failure"}, ""); status != http.StatusConflict {
 		t.Errorf("billing moving an enterprise org: %d", status)
+	}
+}
+
+// withPlans is plan.Default replaced by what PLANS says, as main loads it,
+// until the test ends.
+func withPlans(t *testing.T, config string) {
+	t.Helper()
+	r := plan.New()
+	r.SetBands(plan.DefaultBands())
+	if err := r.Load(config); err != nil {
+		t.Fatalf("PLANS: %v", err)
+	}
+	before := plan.Default
+	plan.Default = r
+	t.Cleanup(func() { plan.Default = before })
+}
+
+// productPlans is a product's PLANS: its own limit and feature, and a ladder
+// with a band named and labelled its way.
+const productPlans = `{
+	"limits":[{"key":"projects","label":"projects"}],
+	"features":[{"key":"exports","label":"scheduled exports","lost_code":"exports_stop","lost_message":"Scheduled exports stop."}],
+	"bands":[
+		{"name":"free","limits":{"users":10,"projects":3}},
+		{"name":"team-50","label":"Team","limits":{"users":50,"projects":25},"features":["exports"]},
+		{"name":"enterprise","contractual":true,"features":["exports","scim"]}]}`
+
+// The catalogue is what the product registered through PLANS, labelled,
+// to anyone signed in.
+func TestPlanCatalogueIsTheRegistry(t *testing.T) {
+	withPlans(t, productPlans)
+	h, _, issuer := newAPI(t)
+
+	if status, _ := get(t, h, "/v1/plans", ""); status != http.StatusUnauthorized {
+		t.Errorf("signed out: %d", status)
+	}
+	status, out := get(t, h, "/v1/plans", tokenFor(t, issuer, testOrg))
+	if status != http.StatusOK {
+		t.Fatalf("catalogue: %d %v", status, out)
+	}
+	type band struct {
+		label       string
+		contractual bool
+		users       float64
+		projects    float64
+		features    string
+	}
+	want := map[string]band{
+		"free":       {"Free", false, 10, 3, ""},
+		"team-50":    {"Team", false, 50, 25, "exports"},
+		"enterprise": {"Enterprise", true, 0, 0, "exports,scim"},
+	}
+	bands := out["bands"].([]any)
+	var names []string
+	for _, x := range bands {
+		b := x.(map[string]any)
+		names = append(names, b["name"].(string))
+		limits := b["limits"].(map[string]any)
+		var features []string
+		for _, f := range b["features"].([]any) {
+			features = append(features, f.(string))
+		}
+		got := band{b["label"].(string), b["contractual"].(bool), limits["users"].(float64), limits["projects"].(float64), strings.Join(features, ",")}
+		if got != want[b["name"].(string)] {
+			t.Errorf("%s: %+v", b["name"], got)
+		}
+	}
+	if strings.Join(names, ",") != "free,team-50,enterprise" {
+		t.Errorf("ladder order: %v", names)
+	}
+	limitLabels, featureLabels := map[string]string{}, map[string]string{}
+	for _, x := range out["limits"].([]any) {
+		l := x.(map[string]any)
+		limitLabels[l["key"].(string)] = l["label"].(string)
+	}
+	for _, x := range out["features"].([]any) {
+		f := x.(map[string]any)
+		featureLabels[f["key"].(string)] = f["label"].(string)
+	}
+	if limitLabels["users"] != "users" || limitLabels["projects"] != "projects" || len(limitLabels) != 2 {
+		t.Errorf("limits: %v", limitLabels)
+	}
+	if featureLabels["exports"] != "scheduled exports" || featureLabels["scim"] != "SCIM provisioning" || featureLabels["audit_export"] == "" {
+		t.Errorf("features: %v", featureLabels)
+	}
+}
+
+// An org's own people, and platform operators, see its plan, what it
+// allows, and its members against the cap, read now.
+func TestOrganizationPlanIsReadNow(t *testing.T) {
+	withPlans(t, productPlans)
+	h, _, issuer := newAPI(t)
+	operator := platformToken(t, issuer)
+	orgID := create(t, h, operator, map[string]any{"name": "Acme", "time_zone": "UTC"})["org_id"].(string)
+	member := tokenFor(t, issuer, orgID)
+	path := "/v1/organizations/" + orgID + "/plan"
+	deps.mu.Lock()
+	deps.active[uuid.MustParse(orgID)] = 4
+	deps.mu.Unlock()
+
+	for _, token := range []string{member, operator} {
+		status, out := get(t, h, path, token)
+		limits, _ := out["limits"].(map[string]any)
+		usage, _ := out["usage"].(map[string]any)
+		if status != http.StatusOK || out["plan"] != "free" || out["label"] != "Free" || out["contractual"] != false ||
+			limits["users"] != float64(10) || limits["projects"] != float64(3) || usage["users"] != float64(4) || len(out["features"].([]any)) != 0 {
+			t.Errorf("free: %d %v", status, out)
+		}
+	}
+	if status, _ := get(t, h, path, tokenFor(t, issuer, testOrg)); status != http.StatusForbidden {
+		t.Errorf("another org's member: %d", status)
+	}
+	if status, _ := get(t, h, path, tokenForService(t, issuer, "billing")); status != http.StatusForbidden {
+		t.Errorf("a service: %d", status)
+	}
+	if status, _ := get(t, h, "/v1/organizations/"+uuid.Must(uuid.NewV7()).String()+"/plan", operator); status != http.StatusNotFound {
+		t.Errorf("no such org: %d", status)
+	}
+
+	// A change shows on the next read, and so does a new member.
+	do(t, h, http.MethodPut, path, operator, map[string]any{"plan": "team-50"}, "")
+	deps.mu.Lock()
+	deps.active[uuid.MustParse(orgID)] = 5
+	deps.mu.Unlock()
+	status, out := get(t, h, path, member)
+	usage, _ := out["usage"].(map[string]any)
+	if status != http.StatusOK || out["plan"] != "team-50" || out["label"] != "Team" || out["limits"].(map[string]any)["projects"] != float64(25) ||
+		usage["users"] != float64(5) || len(out["features"].([]any)) != 1 {
+		t.Errorf("team-50: %d %v", status, out)
+	}
+
+	// Without the user service the plan still shows, without the usage.
+	deps.mu.Lock()
+	deps.countDown = true
+	deps.mu.Unlock()
+	status, out = get(t, h, path, member)
+	if usage, _ := out["usage"].(map[string]any); status != http.StatusOK || out["plan"] != "team-50" || len(usage) != 0 {
+		t.Errorf("user service down: %d %v", status, out)
 	}
 }

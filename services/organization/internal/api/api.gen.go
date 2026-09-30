@@ -307,6 +307,27 @@ type OrganizationPage struct {
 	Organizations []Organization `json:"organizations"`
 }
 
+// OrganizationPlan defines model for OrganizationPlan.
+type OrganizationPlan struct {
+	Contractual bool `json:"contractual"`
+
+	// Features The gated features this plan includes, by key.
+	Features []string `json:"features"`
+
+	// Label The band's label.
+	Label string `json:"label"`
+
+	// Limits Every registered limit's cap on this plan, by key. 0 means no cap.
+	Limits map[string]int     `json:"limits"`
+	OrgId  openapi_types.UUID `json:"org_id"`
+
+	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
+	Plan Plan `json:"plan"`
+
+	// Usage What the org uses now of each limit the template counts, by key (users, its active members). A product's own limits are absent; the product counts them.
+	Usage map[string]int `json:"usage"`
+}
+
 // OrganizationSettings defines model for OrganizationSettings.
 type OrganizationSettings struct {
 	DisplayName nullable.Nullable[string] `json:"display_name,omitempty"`
@@ -328,6 +349,36 @@ type OrganizationStatus string
 // Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 type Plan = string
 
+// PlanBand defines model for PlanBand.
+type PlanBand struct {
+	// Contractual Sold by contract rather than self-serve; billing never moves an organization into or out of it.
+	Contractual bool `json:"contractual"`
+
+	// Features The gated features this band includes, by key.
+	Features []string `json:"features"`
+
+	// Label What a page calls the band, such as Team.
+	Label string `json:"label"`
+
+	// Limits Every registered limit's cap on this band, by key. 0 means no cap.
+	Limits map[string]int `json:"limits"`
+
+	// Name The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
+	Name Plan `json:"name"`
+}
+
+// PlanCatalogue defines model for PlanCatalogue.
+type PlanCatalogue struct {
+	// Bands Every registered band, lowest first.
+	Bands []PlanBand `json:"bands"`
+
+	// Features Every gated feature, in registration order. Anything not listed is on every plan.
+	Features []PlanFeatureInfo `json:"features"`
+
+	// Limits Every registered limit, in registration order (users first).
+	Limits []PlanLimitInfo `json:"limits"`
+}
+
 // PlanChange defines model for PlanChange.
 type PlanChange struct {
 	Consequences []PlanConsequence `json:"consequences"`
@@ -345,6 +396,22 @@ type PlanConsequence struct {
 	// Code Stable; the admin page keys its explanation on it.
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+// PlanFeatureInfo defines model for PlanFeatureInfo.
+type PlanFeatureInfo struct {
+	Key string `json:"key"`
+
+	// Label What a message calls it, such as SCIM provisioning.
+	Label string `json:"label"`
+}
+
+// PlanLimitInfo defines model for PlanLimitInfo.
+type PlanLimitInfo struct {
+	Key string `json:"key"`
+
+	// Label The plural noun a message uses, such as users.
+	Label string `json:"label"`
 }
 
 // PlanLimits defines model for PlanLimits.
@@ -612,6 +679,9 @@ type ServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(w http.ResponseWriter, r *http.Request, orgId OrgId, params CreateOrgExportParams)
+	// GetOrganizationPlan The org's plan, what it allows, and what the org uses now (its members, platform operators)
+	// (GET /v1/organizations/{org_id}/plan)
+	GetOrganizationPlan(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// ChangePlan Move the organization to another plan (platform operators, until billing)
 	// (PUT /v1/organizations/{org_id}/plan)
 	ChangePlan(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -633,6 +703,9 @@ type ServerInterface interface {
 	// SetOrganizationStatus Suspend or reactivate the organization (platform operators)
 	// (PUT /v1/organizations/{org_id}/status)
 	SetOrganizationStatus(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// ListPlans The plan catalogue, for the plans and billing pages to render
+	// (GET /v1/plans)
+	ListPlans(w http.ResponseWriter, r *http.Request)
 	// StartSignup Sign up to create an organization
 	// (POST /v1/signups)
 	StartSignup(w http.ResponseWriter, r *http.Request)
@@ -1292,6 +1365,32 @@ func (siw *ServerInterfaceWrapper) CreateOrgExport(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetOrganizationPlan operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationPlan(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ChangePlan operation middleware
 func (siw *ServerInterfaceWrapper) ChangePlan(w http.ResponseWriter, r *http.Request) {
 
@@ -1490,6 +1589,20 @@ func (siw *ServerInterfaceWrapper) SetOrganizationStatus(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListPlans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartSignup operation middleware
 func (siw *ServerInterfaceWrapper) StartSignup(w http.ResponseWriter, r *http.Request) {
 
@@ -1642,6 +1755,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}", wrapper.GetOrganization)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/organizations/{org_id}", wrapper.UpdateOrganization)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/plans", wrapper.ListPlans)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/plan", wrapper.GetOrganizationPlan)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/plan", wrapper.ChangePlan)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/close", wrapper.CloseOrganization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/reopen", wrapper.ReopenOrganization)
@@ -3343,6 +3458,87 @@ func (response CreateOrgExportdefaultJSONResponse) VisitCreateOrgExportResponse(
 	return err
 }
 
+type GetOrganizationPlanRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type GetOrganizationPlanResponseObject interface {
+	VisitGetOrganizationPlanResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationPlan200JSONResponse OrganizationPlan
+
+func (response GetOrganizationPlan200JSONResponse) VisitGetOrganizationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationPlan401JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetOrganizationPlan401JSONResponse) VisitGetOrganizationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationPlan403JSONResponse Error
+
+func (response GetOrganizationPlan403JSONResponse) VisitGetOrganizationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationPlan404JSONResponse Error
+
+func (response GetOrganizationPlan404JSONResponse) VisitGetOrganizationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationPlandefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetOrganizationPlandefaultJSONResponse) VisitGetOrganizationPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangePlanRequestObject struct {
 	OrgId OrgId `json:"org_id"`
 	Body  *ChangePlanJSONRequestBody
@@ -3926,6 +4122,58 @@ func (response SetOrganizationStatusdefaultJSONResponse) VisitSetOrganizationSta
 	return err
 }
 
+type ListPlansRequestObject struct {
+}
+
+type ListPlansResponseObject interface {
+	VisitListPlansResponse(w http.ResponseWriter) error
+}
+
+type ListPlans200JSONResponse PlanCatalogue
+
+func (response ListPlans200JSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlans401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListPlans401JSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlansdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListPlansdefaultJSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartSignupRequestObject struct {
 	Body *StartSignupJSONRequestBody
 }
@@ -4127,6 +4375,9 @@ type StrictServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(ctx context.Context, request CreateOrgExportRequestObject) (CreateOrgExportResponseObject, error)
+	// GetOrganizationPlan The org's plan, what it allows, and what the org uses now (its members, platform operators)
+	// (GET /v1/organizations/{org_id}/plan)
+	GetOrganizationPlan(ctx context.Context, request GetOrganizationPlanRequestObject) (GetOrganizationPlanResponseObject, error)
 	// ChangePlan Move the organization to another plan (platform operators, until billing)
 	// (PUT /v1/organizations/{org_id}/plan)
 	ChangePlan(ctx context.Context, request ChangePlanRequestObject) (ChangePlanResponseObject, error)
@@ -4148,6 +4399,9 @@ type StrictServerInterface interface {
 	// SetOrganizationStatus Suspend or reactivate the organization (platform operators)
 	// (PUT /v1/organizations/{org_id}/status)
 	SetOrganizationStatus(ctx context.Context, request SetOrganizationStatusRequestObject) (SetOrganizationStatusResponseObject, error)
+	// ListPlans The plan catalogue, for the plans and billing pages to render
+	// (GET /v1/plans)
+	ListPlans(ctx context.Context, request ListPlansRequestObject) (ListPlansResponseObject, error)
 	// StartSignup Sign up to create an organization
 	// (POST /v1/signups)
 	StartSignup(ctx context.Context, request StartSignupRequestObject) (StartSignupResponseObject, error)
@@ -4724,6 +4978,32 @@ func (sh *strictHandler) CreateOrgExport(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// GetOrganizationPlan operation middleware
+func (sh *strictHandler) GetOrganizationPlan(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetOrganizationPlanRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationPlan(ctx, request.(GetOrganizationPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationPlanResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ChangePlan operation middleware
 func (sh *strictHandler) ChangePlan(w http.ResponseWriter, r *http.Request, orgId OrgId) {
 	var request ChangePlanRequestObject
@@ -4928,6 +5208,30 @@ func (sh *strictHandler) SetOrganizationStatus(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetOrganizationStatusResponseObject); ok {
 		if err := validResponse.VisitSetOrganizationStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlans operation middleware
+func (sh *strictHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	var request ListPlansRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlans(ctx, request.(ListPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlansResponseObject); ok {
+		if err := validResponse.VisitListPlansResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

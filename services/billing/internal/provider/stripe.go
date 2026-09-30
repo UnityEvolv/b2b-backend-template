@@ -34,6 +34,9 @@ type Stripe struct {
 	now    func() time.Time
 	// source marks the subscriptions this product made, in their metadata.
 	source string
+	// lowest is the plan registry's lowest band, which has no price: a move
+	// to it is a cancellation at the period's end.
+	lowest Band
 }
 
 // NewStripe is Stripe at base (its API origin, from config) with a secret
@@ -46,12 +49,22 @@ func NewStripe(base, key, webhookSecret string, prices map[Band]string, client *
 	for b, p := range prices {
 		bands[p] = b
 	}
-	return &Stripe{base: strings.TrimRight(base, "/"), key: key, webhookSecret: webhookSecret, prices: prices, bands: bands, http: client, now: time.Now, source: config.DefaultBrand.ID}
+	return &Stripe{base: strings.TrimRight(base, "/"), key: key, webhookSecret: webhookSecret, prices: prices, bands: bands, http: client, now: time.Now, source: config.DefaultBrand.ID, lowest: "free"}
 }
 
 // WithSource is s marking its subscriptions as made by source, the product's id.
 func (s *Stripe) WithSource(source string) *Stripe {
 	s.source = source
+	return s
+}
+
+// WithLowest is s knowing the plan registry's lowest band by name (free
+// unless the product names another): the band with no price, a move to
+// which cancels the subscription at the period's end.
+func (s *Stripe) WithLowest(band Band) *Stripe {
+	if band != "" {
+		s.lowest = band
+	}
 	return s
 }
 
@@ -188,8 +201,8 @@ func (s *Stripe) toSubscription(sub stripeSubscription) Subscription {
 		out.State = "cancelled"
 	}
 	if sub.CancelAtEnd {
-		// A move to free is a cancellation at the period's end.
-		out.ScheduleRef, out.PendingBand = cancelPrefix+sub.ID, "free"
+		// A move to the lowest band is a cancellation at the period's end.
+		out.ScheduleRef, out.PendingBand = cancelPrefix+sub.ID, s.lowest
 	}
 	switch v := sub.Schedule.(type) {
 	case string:
@@ -263,12 +276,12 @@ func (s *Stripe) ChangeNow(ctx context.Context, sub string, band Band) (Subscrip
 	return s.toSubscription(out), nil
 }
 
-// cancelPrefix marks a scheduled move to free, which Stripe keeps as a
-// cancellation at the period's end rather than a schedule.
+// cancelPrefix marks a scheduled move to the lowest band, which Stripe keeps
+// as a cancellation at the period's end rather than a schedule.
 const cancelPrefix = "cancel:"
 
 func (s *Stripe) ChangeAtPeriodEnd(ctx context.Context, sub string, band Band) (Subscription, error) {
-	if band == "free" {
+	if band == s.lowest {
 		var out stripeSubscription
 		if err := s.call(ctx, http.MethodPost, "/v1/subscriptions/"+url.PathEscape(sub), url.Values{"cancel_at_period_end": {"true"}}, &out); err != nil {
 			return Subscription{}, err

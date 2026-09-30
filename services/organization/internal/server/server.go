@@ -93,6 +93,8 @@ var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations":                         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"GET /v1/organizations/{org_id}":                ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PATCH /v1/organizations/{org_id}":              ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"GET /v1/plans":                                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/plan":           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/plan":           ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"GET /v1/organizations/{org_id}/plan-change":    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"POST /v1/signups":                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),

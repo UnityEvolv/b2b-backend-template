@@ -1,11 +1,14 @@
 package provider
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -51,5 +54,38 @@ func TestParsePrices(t *testing.T) {
 	}
 	if _, err := ParsePrices("team"); err == nil {
 		t.Error("no price")
+	}
+}
+
+// The lowest band is the registry's, whatever the product names it: a
+// move to it cancels at the period's end, and the webhook reports it as
+// the pending band.
+func TestLowestBandIsTheRegistrys(t *testing.T) {
+	var got []string
+	stripe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		got = append(got, r.Method+" "+r.URL.Path+" "+r.PostForm.Encode())
+		fmt.Fprint(w, `{"id":"sub_1","status":"active","current_period_end":1790000000,"cancel_at_period_end":true,"items":{"data":[{"id":"si_1","price":{"id":"price_pro"}}]}}`)
+	}))
+	defer stripe.Close()
+	s := NewStripe(stripe.URL, "sk", "whsec_test", map[Band]string{"pro": "price_pro"}, nil).WithLowest("starter")
+
+	sub, err := s.ChangeAtPeriodEnd(context.Background(), "sub_1", "starter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "POST /v1/subscriptions/sub_1 cancel_at_period_end=true" {
+		t.Errorf("requests: %v", got)
+	}
+	if sub.PendingBand != "starter" || sub.ScheduleRef != "cancel:sub_1" || sub.Band != "pro" {
+		t.Errorf("subscription: %+v", sub)
+	}
+	// "free" is only a band like any other when the product has one; here
+	// it has no price, so there is nothing to schedule.
+	if _, err := s.ChangeAtPeriodEnd(context.Background(), "sub_1", "free"); err == nil {
+		t.Error("an unknown band scheduled")
+	}
+	if NewStripe(stripe.URL, "sk", "", nil, nil).WithLowest("").lowest != "free" {
+		t.Error("the default lowest band")
 	}
 }

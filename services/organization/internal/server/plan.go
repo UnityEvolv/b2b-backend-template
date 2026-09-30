@@ -169,3 +169,59 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 	}
 	return api.SetPlanInternal200JSONResponse(toPlanLimits(org)), nil
 }
+
+// ListPlans is the plan catalogue: every band, lowest first, with its
+// label, its caps and its features, and every limit and feature with its
+// label. The same in every org, to anyone signed in; read from the registry
+// now, so what the product registered at start is what the page shows.
+func (s *Server) ListPlans(ctx context.Context, _ api.ListPlansRequestObject) (api.ListPlansResponseObject, error) {
+	limits := plan.Default.Limits()
+	out := api.PlanCatalogue{Bands: []api.PlanBand{}, Limits: make([]api.PlanLimitInfo, 0, len(limits)), Features: []api.PlanFeatureInfo{}}
+	for _, b := range plan.Ladder() {
+		d := plan.Describe(b.Name)
+		out.Bands = append(out.Bands, api.PlanBand{Name: api.Plan(d.Band), Label: d.Label, Contractual: d.Contractual, Limits: d.Limits, Features: d.Features})
+	}
+	for _, l := range limits {
+		out.Limits = append(out.Limits, api.PlanLimitInfo{Key: string(l.Key), Label: l.Label})
+	}
+	for _, f := range plan.Default.Features() {
+		out.Features = append(out.Features, api.PlanFeatureInfo{Key: string(f.Key), Label: f.Label})
+	}
+	return api.ListPlans200JSONResponse(out), nil
+}
+
+// GetOrganizationPlan is the org's plan as its own people see it: the band,
+// what it allows, and what the org uses now of the limits the template
+// counts. For the org's members and platform operators, as the downgrade
+// checklist is. Nothing is cached; the usage is asked of the user service
+// now, and left out, with a warning, when it cannot answer, since the page
+// is informational and the gate is the action itself.
+func (s *Server) GetOrganizationPlan(ctx context.Context, req api.GetOrganizationPlanRequestObject) (api.GetOrganizationPlanResponseObject, error) {
+	if err := auth.RequireOrgOrPlatform(ctx, req.OrgId.String()); err != nil {
+		return api.GetOrganizationPlan403JSONResponse{Code: httpx.CodeForbidden, Message: "Not permitted for this organization."}, nil
+	}
+	var org store.Organization
+	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
+		var err error
+		org, err = store.New(tx).GetOrganization(ctx, req.OrgId)
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return api.GetOrganizationPlan404JSONResponse{Code: "organization.not_found", Message: "No such organization."}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	d := plan.Describe(plan.Band(org.Plan))
+	out := api.OrganizationPlan{OrgId: org.OrgID, Plan: api.Plan(d.Band), Label: d.Label, Contractual: d.Contractual,
+		Limits: d.Limits, Features: d.Features, Usage: map[string]int{}}
+	if s.deps.Users != nil {
+		active, err := s.deps.Users.CountMembers(ctx, org.OrgID)
+		if err != nil {
+			s.logger.Warn("member count not read for the plan page", "org_id", org.OrgID, "error", err)
+		} else {
+			out.Usage[string(plan.Users)] = active
+		}
+	}
+	return api.GetOrganizationPlan200JSONResponse(out), nil
+}

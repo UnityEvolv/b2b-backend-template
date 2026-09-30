@@ -328,7 +328,7 @@ func (s *Server) view(ctx context.Context, org uuid.UUID, a store.Account, grant
 		Band: api.Band(a.Band), State: api.BillingState(a.State), AutoUpgrade: a.AutoUpgrade,
 		CanManageAutoUpgrade: grant.Role == authz.Owner, Invoiced: a.State == "invoiced",
 		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: plan.For(band).Cap(plan.Users),
-		Prices: map[string]api.Price{},
+		Prices: map[string]api.Price{}, Bands: offered(),
 	}
 	for b, p := range s.pricesNow(ctx) {
 		out.Prices[string(b)] = api.Price{Amount: p.Amount, Currency: p.Currency, Interval: p.Interval}
@@ -359,6 +359,17 @@ func (s *Server) view(ctx context.Context, org uuid.UUID, a store.Account, grant
 		out.GraceDaysLeft = &left
 	}
 	return out, nil
+}
+
+// offered is every band the billing page may offer, lowest first: the
+// lowest, which has no price and where a downgrade to free lands, then every
+// self-serve band. Contractual bands are a platform operator's to set.
+func offered() []api.Band {
+	out := []api.Band{api.Band(plan.Lowest())}
+	for _, b := range plan.SelfServe() {
+		out = append(out, api.Band(b))
+	}
+	return out
 }
 
 // GetBilling is the account, for anyone with the billing permission.

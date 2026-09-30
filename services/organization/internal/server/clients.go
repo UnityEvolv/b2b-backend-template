@@ -24,6 +24,9 @@ import (
 type Users interface {
 	// CreateMembership makes the signer-up's user and their Owner membership.
 	CreateMembership(ctx context.Context, in NewMembership) (Membership, error)
+	// CountMembers is how many active members the org has: the usage its
+	// plan's users limit caps.
+	CountMembers(ctx context.Context, orgID uuid.UUID) (int, error)
 }
 
 // Accounts is what this service needs of the identity service.
@@ -92,6 +95,15 @@ type serviceClient struct {
 	http   *http.Client
 }
 
+// get asks path as this service and decodes the answer into out.
+func (c *serviceClient) get(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, out)
+}
+
 func (c *serviceClient) post(ctx context.Context, path string, in, out any, key string) error {
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(in); err != nil {
@@ -106,6 +118,13 @@ func (c *serviceClient) post(ctx context.Context, path string, in, out any, key 
 		key = uuid.NewString()
 	}
 	req.Header.Set("Idempotency-Key", key)
+	return c.do(req, out)
+}
+
+// do sends req with this service's token and the request's id, and
+// decodes a success into out; a refusal comes back as a *Refusal.
+func (c *serviceClient) do(req *http.Request, out any) error {
+	ctx := req.Context()
 	if err := auth.Authorize(ctx, c.tokens, req); err != nil {
 		return err
 	}
@@ -144,6 +163,14 @@ func (u *httpUsers) CreateMembership(ctx context.Context, in NewMembership) (Mem
 	var out Membership
 	err := u.post(ctx, "/v1/internal/memberships", in, &out, in.IdempotencyKey)
 	return out, err
+}
+
+func (u *httpUsers) CountMembers(ctx context.Context, orgID uuid.UUID) (int, error) {
+	var out struct {
+		Active int `json:"active"`
+	}
+	err := u.get(ctx, "/v1/internal/organizations/"+orgID.String()+"/member-count", &out)
+	return out.Active, err
 }
 
 type httpAccounts struct{ serviceClient }

@@ -475,3 +475,53 @@ func TestPricesAreForSelfServeBands(t *testing.T) {
 		}
 	}
 }
+
+// The billing page can offer the lowest band, which has no price, as a
+// downgrade: it is first in bands, and choosing it schedules the move for
+// the period's end, as any downgrade is.
+func TestDowngradeToTheUnpricedLowestBand(t *testing.T) {
+	f := newAPI(t)
+	owner := f.member(t, authz.Owner)
+	_, b := f.do(t, http.MethodGet, f.path("/billing"), owner, nil)
+	if got := fmt.Sprint(b["bands"]); got != "[free team business]" {
+		t.Errorf("offered: %s", got)
+	}
+	if _, priced := b["prices"].(map[string]any)["free"]; priced {
+		t.Error("free has a price")
+	}
+	f.card(t, owner)
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
+	if code, out := f.do(t, http.MethodGet, f.path("/billing/band-preview?band=free"), owner, nil); code != http.StatusOK || out["applies"] != "period_end" {
+		t.Errorf("preview: %d %v", code, out)
+	}
+	code, b := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "free"})
+	if code != http.StatusOK || b["band"] != "team" || b["pending_band"] != "free" || f.orgs.bands[f.org] != plan.Band("team") {
+		t.Fatalf("to free: %d %v", code, b)
+	}
+	if calls := strings.Join(f.pay.calls, ","); !strings.Contains(calls, "schedule:free") {
+		t.Errorf("provider calls: %s", calls)
+	}
+	// Enterprise is never offered; it is contractual.
+	if strings.Contains(fmt.Sprint(b["bands"]), "enterprise") {
+		t.Errorf("offered: %v", b["bands"])
+	}
+}
+
+// A product's ladder from PLANS is what billing offers: its own lowest band
+// first, its self-serve bands after, its contractual one never.
+func TestBillingOffersTheProductsLadder(t *testing.T) {
+	r := plan.New()
+	if err := r.Load(`{"bands":[{"name":"starter","limits":{"users":3}},{"name":"team","limits":{"users":30}},{"name":"business"},{"name":"scale","contractual":true}]}`); err != nil {
+		t.Fatal(err)
+	}
+	before := plan.Default
+	plan.Default = r
+	t.Cleanup(func() { plan.Default = before })
+	f := newAPI(t)
+	f.orgs.bands[f.org] = "starter"
+	owner := f.member(t, authz.Owner)
+	_, b := f.do(t, http.MethodGet, f.path("/billing"), owner, nil)
+	if got := fmt.Sprint(b["bands"]); got != "[starter team business]" || b["band"] != "starter" || b["users_cap"] != float64(3) {
+		t.Errorf("billing: %v", b)
+	}
+}

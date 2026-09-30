@@ -25,13 +25,19 @@ type testDeps struct {
 	accounts []server.NewLocalAccount
 	records  map[string]string // TXT name => value
 	refuse   string            // a code the user service answers with
+	// active is each org's active members, as the user service counts
+	// them; countDown makes the count fail.
+	active    map[uuid.UUID]int
+	countDown bool
 	// duringLookup runs while a TXT lookup is in flight, to race it.
 	duringLookup func()
 }
 
 var deps *testDeps
 
-func newTestDeps() *testDeps { return &testDeps{records: map[string]string{}} }
+func newTestDeps() *testDeps {
+	return &testDeps{records: map[string]string{}, active: map[uuid.UUID]int{}}
+}
 
 func (d *testDeps) deps() server.Deps {
 	return server.Deps{Email: d, Users: d, Accounts: d, DNS: d}
@@ -57,6 +63,15 @@ func (d *testDeps) CreateMembership(_ context.Context, in server.NewMembership) 
 	m := server.Membership{ID: uuid.New()}
 	m.User.ID = uuid.New()
 	return m, nil
+}
+
+func (d *testDeps) CountMembers(_ context.Context, orgID uuid.UUID) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.countDown {
+		return 0, &server.Refusal{Status: 503, Code: "unavailable"}
+	}
+	return d.active[orgID], nil
 }
 
 func (d *testDeps) CreateLocalAccount(_ context.Context, in server.NewLocalAccount) (server.LocalAccount, error) {

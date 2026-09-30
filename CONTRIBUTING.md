@@ -140,6 +140,25 @@ mistake never reaches a request.
 - No secret, hostname or product URL in the code or the repository. They come
   from the environment at deploy time.
 
+### CI on a public repository
+
+- Build, vet, test, and the generated-code drift check need no secret, so a
+  pull request from a fork runs them all. The database tests use service
+  containers.
+- Every workflow starts from `permissions: contents: read`; a job that needs
+  more asks for it itself.
+- No `pull_request_target` workflow checks out code.
+- A job that uses a secret or a deployment environment runs only on the
+  upstream repository, and only from `main` or a tag:
+  `if: github.repository == 'UnityEvolv/b2b-backend-template' && github.ref == 'refs/heads/main'`.
+  A product built on the template changes `upstream` in
+  `internal/repocheck/workflows_test.go` to its own repository.
+- `internal/repocheck` (`TestWorkflowsAreForkSafe`) enforces these rules, and
+  actionlint checks the workflows' syntax. The security workflow scans the
+  full history for secrets with gitleaks, refuses GPL, AGPL, SSPL and unknown
+  licences among the Go modules (LGPL and MPL are allowed), and scans the
+  modules and the images for known vulnerabilities.
+
 ## Licence
 
 By contributing you agree that your contribution is licensed under the

@@ -1,4 +1,12 @@
-# Build, vet and test the Go code, against a real Postgres and Redis.
+# Build, vet and test the Go code, against a real Postgres and Redis, check
+# that generated code matches its sources, and lint the workflows.
+#
+# No secret and no write permission: a pull request from a fork runs exactly
+# what one from a branch does. The databases are service containers with
+# throwaway passwords. A workflow that needs a secret (a deploy, a release)
+# keeps it in a job that runs only on the upstream repository from main or a
+# tag; internal/repocheck (TestWorkflowsAreForkSafe) fails any job that does
+# not.
 
 name: go
 
@@ -58,7 +66,7 @@ jobs:
           docker run -d --name s3 -p 9000:9000 \
             -e RUSTFS_ACCESS_KEY=b2b -e RUSTFS_SECRET_KEY=ci-only-ci-only \
             rustfs/rustfs:1.0.0 /data
-          for i in $(seq 1 30); do curl -sf http://localhost:9000/health && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -sf http://localhost:9000/health && break; sleep 1; done
           docker run --rm --network host \
             -e AWS_ACCESS_KEY_ID=b2b -e AWS_SECRET_ACCESS_KEY=ci-only-ci-only -e AWS_DEFAULT_REGION=us-east-1 \
             amazon/aws-cli:2.37.2 --endpoint-url http://localhost:9000 s3 mb s3://b2b-test
@@ -88,3 +96,13 @@ jobs:
             git diff
             exit 1
           fi
+
+  # Syntax, expressions and the shell in every run step.
+  actionlint:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color

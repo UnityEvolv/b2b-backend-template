@@ -21,6 +21,7 @@ require (
 	golang.org/x/image v0.46.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.287.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -92,7 +93,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen

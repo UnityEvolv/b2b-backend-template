@@ -244,7 +244,7 @@ func TestSCIMUsers(t *testing.T) {
 	}
 
 	// Deactivated with Entra's string boolean: the sessions end, the person
-	// is taken out of any room; back again with everything intact.
+	// loses access; back again with everything intact.
 	if code, out := f.scim(t, http.MethodPatch, base+"/Users/"+aliceID, token, patch(map[string]any{"op": "Replace", "path": "active", "value": "False"})); code != http.StatusOK || out["active"] != false {
 		t.Fatalf("deactivate: %d %v", code, out)
 	}

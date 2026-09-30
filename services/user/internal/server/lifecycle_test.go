@@ -40,7 +40,7 @@ type forgetter struct {
 	forgotten []string // "org:membership"
 }
 
-func (f *forgetter) Name() string { return "usage" }
+func (f *forgetter) Name() string { return "projects" }
 
 func (f *forgetter) Forget(_ context.Context, orgID, membershipID uuid.UUID) error {
 	f.mu.Lock()

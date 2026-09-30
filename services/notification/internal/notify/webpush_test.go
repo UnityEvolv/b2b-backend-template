@@ -93,7 +93,7 @@ func TestWebPush(t *testing.T) {
 	sub.Keys.Auth = b64.EncodeToString(auth)
 	token, _ := json.Marshal(sub)
 
-	p := Payload{Title: "Ana mentioned you", Body: "in Design", Category: Mention, Link: "/chat/c1", Collapse: "conv:c1", Expires: time.Now().Add(time.Minute)}
+	p := Payload{Title: "Ana mentioned you", Body: "in Design", Category: "chat", Link: "/chat/c1", Collapse: "conv:c1", Expires: time.Now().Add(time.Minute)}
 	if err := w.Push(context.Background(), string(token), p); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestWebPush(t *testing.T) {
 		t.Errorf("headers %v", got.headers)
 	}
 	if ttl := got.headers.Get("TTL"); ttl == "" || ttl == "0" || len(ttl) > 2 {
-		t.Errorf("the knock's expiry is the time to live: %q", ttl)
+		t.Errorf("a short-lived push's expiry is the time to live: %q", ttl)
 	}
 	if a := got.headers.Get("Authorization"); !strings.HasPrefix(a, "vapid t=") || !strings.HasSuffix(a, "k="+public) {
 		t.Errorf("authorization %q", a)

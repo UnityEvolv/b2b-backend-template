@@ -14,6 +14,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
@@ -102,7 +103,7 @@ func (s *Server) notifyAdmins(ctx context.Context, org uuid.UUID, id, kind strin
 	if s.notices == nil {
 		return
 	}
-	if err := s.notices.Notify(ctx, Notice{ID: "scim:" + id, OrgID: org.String(), Kind: kind, Category: "admin_directory", Audience: "admins", Link: "/scim", Data: data}); err != nil {
+	if err := s.notices.Notify(ctx, Notice{ID: "scim:" + id, OrgID: org.String(), Kind: kind, Category: notifycat.AdminNotices, Audience: "admins", Link: "/scim", Data: data}); err != nil {
 		s.logger.Warn("scim notice not sent", "org_id", org, "error", err)
 	}
 }

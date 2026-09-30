@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/notify"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/server"
 )
@@ -142,7 +142,8 @@ func newNotify(t *testing.T) *notifyFixture {
 	f := &notifyFixture{rdb: rdb, pool: pool, issuer: issuer, people: &people{persons: map[uuid.UUID]notify.Person{}},
 		pushed: &pushed{sent: map[string][]notify.Payload{}}, clock: &clock{}, grants: authz.Static{}, org: uuid.Must(uuid.NewV7())}
 	pushers := notify.Pushers{"web": recorder{"web", f.pushed}, "android": recorder{"android", f.pushed}}
-	f.router = notify.NewRouter(cluster, rdb, f.people, pushers, nil, notify.Links{App: "http://app.test", Admin: "http://admin.test", API: "http://api.test", Key: linkKey}, logger).WithClock(f.clock.now)
+	f.router = notify.NewRouter(cluster, rdb, f.people, pushers, nil, notify.Links{App: "http://app.test", Admin: "http://admin.test", API: "http://api.test", Key: linkKey}, logger).
+		WithClock(f.clock.now).WithCategories(testCategories())
 	srv := server.New(cluster, logger).WithNotifications(server.Notifications{Router: f.router, Authz: f.grants, VAPIDPublic: "public-key", LinkKey: linkKey})
 	root := http.NewServeMux()
 	api := srv.Handler(httpx.NewMux())
@@ -201,15 +202,14 @@ func (f *notifyFixture) device(t *testing.T, token, platform string) {
 	}
 }
 
-// looking sets what the member's app shows now, and when it was last open.
-func (f *notifyFixture) looking(t *testing.T, id uuid.UUID, group string, seen time.Time) {
+// looking sets what the member's app shows now; "-" is no app open.
+func (f *notifyFixture) looking(t *testing.T, id uuid.UUID, group string) {
 	t.Helper()
 	ctx := context.Background()
 	f.rdb.Del(ctx, notify.FocusKey(config.DefaultRedis, f.org, id))
 	if group != "-" {
 		f.rdb.HSet(ctx, notify.FocusKey(config.DefaultRedis, f.org, id), "socket-1", group)
 	}
-	f.rdb.Set(ctx, notify.SeenKey(config.DefaultRedis, f.org, id), strconv.FormatInt(seen.UnixMilli(), 10), time.Hour)
 }
 
 func (f *notifyFixture) emit(t *testing.T, ev notify.Event) {
@@ -236,8 +236,31 @@ func (f *notifyFixture) outbox(t *testing.T, to uuid.UUID) []string {
 	return out
 }
 
+// Categories a product registers, for the router's flags: chat is
+// batched, in the feed, pushed and in the digest; chat_room is feed only;
+// ping is push only, to phones, never held for quiet hours.
+const (
+	chat     = "chat"
+	chatRoom = "chat_room"
+	ping     = "ping"
+)
+
+// testCategories is the template's categories and the test product's.
+func testCategories() *notifycat.Registry {
+	r := notifycat.New()
+	r.Register(notifycat.Category{ID: chat, Label: "Chat", Audience: notifycat.Member, QuietHours: true, Batched: true,
+		Default: notifycat.Channels{InApp: true, Push: true, Digest: true},
+		Copy:    map[string]notifycat.Copy{"message": {Title: "{by|Someone} wrote in {where|a conversation}", Line: "Open the conversation to reply.", Many: "{count} new messages in {where|a conversation}"}}})
+	r.Register(notifycat.Category{ID: chatRoom, Label: "Room chat", Audience: notifycat.Member, QuietHours: true, Batched: true,
+		Default: notifycat.Channels{InApp: true}})
+	r.Register(notifycat.Category{ID: ping, Label: "Pings", Audience: notifycat.Member,
+		Default: notifycat.Channels{Push: true}, Channels: []notifycat.Channel{notifycat.Push}, Platforms: []string{"android", "ios"},
+		Copy: map[string]notifycat.Copy{"ping": {Title: "{by|Someone} is pinging you", Line: "At {room|your desk}."}}})
+	return r
+}
+
 func mention(to uuid.UUID, conv string) notify.Event {
-	return notify.Event{Kind: "mention", Category: notify.Mention, Recipients: []uuid.UUID{to}, Link: "/chat/" + conv, Group: "conv:" + conv, Data: map[string]any{"by": "Ana", "where": "Design"}}
+	return notify.Event{Kind: "message", Category: chat, Recipients: []uuid.UUID{to}, Link: "/chat/" + conv, Group: "conv:" + conv, Data: map[string]any{"by": "Ana", "where": "Design"}}
 }
 
 // The routing story's "done when".
@@ -250,7 +273,7 @@ func TestRouting(t *testing.T) {
 	conv := uuid.NewString()
 
 	// Reading the conversation: a feed entry, and nothing else.
-	f.looking(t, reader, "conv:"+conv, time.Now())
+	f.looking(t, reader, "conv:"+conv)
 	f.emit(t, mention(reader, conv))
 	if got := f.pushed.take("android"); len(got) != 0 {
 		t.Errorf("pushed to someone looking: %v", got)
@@ -261,11 +284,11 @@ func TestRouting(t *testing.T) {
 
 	// On a backgrounded phone: one push. Three in two minutes: still one,
 	// and one feed entry counting three.
-	f.looking(t, away, "", time.Now().Add(-10*time.Minute))
+	f.looking(t, away, "")
 	for range 3 {
 		f.emit(t, mention(away, conv))
 	}
-	if got := f.pushed.take("android"); len(got) != 1 || got[0].Link != "/chat/"+conv {
+	if got := f.pushed.take("android"); len(got) != 1 || got[0].Link != "/chat/"+conv || got[0].Title != "Ana wrote in Design" || got[0].Category != chat {
 		t.Errorf("pushes for three mentions: %v", got)
 	}
 	_, feed := f.do(t, http.MethodGet, f.path("/notifications"), awayToken, nil)
@@ -273,9 +296,9 @@ func TestRouting(t *testing.T) {
 	if len(entries) != 1 || entries[0].(map[string]any)["count"].(float64) != 3 || feed["unread"].(float64) != 1 {
 		t.Errorf("a batch is one entry: %v", feed)
 	}
-	// Away ten minutes: the mention waits for the digest, no email yet.
+	// Chat is not emailed at once: it waits for the digest.
 	if got := f.outbox(t, away); len(got) != 0 {
-		t.Errorf("emailed someone away ten minutes: %v", got)
+		t.Errorf("emailed a category with the digest only: %v", got)
 	}
 	// The same event twice is one notification.
 	ev := mention(away, uuid.NewString())
@@ -295,33 +318,47 @@ func TestRouting(t *testing.T) {
 	}
 }
 
-// A knock reaches a backgrounded phone while it is valid, and never a browser.
-func TestKnocks(t *testing.T) {
+// A push-only category limited to phones (a ping) reaches a backgrounded
+// phone while it is valid, and never a browser or the feed; the router has
+// no branch for it, only the category's flags.
+func TestPushOnlyCategoryToPhones(t *testing.T) {
 	f := newNotify(t)
 	id, token := f.person(t, authz.User)
 	f.device(t, token, "android")
 	f.device(t, token, "web")
-	f.looking(t, id, "", time.Now().Add(-time.Minute))
+	f.looking(t, id, "")
 	later := time.Now().Add(30 * time.Second)
-	f.emit(t, notify.Event{Kind: "knock", Category: notify.Knock, Recipients: []uuid.UUID{id}, Link: "/offices/o", Group: "room:o:r", ExpiresAt: &later, Data: map[string]any{"by": "Ben", "room": "Design"}})
-	if got := f.pushed.take("android"); len(got) != 1 || got[0].Expires.IsZero() {
-		t.Errorf("knock push: %v", got)
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", Group: "desk:d", ExpiresAt: &later, Data: map[string]any{"by": "Ben", "room": "Design"}})
+	if got := f.pushed.take("android"); len(got) != 1 || got[0].Expires.IsZero() || got[0].Title != "Ben is pinging you" || got[0].Body != "At Design." {
+		t.Errorf("ping push: %v", got)
 	}
 	if got := f.pushed.take("web"); len(got) != 0 {
-		t.Errorf("a knock went to a browser: %v", got)
+		t.Errorf("a ping went to a browser: %v", got)
 	}
 	earlier := time.Now().Add(-time.Second)
-	f.emit(t, notify.Event{Kind: "knock", Category: notify.Knock, Recipients: []uuid.UUID{id}, Link: "/offices/o", ExpiresAt: &earlier})
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", ExpiresAt: &earlier})
 	if got := f.pushed.take("android"); len(got) != 0 {
-		t.Errorf("an expired knock: %v", got)
+		t.Errorf("an expired ping: %v", got)
 	}
-	// Never in the feed.
+	// Never in the feed, even for someone who asks for it there.
+	f.do(t, http.MethodPut, f.path("/notification-preferences"), token, map[string]any{
+		"channels": map[string]any{ping: map[string]any{"in_app": true, "push": true, "email": true, "digest": true}}, "push_previews": true, "muted": []string{},
+		"quiet_hours": map[string]any{"enabled": false, "start_minute": 0, "end_minute": 0, "days": []int{}},
+	})
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", ExpiresAt: &later})
+	if got := f.pushed.take("android"); len(got) != 1 {
+		t.Errorf("ping push with every channel asked for: %v", got)
+	}
 	if _, feed := f.do(t, http.MethodGet, f.path("/notifications"), token, nil); len(feed["entries"].([]any)) != 0 {
-		t.Errorf("a knock in the feed: %v", feed)
+		t.Errorf("a ping in the feed: %v", feed)
+	}
+	if got := f.outbox(t, id); len(got) != 0 {
+		t.Errorf("a ping emailed: %v", got)
 	}
 }
 
-// A provider failure emails each admin once; quiet hours hold it.
+// An admin notice, the template's own category, emails each admin once;
+// quiet hours hold it.
 func TestAdminEventsAndQuietHours(t *testing.T) {
 	f := newNotify(t)
 	a, _ := f.person(t, authz.Owner)
@@ -340,7 +377,7 @@ func TestAdminEventsAndQuietHours(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("preferences: %d %v", code, out)
 	}
-	failing := notify.Event{ID: "provider-failing-1", Kind: "provider_failing", Category: notify.AdminProviders, Audience: "admins", Link: "/providers", Data: map[string]any{"heading": "LiveKit is not answering"}}
+	failing := notify.Event{ID: "scim-halted-1", Kind: "scim_halted", Category: notifycat.AdminNotices, Audience: "admins", Link: "/scim", Data: map[string]any{"heading": "Directory sync stopped"}}
 	f.emit(t, failing)
 	f.emit(t, failing)
 	if got := f.outbox(t, a); len(got) != 1 || got[0] != "notification" {
@@ -373,12 +410,12 @@ func TestAdminEventsAndQuietHours(t *testing.T) {
 	}
 }
 
-// Mentions that were not emailed at once arrive as one digest at the
+// Entries of a category with the digest on arrive as one digest at the
 // person's time, and a digest with nothing in it is not sent.
 func TestDigest(t *testing.T) {
 	f := newNotify(t)
 	id, _ := f.person(t, authz.User)
-	f.looking(t, id, "", time.Now().Add(-5*time.Minute))
+	f.looking(t, id, "")
 	f.emit(t, mention(id, uuid.NewString()))
 	f.emit(t, mention(id, uuid.NewString()))
 	if got := f.outbox(t, id); len(got) != 0 {
@@ -408,7 +445,8 @@ func TestPreferencesAndDevices(t *testing.T) {
 	f := newNotify(t)
 	id, token := f.person(t, authz.User)
 	code, prefs := f.do(t, http.MethodGet, f.path("/notification-preferences"), token, nil)
-	if code != http.StatusOK || !prefs["channels"].(map[string]any)["mention"].(map[string]any)["push"].(bool) || prefs["channels"].(map[string]any)["room_message"].(map[string]any)["push"].(bool) {
+	if code != http.StatusOK || !prefs["channels"].(map[string]any)[chat].(map[string]any)["push"].(bool) || prefs["channels"].(map[string]any)[chatRoom].(map[string]any)["push"].(bool) ||
+		!prefs["channels"].(map[string]any)[notifycat.Security].(map[string]any)["email"].(bool) {
 		t.Fatalf("defaults: %d %v", code, prefs)
 	}
 	if code, _ := f.do(t, http.MethodPut, f.path("/notification-preferences"), token, map[string]any{
@@ -417,15 +455,15 @@ func TestPreferencesAndDevices(t *testing.T) {
 	}); code != http.StatusBadRequest {
 		t.Errorf("an unknown category: %d", code)
 	}
-	// Turning push off for room messages stops them; mentions still arrive.
+	// Push off for room chat stops it there; chat still arrives.
 	f.device(t, token, "android")
 	f.do(t, http.MethodPut, f.path("/notification-preferences"), token, map[string]any{
-		"channels": map[string]any{"room_message": map[string]any{"in_app": true, "push": false, "email": false}}, "push_previews": true, "muted": []string{},
+		"channels": map[string]any{chatRoom: map[string]any{"in_app": true, "push": false, "email": false, "digest": false}}, "push_previews": true, "muted": []string{},
 		"quiet_hours": map[string]any{"enabled": false, "start_minute": 0, "end_minute": 0, "days": []int{}},
 	})
-	f.looking(t, id, "-", time.Now().Add(-time.Minute))
+	f.looking(t, id, "-")
 	conv := uuid.NewString()
-	f.emit(t, notify.Event{Kind: "room_message", Category: notify.RoomMessage, Recipients: []uuid.UUID{id}, Link: "/chat/" + conv, Group: "conv:x" + conv})
+	f.emit(t, notify.Event{Kind: "message", Category: chatRoom, Recipients: []uuid.UUID{id}, Link: "/chat/" + conv, Group: "conv:x" + conv})
 	if got := f.pushed.take("android"); len(got) != 0 {
 		t.Errorf("room message pushed with push off: %v", got)
 	}
@@ -443,14 +481,26 @@ func TestPreferencesAndDevices(t *testing.T) {
 	if code, _ := f.do(t, http.MethodPost, f.path("/notification-preferences/test"), token, map[string]any{"channel": "email"}); code != http.StatusAccepted || len(f.outbox(t, id)) != 1 {
 		t.Errorf("test email: %d %v", code, f.outbox(t, id))
 	}
-	// One-click unsubscribe, with no sign-in.
-	link := notify.UnsubscribeToken(linkKey, f.org, id, notify.Mention)
-	if code, out := f.do(t, http.MethodPost, "/v1/unsubscribe/"+link, "", nil); code != http.StatusOK || out["category"] != "mention" {
+	// One-click unsubscribe, with no sign-in: one category's email, and the
+	// digest for every category.
+	link := notify.UnsubscribeToken(linkKey, f.org, id, notifycat.Security)
+	if code, out := f.do(t, http.MethodPost, "/v1/unsubscribe/"+link, "", nil); code != http.StatusOK || out["category"] != notifycat.Security {
 		t.Fatalf("unsubscribe: %d %v", code, out)
 	}
 	_, prefs = f.do(t, http.MethodGet, f.path("/notification-preferences"), token, nil)
-	if prefs["channels"].(map[string]any)["mention"].(map[string]any)["email"].(bool) {
-		t.Errorf("mention email still on: %v", prefs)
+	if sec := prefs["channels"].(map[string]any)[notifycat.Security].(map[string]any); sec["email"].(bool) || !sec["push"].(bool) {
+		t.Errorf("security email still on: %v", prefs)
+	}
+	digest := notify.UnsubscribeToken(linkKey, f.org, id, notifycat.DigestToken)
+	if code, out := f.do(t, http.MethodPost, "/v1/unsubscribe/"+digest, "", nil); code != http.StatusOK || out["category"] != "digest" {
+		t.Fatalf("digest unsubscribe: %d %v", code, out)
+	}
+	_, prefs = f.do(t, http.MethodGet, f.path("/notification-preferences"), token, nil)
+	if c := prefs["channels"].(map[string]any)[chat].(map[string]any); c["digest"].(bool) || !c["in_app"].(bool) {
+		t.Errorf("chat digest still on: %v", prefs)
+	}
+	if code, _ := f.do(t, http.MethodPost, "/v1/unsubscribe/"+notify.UnsubscribeToken(linkKey, f.org, id, "gone"), "", nil); code != http.StatusBadRequest {
+		t.Errorf("a category no longer registered: %d", code)
 	}
 	if code, _ := f.do(t, http.MethodPost, "/v1/unsubscribe/"+link+"x", "", nil); code != http.StatusBadRequest {
 		t.Errorf("a forged link: %d", code)

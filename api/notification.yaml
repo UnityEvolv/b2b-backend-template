@@ -316,6 +316,27 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/notification-categories:
+    get:
+      operationId: listNotificationCategories
+      summary: The registered notification categories, for the preferences pages to render
+      description: |
+        Every category registered in this deployment, the template's and the
+        product's, in order, with its label, who it is for, where it goes by
+        default and where it may go. The same for every org; any signed-in
+        caller may read it.
+      tags: [preferences]
+      responses:
+        '200':
+          description: The categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCategoryList'
+        '401':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/push-config:
     get:
       operationId: getPushConfig
@@ -339,8 +360,8 @@ paths:
   /v1/unsubscribe/{token}:
     post:
       operationId: unsubscribe
-      summary: One-click unsubscribe from a category's email, from the link in it
-      description: No sign-in; the token is signed and names the person and the category.
+      summary: One-click unsubscribe from a category's email, or from the digest, from the link in it
+      description: No sign-in; the token is signed and names the person and the category, or `digest` for the daily digest, which it turns off for every category.
       security: []
       tags: [preferences]
       parameters:
@@ -360,7 +381,8 @@ paths:
                 required: [category]
                 properties:
                   category:
-                    $ref: '#/components/schemas/Category'
+                    type: string
+                    description: The category unsubscribed from, or digest.
         '400':
           $ref: '#/components/responses/Error'
         default:
@@ -563,20 +585,66 @@ components:
             type: string
     Category:
       type: string
-      enum: [mention, direct_message, room_message, room_activity, knock, meeting, admin_providers, admin_billing, admin_templates, admin_marketplace, admin_directory]
+      maxLength: 60
+      description: >-
+        A registered notification category's id (GET /v1/notification-categories):
+        security, membership, billing and admin_notices in the template, and
+        whatever the product registers. Validated against the registry.
     Channel:
       type: string
       enum: [in_app, push, email]
     ChannelChoice:
       type: object
-      required: [in_app, push, email]
+      required: [in_app, push, email, digest]
       properties:
         in_app:
           type: boolean
+          description: The in-app feed.
         push:
           type: boolean
         email:
           type: boolean
+          description: An email at once.
+        digest:
+          type: boolean
+          description: A line in the daily digest email.
+    NotificationCategory:
+      type: object
+      required: [id, label, description, audience, default_channels, channels, quiet_hours, batched]
+      properties:
+        id:
+          $ref: '#/components/schemas/Category'
+        label:
+          type: string
+          description: What the preferences grid calls it.
+        description:
+          type: string
+        audience:
+          type: string
+          enum: [member, admin]
+          description: Who it is for. An admin category's links open in the admin app.
+        default_channels:
+          $ref: '#/components/schemas/ChannelChoice'
+        channels:
+          type: array
+          description: The channels it may use at all; the grid offers only these, and a choice outside them is ignored.
+          items:
+            type: string
+            enum: [in_app, push, email, digest]
+        quiet_hours:
+          type: boolean
+          description: Whether quiet hours hold its push and email.
+        batched:
+          type: boolean
+          description: Whether events about the same thing within a few minutes are one entry and one push.
+    NotificationCategoryList:
+      type: object
+      required: [categories]
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationCategory'
     FeedEntry:
       type: object
       required: [id, category, kind, data, link, count, items, occurred_at, read]
@@ -723,7 +791,7 @@ components:
         kind:
           type: string
           maxLength: 60
-          description: What happened, such as mention, direct_message, knock or provider_failing.
+          description: What happened within the category, such as new_sign_in or payment_failed; picks the category's words.
         category:
           $ref: '#/components/schemas/Category'
         recipients:
@@ -747,7 +815,7 @@ components:
         group:
           type: string
           maxLength: 200
-          description: 'What it is about, for batching and suppression, such as conv:<id> or room:<office>:<room>.'
+          description: 'What it is about, for batching and suppression, such as project:<id>.'
         data:
           type: object
           additionalProperties: true

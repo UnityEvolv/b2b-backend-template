@@ -27,6 +27,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/notify"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/sender"
@@ -101,6 +102,8 @@ func run() error {
 		fcmProject = env.String("FCM_PROJECT", "")
 		fcmBase    = env.String("FCM_BASE_URL", "https://fcm.googleapis.com")
 		notifyPoll = env.Duration("NOTIFY_POLL", 30*time.Second)
+		// A product's own notification categories, beside the template's.
+		categories = env.String("NOTIFICATION_CATEGORIES", "")
 	)
 	password, err := db.PasswordFromEnv(service, db.LocalPasswords())
 	if err != nil {
@@ -113,6 +116,9 @@ func run() error {
 	// accepted here.
 	if err := dataowner.Default.Load(env.String("DATA_OWNERS", "")); err != nil {
 		return fmt.Errorf("DATA_OWNERS: %w", err)
+	}
+	if err := notifycat.Default.Load(categories); err != nil {
+		return fmt.Errorf("NOTIFICATION_CATEGORIES: %w", err)
 	}
 	// Error tracking first, so the logger can forward to it. Off without a DSN.
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
@@ -195,7 +201,7 @@ func run() error {
 	}
 	router := notify.NewRouter(cluster, rdb, notify.Services{User: userURL, Organization: organizationURL, Tokens: tokens}, pushers,
 		notify.RedisLive{Client: rdb, Channel: redisNames.ToMembers()}, notify.Links{App: apps.Origins[apps.Main()], Admin: adminOrigin(apps), API: publicURL, Key: []byte(linkKey)}, logger).
-		WithBrand(brand.Name, redisNames)
+		WithBrand(brand.Name, redisNames).WithCategories(notifycat.Default)
 	srv := server.New(cluster, logger).WithProduct(brand.Name).WithNotifications(server.Notifications{
 		Router: router, Authz: authz.Client(authorizationURL, tokens, nil), VAPIDPublic: vapidPublic, LinkKey: []byte(linkKey),
 	})

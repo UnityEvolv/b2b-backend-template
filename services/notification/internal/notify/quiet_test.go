@@ -51,19 +51,3 @@ func TestDigestDue(t *testing.T) {
 		t.Error("not yet ten")
 	}
 }
-
-func TestResolve(t *testing.T) {
-	got := Resolve([]byte(`{"room_message":{"in_app":true,"push":true,"email":false},"knock":{"in_app":true,"push":false,"email":true}}`), []byte(`{"mention":{"in_app":true,"push":false,"email":false}}`))
-	if !got[RoomMessage].Push {
-		t.Error("the person's choice")
-	}
-	if got[Mention].Push {
-		t.Error("the org's default where the person chose nothing")
-	}
-	if got[Knock].InApp || got[Knock].Email || got[Knock].Push {
-		t.Error("knocks are push only, whatever is stored")
-	}
-	if !got[AdminBilling].Email {
-		t.Error("the platform's default")
-	}
-}

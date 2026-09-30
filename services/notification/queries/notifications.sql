@@ -42,7 +42,7 @@ WHERE org_id = @org_id AND membership_id = @membership_id AND read_at IS NULL
   AND (sqlc.narg('ids')::uuid[] IS NULL OR id = ANY(sqlc.narg('ids')::uuid[]));
 
 -- name: MarkFeedReadByLink :execrows
--- Opening the thing an entry is about reads the entry: the conversation, the room.
+-- Opening the thing an entry is about reads the entry: the conversation, the page.
 UPDATE feed_entries SET read_at = now()
 WHERE org_id = @org_id AND membership_id = @membership_id AND read_at IS NULL AND group_key = @group_key;
 

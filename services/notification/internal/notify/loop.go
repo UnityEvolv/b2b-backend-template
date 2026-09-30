@@ -12,6 +12,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
 )
 
@@ -124,7 +125,7 @@ func (r *Router) emailHeld(ctx context.Context, org, to, entryID uuid.UUID) erro
 }
 
 // digests sends each person whose time has come one email with what they
-// have email on for and have not seen, and nothing when there is nothing.
+// have the digest on for and have not seen or been emailed, and nothing when there is nothing.
 func (r *Router) digests(ctx context.Context, org uuid.UUID) error {
 	var candidates []store.DigestCandidatesRow
 	err := r.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
@@ -185,18 +186,18 @@ func (r *Router) digest(ctx context.Context, org, to uuid.UUID, person Person, l
 		ids   []uuid.UUID
 	)
 	for _, e := range entries {
-		category := Category(e.Category)
-		if !s.channels[category].Email {
+		category := e.Category
+		if !s.channels[category].Digest {
 			continue
 		}
 		var data map[string]any
 		_ = json.Unmarshal(e.Data, &data)
-		title, _ := Words(e.Kind, data, int(e.Count))
+		title, _ := r.cats.Words(category, e.Kind, data, int(e.Count))
 		items = append(items, map[string]any{"line": title, "link": r.appLink(category, e.Link)})
 		ids = append(ids, e.ID)
 	}
 	if len(items) > 0 {
-		if err := r.queueEmail(ctx, org, to, person, Mention, "digest", map[string]any{"items": items}, ids); err != nil {
+		if err := r.queueEmail(ctx, org, to, person, notifycat.DigestToken, "digest", map[string]any{"items": items}, ids); err != nil {
 			return err
 		}
 	}

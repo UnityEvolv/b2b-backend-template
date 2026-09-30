@@ -904,7 +904,7 @@ type MarkFeedReadByLinkParams struct {
 	GroupKey     pgtype.Text
 }
 
-// Opening the thing an entry is about reads the entry: the conversation, the room.
+// Opening the thing an entry is about reads the entry: the conversation, the page.
 func (q *Queries) MarkFeedReadByLink(ctx context.Context, arg MarkFeedReadByLinkParams) (int64, error) {
 	result, err := q.db.Exec(ctx, markFeedReadByLink, arg.OrgID, arg.MembershipID, arg.GroupKey)
 	if err != nil {

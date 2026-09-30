@@ -18,51 +18,6 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for Category.
-const (
-	AdminBilling     Category = "admin_billing"
-	AdminDirectory   Category = "admin_directory"
-	AdminMarketplace Category = "admin_marketplace"
-	AdminProviders   Category = "admin_providers"
-	AdminTemplates   Category = "admin_templates"
-	DirectMessage    Category = "direct_message"
-	Knock            Category = "knock"
-	Meeting          Category = "meeting"
-	Mention          Category = "mention"
-	RoomActivity     Category = "room_activity"
-	RoomMessage      Category = "room_message"
-)
-
-// Valid indicates whether the value is a known member of the Category enum.
-func (e Category) Valid() bool {
-	switch e {
-	case AdminBilling:
-		return true
-	case AdminDirectory:
-		return true
-	case AdminMarketplace:
-		return true
-	case AdminProviders:
-		return true
-	case AdminTemplates:
-		return true
-	case DirectMessage:
-		return true
-	case Knock:
-		return true
-	case Meeting:
-		return true
-	case Mention:
-		return true
-	case RoomActivity:
-		return true
-	case RoomMessage:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for Channel.
 const (
 	ChannelEmail Channel = "email"
@@ -153,15 +108,63 @@ func (e NewDevicePlatform) Valid() bool {
 	}
 }
 
-// Category defines model for Category.
-type Category string
+// Defines values for NotificationCategoryAudience.
+const (
+	Admin  NotificationCategoryAudience = "admin"
+	Member NotificationCategoryAudience = "member"
+)
+
+// Valid indicates whether the value is a known member of the NotificationCategoryAudience enum.
+func (e NotificationCategoryAudience) Valid() bool {
+	switch e {
+	case Admin:
+		return true
+	case Member:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationCategoryChannels.
+const (
+	NotificationCategoryChannelsDigest NotificationCategoryChannels = "digest"
+	NotificationCategoryChannelsEmail  NotificationCategoryChannels = "email"
+	NotificationCategoryChannelsInApp  NotificationCategoryChannels = "in_app"
+	NotificationCategoryChannelsPush   NotificationCategoryChannels = "push"
+)
+
+// Valid indicates whether the value is a known member of the NotificationCategoryChannels enum.
+func (e NotificationCategoryChannels) Valid() bool {
+	switch e {
+	case NotificationCategoryChannelsDigest:
+		return true
+	case NotificationCategoryChannelsEmail:
+		return true
+	case NotificationCategoryChannelsInApp:
+		return true
+	case NotificationCategoryChannelsPush:
+		return true
+	default:
+		return false
+	}
+}
+
+// Category A registered notification category's id (GET /v1/notification-categories): security, membership, billing and admin_notices in the template, and whatever the product registers. Validated against the registry.
+type Category = string
 
 // Channel defines model for Channel.
 type Channel string
 
 // ChannelChoice defines model for ChannelChoice.
 type ChannelChoice struct {
+	// Digest A line in the daily digest email.
+	Digest bool `json:"digest"`
+
+	// Email An email at once.
 	Email bool `json:"email"`
+
+	// InApp The in-app feed.
 	InApp bool `json:"in_app"`
 	Push  bool `json:"push"`
 }
@@ -215,18 +218,20 @@ type Event struct {
 	Actor *openapi_types.UUID `json:"actor,omitempty"`
 
 	// Audience Instead of recipients, everyone in the org holding that permission.
-	Audience  *EventAudience          `json:"audience,omitempty"`
+	Audience *EventAudience `json:"audience,omitempty"`
+
+	// Category A registered notification category's id (GET /v1/notification-categories): security, membership, billing and admin_notices in the template, and whatever the product registers. Validated against the registry.
 	Category  Category                `json:"category"`
 	Data      *map[string]interface{} `json:"data,omitempty"`
 	ExpiresAt *time.Time              `json:"expires_at,omitempty"`
 
-	// Group What it is about, for batching and suppression, such as conv:<id> or room:<office>:<room>.
+	// Group What it is about, for batching and suppression, such as project:<id>.
 	Group *string `json:"group,omitempty"`
 
 	// Id The emitter's id for the event; the same id twice is one event.
 	Id string `json:"id"`
 
-	// Kind What happened, such as mention, direct_message, knock or provider_failing.
+	// Kind What happened within the category, such as new_sign_in or payment_failed; picks the category's words.
 	Kind  string             `json:"kind"`
 	Link  string             `json:"link"`
 	OrgId openapi_types.UUID `json:"org_id"`
@@ -243,6 +248,7 @@ type EventAudience string
 
 // FeedEntry defines model for FeedEntry.
 type FeedEntry struct {
+	// Category A registered notification category's id (GET /v1/notification-categories): security, membership, billing and admin_notices in the template, and whatever the product registers. Validated against the registry.
 	Category Category `json:"category"`
 	Count    int      `json:"count"`
 
@@ -295,6 +301,40 @@ type NewEmail struct {
 
 	// To The recipient. Validated by the service, which names the field when it is wrong.
 	To string `json:"to"`
+}
+
+// NotificationCategory defines model for NotificationCategory.
+type NotificationCategory struct {
+	// Audience Who it is for. An admin category's links open in the admin app.
+	Audience NotificationCategoryAudience `json:"audience"`
+
+	// Batched Whether events about the same thing within a few minutes are one entry and one push.
+	Batched bool `json:"batched"`
+
+	// Channels The channels it may use at all; the grid offers only these, and a choice outside them is ignored.
+	Channels        []NotificationCategoryChannels `json:"channels"`
+	DefaultChannels ChannelChoice                  `json:"default_channels"`
+	Description     string                         `json:"description"`
+
+	// Id A registered notification category's id (GET /v1/notification-categories): security, membership, billing and admin_notices in the template, and whatever the product registers. Validated against the registry.
+	Id Category `json:"id"`
+
+	// Label What the preferences grid calls it.
+	Label string `json:"label"`
+
+	// QuietHours Whether quiet hours hold its push and email.
+	QuietHours bool `json:"quiet_hours"`
+}
+
+// NotificationCategoryAudience Who it is for. An admin category's links open in the admin app.
+type NotificationCategoryAudience string
+
+// NotificationCategoryChannels defines model for NotificationCategory.Channels.
+type NotificationCategoryChannels string
+
+// NotificationCategoryList defines model for NotificationCategoryList.
+type NotificationCategoryList struct {
+	Categories []NotificationCategory `json:"categories"`
 }
 
 // NotificationPreferences defines model for NotificationPreferences.
@@ -425,6 +465,9 @@ type ServerInterface interface {
 	// ExportUserData What this service keeps about one person, for their own export (the organization service only)
 	// (GET /v1/internal/users/{user_id}/data)
 	ExportUserData(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, params ExportUserDataParams)
+	// ListNotificationCategories The registered notification categories, for the preferences pages to render
+	// (GET /v1/notification-categories)
+	ListNotificationCategories(w http.ResponseWriter, r *http.Request)
 	// RegisterDevice This device gets pushes, for the caller's session
 	// (POST /v1/organizations/{org_id}/devices)
 	RegisterDevice(w http.ResponseWriter, r *http.Request, orgId OrgId, params RegisterDeviceParams)
@@ -455,7 +498,7 @@ type ServerInterface interface {
 	// GetPushConfig What a browser subscribes to web push with
 	// (GET /v1/push-config)
 	GetPushConfig(w http.ResponseWriter, r *http.Request)
-	// Unsubscribe One-click unsubscribe from a category's email, from the link in it
+	// Unsubscribe One-click unsubscribe from a category's email, or from the digest, from the link in it
 	// (POST /v1/unsubscribe/{token})
 	Unsubscribe(w http.ResponseWriter, r *http.Request, token string)
 }
@@ -652,6 +695,20 @@ func (siw *ServerInterfaceWrapper) ExportUserData(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ExportUserData(w, r, userId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationCategories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationCategories(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1136,6 +1193,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/notification-settings", wrapper.SetOrgNotificationSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/devices", wrapper.RegisterDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/devices/unregister", wrapper.UnregisterDevice)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notification-categories", wrapper.ListNotificationCategories)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/push-config", wrapper.GetPushConfig)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/unsubscribe/{token}", wrapper.Unsubscribe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/internal/events", wrapper.EmitEvent)
@@ -1584,6 +1642,58 @@ type ExportUserDatadefaultJSONResponse struct {
 }
 
 func (response ExportUserDatadefaultJSONResponse) VisitExportUserDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationCategoriesRequestObject struct {
+}
+
+type ListNotificationCategoriesResponseObject interface {
+	VisitListNotificationCategoriesResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationCategories200JSONResponse NotificationCategoryList
+
+func (response ListNotificationCategories200JSONResponse) VisitListNotificationCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationCategories401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListNotificationCategories401JSONResponse) VisitListNotificationCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationCategoriesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListNotificationCategoriesdefaultJSONResponse) VisitListNotificationCategoriesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2197,7 +2307,8 @@ type UnsubscribeResponseObject interface {
 }
 
 type Unsubscribe200JSONResponse struct {
-	Category Category `json:"category"`
+	// Category The category unsubscribed from, or digest.
+	Category string `json:"category"`
 }
 
 func (response Unsubscribe200JSONResponse) VisitUnsubscribeResponse(w http.ResponseWriter) error {
@@ -2266,6 +2377,9 @@ type StrictServerInterface interface {
 	// ExportUserData What this service keeps about one person, for their own export (the organization service only)
 	// (GET /v1/internal/users/{user_id}/data)
 	ExportUserData(ctx context.Context, request ExportUserDataRequestObject) (ExportUserDataResponseObject, error)
+	// ListNotificationCategories The registered notification categories, for the preferences pages to render
+	// (GET /v1/notification-categories)
+	ListNotificationCategories(ctx context.Context, request ListNotificationCategoriesRequestObject) (ListNotificationCategoriesResponseObject, error)
 	// RegisterDevice This device gets pushes, for the caller's session
 	// (POST /v1/organizations/{org_id}/devices)
 	RegisterDevice(ctx context.Context, request RegisterDeviceRequestObject) (RegisterDeviceResponseObject, error)
@@ -2296,7 +2410,7 @@ type StrictServerInterface interface {
 	// GetPushConfig What a browser subscribes to web push with
 	// (GET /v1/push-config)
 	GetPushConfig(ctx context.Context, request GetPushConfigRequestObject) (GetPushConfigResponseObject, error)
-	// Unsubscribe One-click unsubscribe from a category's email, from the link in it
+	// Unsubscribe One-click unsubscribe from a category's email, or from the digest, from the link in it
 	// (POST /v1/unsubscribe/{token})
 	Unsubscribe(ctx context.Context, request UnsubscribeRequestObject) (UnsubscribeResponseObject, error)
 }
@@ -2528,6 +2642,30 @@ func (sh *strictHandler) ExportUserData(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ExportUserDataResponseObject); ok {
 		if err := validResponse.VisitExportUserDataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationCategories operation middleware
+func (sh *strictHandler) ListNotificationCategories(w http.ResponseWriter, r *http.Request) {
+	var request ListNotificationCategoriesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationCategories(ctx, request.(ListNotificationCategoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationCategories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationCategoriesResponseObject); ok {
+		if err := validResponse.VisitListNotificationCategoriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

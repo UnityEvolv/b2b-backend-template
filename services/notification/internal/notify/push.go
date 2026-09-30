@@ -11,7 +11,7 @@ import (
 type Payload struct {
 	Title    string    `json:"title"`
 	Body     string    `json:"body"`
-	Category Category  `json:"category"`
+	Category string    `json:"category"`
 	Link     string    `json:"link"`
 	Expires  time.Time `json:"expires_at,omitzero"`
 	// A later push with the same key replaces the earlier on the device.

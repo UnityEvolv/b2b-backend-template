@@ -60,6 +60,7 @@ var Limits = map[string]ratelimit.Bound{
 	"PUT /v1/organizations/{org_id}/notification-settings":          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/devices":                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/devices/unregister":            ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"GET /v1/notification-categories":                               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in the

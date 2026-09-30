@@ -112,7 +112,7 @@ func (w *WebPush) Push(ctx context.Context, token string, p Payload) error {
 	}
 	ttl := int(p.TTL(w.now()) / time.Second)
 	if ttl <= 0 {
-		// Lapsed before it left: a knock that expired is not delivered.
+		// Lapsed before it left: a push that expired is not delivered.
 		return nil
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sub.Endpoint, bytes.NewReader(body))

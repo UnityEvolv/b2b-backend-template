@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
 )
 
@@ -29,7 +29,7 @@ type Event struct {
 	ID         string         `json:"id"`
 	OrgID      uuid.UUID      `json:"org_id"`
 	Kind       string         `json:"kind"`
-	Category   Category       `json:"category"`
+	Category   string         `json:"category"`
 	Recipients []uuid.UUID    `json:"recipients"`
 	Audience   string         `json:"audience,omitempty"`
 	Actor      *uuid.UUID     `json:"actor,omitempty"`
@@ -40,8 +40,9 @@ type Event struct {
 	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
 }
 
-// Validate is nil when the event can be routed.
-func (e Event) Validate() error {
+// Validate is nil when the event can be routed: its category registered in
+// cats.
+func (e Event) Validate(cats *notifycat.Registry) error {
 	switch {
 	case e.ID == "" || len(e.ID) > 200:
 		return errors.New("an id")
@@ -49,7 +50,7 @@ func (e Event) Validate() error {
 		return errors.New("an org")
 	case e.Kind == "" || len(e.Kind) > 60:
 		return errors.New("a kind")
-	case !e.Category.Valid():
+	case !cats.Valid(e.Category):
 		return errors.New("a category")
 	case len(e.Recipients) == 0 && e.Audience == "":
 		return errors.New("recipients or an audience")
@@ -116,13 +117,24 @@ type Router struct {
 	// keys shared with the other services.
 	product string
 	names   config.Redis
+	// cats is the categories events are validated and routed by.
+	cats *notifycat.Registry
 }
 
 // NewRouter is the router, under the template's default brand.
 func NewRouter(cluster *db.Cluster, rdb redis.Cmdable, people Directory, pushers Pushers, live Live, links Links, logger *slog.Logger) *Router {
 	return &Router{cluster: cluster, redis: rdb, people: people, pushers: pushers, live: live, links: links, logger: logger, now: time.Now,
-		product: config.DefaultBrand.Name, names: config.DefaultRedis}
+		product: config.DefaultBrand.Name, names: config.DefaultRedis, cats: notifycat.Default}
 }
+
+// WithCategories is r routing by the categories in cats.
+func (r *Router) WithCategories(cats *notifycat.Registry) *Router {
+	r.cats = cats
+	return r
+}
+
+// Categories is the registry r routes by.
+func (r *Router) Categories() *notifycat.Registry { return r.cats }
 
 // WithBrand is r sending emails as product, with the Redis names in names.
 func (r *Router) WithBrand(product string, names config.Redis) *Router {
@@ -136,8 +148,8 @@ func (r *Router) WithClock(now func() time.Time) *Router {
 	return r
 }
 
-// Redis keys. Focus and seen are written by the realtime service, which knows
-// what each person's apps are showing.
+// Redis keys. Focus is written by whatever keeps the apps' live
+// connections, which knows what each person's apps are showing.
 func dedupeKey(org uuid.UUID, id string, to uuid.UUID) string {
 	return fmt.Sprintf("notify:dedupe:%s:%s:%s", org, id, to)
 }
@@ -146,12 +158,9 @@ func batchKey(org, to uuid.UUID, group string) string {
 }
 
 // FocusKey is a hash, socket => what that socket is showing ("" when the app
-// is in the background). SeenKey is when the person last had the app open.
+// is in the background): the groups whose notifications it has already seen.
 func FocusKey(n config.Redis, org, to uuid.UUID) string {
 	return n.Key("focus", org.String(), to.String())
-}
-func SeenKey(n config.Redis, org, to uuid.UUID) string {
-	return n.Key("seen", org.String(), to.String())
 }
 
 const dedupeFor = 10 * time.Minute
@@ -159,7 +168,7 @@ const dedupeFor = 10 * time.Minute
 // Handle routes one event to each of its recipients.
 func (r *Router) Handle(ctx context.Context, ev Event) error {
 	ctx = db.WithActor(ctx, db.SystemActor("notification"))
-	if err := ev.Validate(); err != nil {
+	if err := ev.Validate(r.cats); err != nil {
 		return err
 	}
 	recipients := ev.Recipients
@@ -217,7 +226,7 @@ func (r *Router) Handle(ctx context.Context, ev Event) error {
 
 // settings is one recipient's resolved preferences.
 type settings struct {
-	channels   map[Category]Channels
+	channels   map[string]notifycat.Channels
 	previews   bool
 	quiet      Quiet
 	muted      []uuid.UUID
@@ -253,10 +262,10 @@ func (r *Router) settings(ctx context.Context, org, to uuid.UUID, zone *time.Loc
 	}
 	s := settings{previews: o.PreviewsAllowed}
 	if !has {
-		s.channels = Resolve(nil, o.Channels)
+		s.channels = r.cats.Resolve(nil, o.Channels)
 		return s, nil
 	}
-	s.channels = Resolve(p.Channels, o.Channels)
+	s.channels = r.cats.Resolve(p.Channels, o.Channels)
 	s.previews = s.previews && p.PushPreviews
 	s.quiet = Quiet{Enabled: p.QuietEnabled, Start: int(p.QuietStartMinute), End: int(p.QuietEndMinute), Days: p.QuietDays, Zone: zone}
 	s.muted = p.Muted
@@ -271,36 +280,23 @@ func (r *Router) settings(ctx context.Context, org, to uuid.UUID, zone *time.Loc
 }
 
 // looking is whether any of the person's apps is showing what the event is
-// about right now, and how long since any was open.
-func (r *Router) looking(ctx context.Context, org, to uuid.UUID, group string, now time.Time) (bool, time.Duration, error) {
+// about right now.
+func (r *Router) looking(ctx context.Context, org, to uuid.UUID, group string) (bool, error) {
+	if group == "" {
+		return false, nil
+	}
 	shown, err := r.redis.HVals(ctx, FocusKey(r.names, org, to)).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return false, 0, err
+		return false, err
 	}
-	away := 365 * 24 * time.Hour
-	if seen, err := r.redis.Get(ctx, SeenKey(r.names, org, to)).Result(); err == nil {
-		if ms, err := strconv.ParseInt(seen, 10, 64); err == nil {
-			away = now.Sub(time.UnixMilli(ms))
-		}
-	}
-	if len(shown) > 0 {
-		for _, s := range shown {
-			if s != "" {
-				away = 0
-			}
-		}
-	}
-	if group == "" {
-		return false, away, nil
-	}
-	// A socket may show several things at once, comma separated: the room on
-	// the map and a conversation in the sidebar.
+	// A socket may show several things at once, comma separated: a page
+	// and a conversation beside it.
 	for _, s := range shown {
 		if slices.Contains(strings.Split(s, ","), group) {
-			return true, away, nil
+			return true, nil
 		}
 	}
-	return false, away, nil
+	return false, nil
 }
 
 // route is one event for one person. It reports whether a feed entry was
@@ -322,14 +318,17 @@ func (r *Router) route(ctx context.Context, ev Event, to uuid.UUID, now time.Tim
 			return false, nil
 		}
 	}
+	// What the category allows is already applied: a channel it may not
+	// use is off whatever the person chose.
+	cat, _ := r.cats.Get(ev.Category)
 	ch := s.channels[ev.Category]
-	looking, away, err := r.looking(ctx, ev.OrgID, to, ev.Group, now)
+	looking, err := r.looking(ctx, ev.OrgID, to, ev.Group)
 	if err != nil {
 		return false, err
 	}
 
 	var entry *store.FeedEntry
-	if ch.InApp && ev.Category != Knock {
+	if ch.InApp {
 		e, err := r.feed(ctx, ev, to, now)
 		if err != nil {
 			return false, err
@@ -344,8 +343,8 @@ func (r *Router) route(ctx context.Context, ev Event, to uuid.UUID, now time.Tim
 
 	if ch.Push {
 		batched := true
-		if ev.Category.Batched() && ev.Group != "" {
-			// Three mentions in two minutes are one push.
+		if cat.Batched && ev.Group != "" {
+			// Three of a kind in two minutes are one push.
 			batched, err = r.redis.SetNX(ctx, batchKey(ev.OrgID, to, ev.Group), 1, BatchWindow).Result()
 			if err != nil {
 				return entry != nil, err
@@ -353,7 +352,7 @@ func (r *Router) route(ctx context.Context, ev Event, to uuid.UUID, now time.Tim
 		}
 		if batched {
 			p := r.payload(ev, entry, s.previews)
-			if until, quiet := s.quiet.Until(now); quiet && ev.Category != Knock {
+			if until, quiet := s.quiet.Until(now); quiet && cat.QuietHours {
 				r.hold(ctx, ev.OrgID, to, "push", p, until, ev.ExpiresAt)
 			} else {
 				r.PushTo(ctx, ev.OrgID, to, ev.Category, p)
@@ -361,9 +360,10 @@ func (r *Router) route(ctx context.Context, ev Event, to uuid.UUID, now time.Tim
 		}
 	}
 
-	// Email: now for what must be known now, else the digest collects it.
-	if ch.Email && entry != nil && Immediate(ev.Category, away) {
-		if until, quiet := s.quiet.Until(now); quiet {
+	// Email at once where the person has it; the digest collects entries
+	// of the categories they have it for.
+	if ch.Email && entry != nil {
+		if until, quiet := s.quiet.Until(now); quiet && cat.QuietHours {
 			r.hold(ctx, ev.OrgID, to, "email", emailHeld{EntryID: entry.ID}, until, ev.ExpiresAt)
 		} else if err := r.emailEntry(ctx, ev.OrgID, to, person, *entry); err != nil {
 			r.logger.Warn("notification email not queued", "org_id", ev.OrgID, "membership_id", to, "error", err)
@@ -391,7 +391,7 @@ func (r *Router) feed(ctx context.Context, ev Event, to uuid.UUID, now time.Time
 	var entry store.FeedEntry
 	err = r.cluster.Tx(ctx, ev.OrgID.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if ev.Category.Batched() && ev.Group != "" {
+		if cat, _ := r.cats.Get(ev.Category); cat.Batched && ev.Group != "" {
 			open, err := q.OpenBatch(ctx, store.OpenBatchParams{OrgID: ev.OrgID, MembershipID: to, GroupKey: pgtype.Text{String: ev.Group, Valid: true}, Since: now.Add(-BatchWindow)})
 			if err == nil {
 				entry, err = q.GrowBatch(ctx, store.GrowBatchParams{
@@ -409,7 +409,7 @@ func (r *Router) feed(ctx context.Context, ev Event, to uuid.UUID, now time.Time
 			return err
 		}
 		entry, err = q.InsertFeedEntry(ctx, store.InsertFeedEntryParams{
-			OrgID: ev.OrgID, ID: id, MembershipID: to, Category: string(ev.Category), Kind: ev.Kind,
+			OrgID: ev.OrgID, ID: id, MembershipID: to, Category: ev.Category, Kind: ev.Kind,
 			Data: rawData, Link: ev.Link, GroupKey: pgtype.Text{String: ev.Group, Valid: ev.Group != ""},
 			Items: []byte("[" + string(item(ev, now)) + "]"), OccurredAt: now, ExpiresAt: now.Add(FeedLife),
 		})
@@ -421,9 +421,9 @@ func (r *Router) feed(ctx context.Context, ev Event, to uuid.UUID, now time.Time
 // payload is the push for an event: the words, and the preview only where
 // the person and their org allow it.
 func (r *Router) payload(ev Event, entry *store.FeedEntry, previews bool) Payload {
-	title, body := Words(ev.Kind, ev.Data, 1)
+	title, body := r.cats.Words(ev.Category, ev.Kind, ev.Data, 1)
 	if entry != nil && entry.Count > 1 {
-		title, body = Words(ev.Kind, ev.Data, int(entry.Count))
+		title, body = r.cats.Words(ev.Category, ev.Kind, ev.Data, int(entry.Count))
 	}
 	if previews && ev.Preview != "" {
 		body = ev.Preview
@@ -435,9 +435,10 @@ func (r *Router) payload(ev Event, entry *store.FeedEntry, previews bool) Payloa
 	return p
 }
 
-// PushTo sends p to every device the person has for category: knocks only to
-// phones, since a desktop or a browser tab has the office open or no need.
-func (r *Router) PushTo(ctx context.Context, org, to uuid.UUID, category Category, p Payload) int {
+// PushTo sends p to every device the person has on a platform the
+// category pushes to.
+func (r *Router) PushTo(ctx context.Context, org, to uuid.UUID, category string, p Payload) int {
+	cat, _ := r.cats.Get(category)
 	var devices []store.Device
 	err := r.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
 		var err error
@@ -450,7 +451,7 @@ func (r *Router) PushTo(ctx context.Context, org, to uuid.UUID, category Categor
 	}
 	sent, failed := 0, 0
 	for _, d := range devices {
-		if category == Knock && d.Platform == "web" {
+		if !cat.PushesTo(d.Platform) {
 			continue
 		}
 		pusher, ok := r.pushers[d.Platform]
@@ -509,15 +510,17 @@ func (r *Router) emailEntry(ctx context.Context, org, to uuid.UUID, person Perso
 	}
 	var data map[string]any
 	_ = json.Unmarshal(entry.Data, &data)
-	heading, line := Words(entry.Kind, data, int(entry.Count))
-	category := Category(entry.Category)
+	heading, line := r.cats.Words(entry.Category, entry.Kind, data, int(entry.Count))
+	category := entry.Category
 	return r.queueEmail(ctx, org, to, person, category, "notification", map[string]any{
 		"heading": heading, "line": line, "link": r.appLink(category, entry.Link),
 	}, []uuid.UUID{entry.ID})
 }
 
-func (r *Router) appLink(category Category, path string) string {
-	if category.Admin() && r.links.Admin != "" {
+// appLink is path in the app the category's audience uses: the admin app
+// for an admin category.
+func (r *Router) appLink(category, path string) string {
+	if cat, _ := r.cats.Get(category); cat.Audience == notifycat.Admin && r.links.Admin != "" {
 		return strings.TrimRight(r.links.Admin, "/") + path
 	}
 	return strings.TrimRight(r.links.App, "/") + path
@@ -525,7 +528,7 @@ func (r *Router) appLink(category Category, path string) string {
 
 // queueEmail renders a notification email into the outbox, with its
 // unsubscribe link, and marks the entries it carries emailed.
-func (r *Router) queueEmail(ctx context.Context, org, to uuid.UUID, person Person, category Category, template string, data map[string]any, entries []uuid.UUID) error {
+func (r *Router) queueEmail(ctx context.Context, org, to uuid.UUID, person Person, category, template string, data map[string]any, entries []uuid.UUID) error {
 	orgName, err := r.people.OrgName(ctx, org)
 	if err != nil {
 		return err
@@ -595,7 +598,7 @@ func TokenHash(token string) []byte {
 func (r *Router) Test(ctx context.Context, org, to uuid.UUID, channel string) (int, error) {
 	ctx = db.WithActor(ctx, db.SystemActor("notification"))
 	now := r.now()
-	ev := Event{ID: "test:" + uuid.NewString(), OrgID: org, Kind: "test", Category: RoomActivity, Link: "/settings/notifications"}
+	ev := Event{ID: "test:" + uuid.NewString(), OrgID: org, Kind: "test", Category: notifycat.Security, Link: "/settings/notifications"}
 	switch channel {
 	case "in_app":
 		if _, err := r.feed(ctx, ev, to, now); err != nil {
@@ -606,16 +609,16 @@ func (r *Router) Test(ctx context.Context, org, to uuid.UUID, channel string) (i
 		}
 		return 1, nil
 	case "push":
-		title, body := Words("test", nil, 1)
-		return r.PushTo(ctx, org, to, RoomActivity, Payload{Title: title, Body: body, Category: RoomActivity, Link: ev.Link, Expires: now.Add(time.Hour)}), nil
+		title, body := r.cats.Words(notifycat.Security, "test", nil, 1)
+		return r.PushTo(ctx, org, to, notifycat.Security, Payload{Title: title, Body: body, Category: notifycat.Security, Link: ev.Link, Expires: now.Add(time.Hour)}), nil
 	case "email":
 		person, err := r.people.Person(ctx, org, to)
 		if err != nil {
 			return 0, err
 		}
-		heading, line := Words("test", nil, 1)
-		if err := r.queueEmail(ctx, org, to, person, RoomActivity, "notification", map[string]any{
-			"heading": heading, "line": line, "link": r.appLink(RoomActivity, ev.Link),
+		heading, line := r.cats.Words(notifycat.Security, "test", nil, 1)
+		if err := r.queueEmail(ctx, org, to, person, notifycat.Security, "notification", map[string]any{
+			"heading": heading, "line": line, "link": r.appLink(notifycat.Security, ev.Link),
 		}, []uuid.UUID{}); err != nil {
 			return 0, err
 		}

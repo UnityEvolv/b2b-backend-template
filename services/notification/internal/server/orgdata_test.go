@@ -35,7 +35,7 @@ func TestOrgData(t *testing.T) {
 	f.device(t, anaToken, "android")
 	f.device(t, anaToken, "web")
 	f.do(t, http.MethodPut, f.path("/notification-preferences"), anaToken, map[string]any{
-		"channels": map[string]any{"room_message": map[string]any{"in_app": true, "push": false, "email": false}}, "push_previews": true, "muted": []string{},
+		"channels": map[string]any{chat: map[string]any{"in_app": true, "push": true, "email": true, "digest": false}}, "push_previews": true, "muted": []string{},
 		"quiet_hours": map[string]any{"enabled": false, "start_minute": 0, "end_minute": 0, "days": []int{}},
 	})
 	f.emit(t, mention(ana, uuid.NewString()))
@@ -73,7 +73,7 @@ func TestOrgData(t *testing.T) {
 		t.Fatalf("export: %d %v", code, part)
 	}
 	data := part["data"].(map[string]any)
-	if len(data["devices"].([]any)) != 2 || len(data["feed_entries"].([]any)) != 2 || len(data["preferences"].([]any)) == 0 || len(data["emails"].([]any)) != 3 {
+	if len(data["devices"].([]any)) != 2 || len(data["feed_entries"].([]any)) != 2 || len(data["preferences"].([]any)) == 0 || len(data["emails"].([]any)) != 2 {
 		t.Errorf("export: %v", data)
 	}
 	raw, _ := json.Marshal(part)

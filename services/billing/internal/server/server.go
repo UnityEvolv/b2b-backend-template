@@ -24,6 +24,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/billing/internal/api"
@@ -239,7 +240,7 @@ func (s *Server) notify(ctx context.Context, org uuid.UUID, id, kind string, dat
 	if s.notifier == nil {
 		return
 	}
-	err := s.notifier.Notify(ctx, Notice{ID: "billing:" + id, OrgID: org.String(), Kind: kind, Category: "admin_billing", Audience: "billing", Link: "/billing", Data: data})
+	err := s.notifier.Notify(ctx, Notice{ID: "billing:" + id, OrgID: org.String(), Kind: kind, Category: notifycat.Billing, Audience: "billing", Link: "/billing", Data: data})
 	if err != nil {
 		s.logger.Warn("billing notice not sent", "org_id", org, "kind", kind, "error", err)
 	}

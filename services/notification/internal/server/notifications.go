@@ -13,6 +13,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/notify"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
@@ -160,11 +161,22 @@ func (s *Server) ReadNotifications(ctx context.Context, req api.ReadNotification
 	return api.ReadNotifications200JSONResponse{Unread: int(unread)}, nil
 }
 
-func toPreferences(p store.Preference, org store.OrgSetting) api.NotificationPreferences {
-	channels := map[string]api.ChannelChoice{}
-	for c, ch := range notify.Resolve(p.Channels, org.Channels) {
-		channels[string(c)] = api.ChannelChoice{InApp: ch.InApp, Push: ch.Push, Email: ch.Email}
+// choice is the wire form of a category's channels.
+func choice(ch notifycat.Channels) api.ChannelChoice {
+	return api.ChannelChoice{InApp: ch.InApp, Push: ch.Push, Email: ch.Email, Digest: ch.Digest}
+}
+
+// grid is every registered category's resolved channels, on the wire.
+func grid(cats *notifycat.Registry, person, org []byte) map[string]api.ChannelChoice {
+	out := map[string]api.ChannelChoice{}
+	for c, ch := range cats.Resolve(person, org) {
+		out[c] = choice(ch)
 	}
+	return out
+}
+
+func (s *Server) toPreferences(p store.Preference, org store.OrgSetting) api.NotificationPreferences {
+	channels := grid(s.n.Router.Categories(), p.Channels, org.Channels)
 	days := make([]int, len(p.QuietDays))
 	for i, d := range p.QuietDays {
 		days[i] = int(d)
@@ -223,18 +235,18 @@ func (s *Server) GetNotificationPreferences(ctx context.Context, req api.GetNoti
 	if err != nil {
 		return nil, err
 	}
-	return api.GetNotificationPreferences200JSONResponse(toPreferences(p, o)), nil
+	return api.GetNotificationPreferences200JSONResponse(s.toPreferences(p, o)), nil
 }
 
-// channelsJSON is the stored form of a grid: known categories only.
-func channelsJSON(in map[string]api.ChannelChoice) ([]byte, map[string]string) {
-	out := map[notify.Category]notify.Channels{}
+// channelsJSON is the stored form of a grid: registered categories only.
+func (s *Server) channelsJSON(in map[string]api.ChannelChoice) ([]byte, map[string]string) {
+	cats := s.n.Router.Categories()
+	out := map[string]notifycat.Channels{}
 	for k, v := range in {
-		c := notify.Category(k)
-		if !c.Valid() {
-			return nil, map[string]string{"channels." + k: "not a category"}
+		if !cats.Valid(k) {
+			return nil, map[string]string{"channels." + k: "not a registered category"}
 		}
-		out[c] = notify.Channels{InApp: v.InApp, Push: v.Push, Email: v.Email}
+		out[k] = notifycat.Channels{InApp: v.InApp, Push: v.Push, Email: v.Email, Digest: v.Digest}
 	}
 	raw, _ := json.Marshal(out)
 	return raw, nil
@@ -248,7 +260,7 @@ func (s *Server) SetNotificationPreferences(ctx context.Context, req api.SetNoti
 		return api.SetNotificationPreferences403JSONResponse(forbidden("Not permitted for this organization.")), nil
 	}
 	b := req.Body
-	raw, fields := channelsJSON(b.Channels)
+	raw, fields := s.channelsJSON(b.Channels)
 	q := b.QuietHours
 	if fields == nil {
 		fields = map[string]string{}
@@ -305,7 +317,7 @@ func (s *Server) SetNotificationPreferences(ctx context.Context, req api.SetNoti
 	if err != nil {
 		return nil, err
 	}
-	return api.SetNotificationPreferences200JSONResponse(toPreferences(p, o)), nil
+	return api.SetNotificationPreferences200JSONResponse(s.toPreferences(p, o)), nil
 }
 
 // TestNotification sends one test on a channel to the caller.
@@ -340,12 +352,8 @@ func (s *Server) orgSettings(ctx context.Context, org uuid.UUID) (store.OrgSetti
 	return o, err
 }
 
-func toOrgSettings(o store.OrgSetting) api.OrgNotificationSettings {
-	channels := map[string]api.ChannelChoice{}
-	for c, ch := range notify.Resolve(nil, o.Channels) {
-		channels[string(c)] = api.ChannelChoice{InApp: ch.InApp, Push: ch.Push, Email: ch.Email}
-	}
-	return api.OrgNotificationSettings{Channels: channels, PreviewsAllowed: o.PreviewsAllowed}
+func (s *Server) toOrgSettings(o store.OrgSetting) api.OrgNotificationSettings {
+	return api.OrgNotificationSettings{Channels: grid(s.n.Router.Categories(), nil, o.Channels), PreviewsAllowed: o.PreviewsAllowed}
 }
 
 // GetOrgNotificationSettings is the org's defaults, for its people.
@@ -357,7 +365,7 @@ func (s *Server) GetOrgNotificationSettings(ctx context.Context, req api.GetOrgN
 	if err != nil {
 		return nil, err
 	}
-	return api.GetOrgNotificationSettings200JSONResponse(toOrgSettings(o)), nil
+	return api.GetOrgNotificationSettings200JSONResponse(s.toOrgSettings(o)), nil
 }
 
 // SetOrgNotificationSettings changes the org's defaults: an Owner's call.
@@ -369,7 +377,7 @@ func (s *Server) SetOrgNotificationSettings(ctx context.Context, req api.SetOrgN
 	if err != nil || grant.Role != authz.Owner {
 		return api.SetOrgNotificationSettings403JSONResponse(forbidden("Only an Owner sets the org's notification defaults.")), nil
 	}
-	raw, fields := channelsJSON(req.Body.Channels)
+	raw, fields := s.channelsJSON(req.Body.Channels)
 	if fields != nil {
 		return api.SetOrgNotificationSettings400JSONResponse{ErrorJSONResponse: invalid("Some defaults are not valid.", fields)}, nil
 	}
@@ -382,7 +390,7 @@ func (s *Server) SetOrgNotificationSettings(ctx context.Context, req api.SetOrgN
 	if err != nil {
 		return nil, err
 	}
-	return api.SetOrgNotificationSettings200JSONResponse(toOrgSettings(o)), nil
+	return api.SetOrgNotificationSettings200JSONResponse(s.toOrgSettings(o)), nil
 }
 
 // RegisterDevice records this device's push token for the caller's session.
@@ -454,8 +462,9 @@ func (s *Server) GetPushConfig(ctx context.Context, _ api.GetPushConfigRequestOb
 	return api.GetPushConfig200JSONResponse{Enabled: true, VapidPublicKey: &key}, nil
 }
 
-// Unsubscribe turns off one category's email for the person a signed link
-// names, with no sign-in: the one-click unsubscribe an email carries.
+// Unsubscribe turns off one category's email, or the digest for every
+// category, for the person a signed link names, with no sign-in: the
+// one-click unsubscribe an email carries.
 func (s *Server) Unsubscribe(ctx context.Context, req api.UnsubscribeRequestObject) (api.UnsubscribeResponseObject, error) {
 	if s.n == nil {
 		return api.Unsubscribe400JSONResponse{ErrorJSONResponse: invalid("This link does not work here.", nil)}, nil
@@ -469,10 +478,20 @@ func (s *Server) Unsubscribe(ctx context.Context, req api.UnsubscribeRequestObje
 	if err != nil {
 		return nil, err
 	}
-	channels := notify.Resolve(p.Channels, o.Channels)
-	ch := channels[category]
-	ch.Email = false
-	channels[category] = ch
+	cats := s.n.Router.Categories()
+	if category != notifycat.DigestToken && !cats.Valid(category) {
+		return api.Unsubscribe400JSONResponse{ErrorJSONResponse: invalid("This kind of notification no longer exists.", map[string]string{"token": "not a registered category"})}, nil
+	}
+	channels := cats.Resolve(p.Channels, o.Channels)
+	for c, ch := range channels {
+		switch {
+		case category == notifycat.DigestToken:
+			ch.Digest = false
+		case c == category:
+			ch.Email = false
+		}
+		channels[c] = ch
+	}
 	raw, _ := json.Marshal(channels)
 	err = s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
 		_, err := store.New(tx).UpsertPreferences(ctx, store.UpsertPreferencesParams{
@@ -484,7 +503,7 @@ func (s *Server) Unsubscribe(ctx context.Context, req api.UnsubscribeRequestObje
 	if err != nil {
 		return nil, err
 	}
-	return api.Unsubscribe200JSONResponse{Category: api.Category(category)}, nil
+	return api.Unsubscribe200JSONResponse{Category: category}, nil
 }
 
 // EmitEvent is the HTTP intake, for a service that would rather not publish.
@@ -493,7 +512,7 @@ func (s *Server) EmitEvent(ctx context.Context, req api.EmitEventRequestObject) 
 		return api.EmitEvent403JSONResponse(forbidden("Services only.")), nil
 	}
 	b := req.Body
-	ev := notify.Event{ID: b.Id, OrgID: b.OrgId, Kind: b.Kind, Category: notify.Category(b.Category), Recipients: b.Recipients, Actor: b.Actor, Link: b.Link, ExpiresAt: b.ExpiresAt}
+	ev := notify.Event{ID: b.Id, OrgID: b.OrgId, Kind: b.Kind, Category: b.Category, Recipients: b.Recipients, Actor: b.Actor, Link: b.Link, ExpiresAt: b.ExpiresAt}
 	if b.Audience != nil {
 		ev.Audience = string(*b.Audience)
 	}
@@ -506,11 +525,36 @@ func (s *Server) EmitEvent(ctx context.Context, req api.EmitEventRequestObject) 
 	if b.Preview != nil {
 		ev.Preview = *b.Preview
 	}
-	if err := ev.Validate(); err != nil {
+	if err := ev.Validate(s.n.Router.Categories()); err != nil {
 		return api.EmitEvent400JSONResponse{ErrorJSONResponse: invalid("The event is not valid: it needs "+err.Error()+".", nil)}, nil
 	}
 	if err := s.n.Router.Handle(ctx, ev); err != nil {
 		return nil, err
 	}
 	return api.EmitEvent202Response{}, nil
+}
+
+// ListNotificationCategories is every registered category, the template's
+// and the product's, for the preferences grids: a person's own and the
+// org's defaults. Anyone signed in.
+func (s *Server) ListNotificationCategories(ctx context.Context, _ api.ListNotificationCategoriesRequestObject) (api.ListNotificationCategoriesResponseObject, error) {
+	if _, ok := auth.CallerFrom(ctx); !ok {
+		return api.ListNotificationCategories401JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeUnauthenticated, Message: "Sign in first."}}, nil
+	}
+	cats := notifycat.Default
+	if s.n != nil {
+		cats = s.n.Router.Categories()
+	}
+	out := api.NotificationCategoryList{Categories: []api.NotificationCategory{}}
+	for _, c := range cats.Categories() {
+		allowed := []api.NotificationCategoryChannels{}
+		for _, ch := range c.Allowed() {
+			allowed = append(allowed, api.NotificationCategoryChannels(ch))
+		}
+		out.Categories = append(out.Categories, api.NotificationCategory{
+			Id: c.ID, Label: c.Label, Description: c.Description, Audience: api.NotificationCategoryAudience(c.Audience),
+			DefaultChannels: choice(c.Default), Channels: allowed, QuietHours: c.QuietHours, Batched: c.Batched,
+		})
+	}
+	return api.ListNotificationCategories200JSONResponse(out), nil
 }

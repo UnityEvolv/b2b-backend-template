@@ -59,14 +59,13 @@ CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON email_suppressions
 
 -- One line in a person's feed. A batch ("3 new comments") is one entry with
 -- a count, grown while its window is open. Kept 30 days. The category is
--- every one the notification service knows.
+-- a registered one (pkg/notifycat), checked by the service, not here: a
+-- product registers its own without a migration.
 CREATE TABLE feed_entries (
     org_id           uuid        NOT NULL,
     id               uuid        NOT NULL,
     membership_id    uuid        NOT NULL,
-    category         text        NOT NULL CHECK (category IN (
-                         'mention', 'direct_message', 'room_message', 'room_activity', 'knock', 'meeting',
-                         'admin_providers', 'admin_billing', 'admin_templates', 'admin_marketplace', 'admin_directory')),
+    category         text        NOT NULL CHECK (length(category) BETWEEN 1 AND 60),
     kind             text        NOT NULL CHECK (length(kind) BETWEEN 1 AND 60),
     -- What the entry says, as data the apps put into words: who, where, a preview.
     data             jsonb       NOT NULL DEFAULT '{}'::jsonb,
@@ -95,7 +94,7 @@ CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON feed_entries
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
 -- A person's choices in one org. Channels is category => {in_app, push,
--- email}; a category absent from it takes the default. Mutes are
+-- email, digest}; a category absent from it takes the default. Mutes are
 -- conversations silenced from the conversation itself.
 CREATE TABLE preferences (
     org_id              uuid        NOT NULL,

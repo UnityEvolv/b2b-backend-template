@@ -54,41 +54,73 @@ session, not audited: nobody did it.
 
 ## The push
 
-The identity service publishes every revocation on the Redis pub/sub
-channel `<prefix>:host-events` (`REDIS_PREFIX`, the product id by default); a listener feeds the
-engine's event bus. No broker: Redis pub/sub is the only bus, and a message
-nobody is listening for is dropped, which is right for "close this socket
-now". A Redis that is down is logged, not fatal: the session is already
-ended and the next refresh says so.
+Every revocation is pushed on the live-session bus,
+[pkg/livebus](../pkg/livebus/livebus.go): one Redis pub/sub channel,
+`<prefix>:live-events` (`REDIS_PREFIX`, the product id by default). No
+broker: a message nobody is listening for is dropped, which is right for
+"close this now". A Redis that is down is logged, not fatal: the session is
+already ended and the next refresh says so.
+
+The core's events:
+
+| type | published by | when | concerns |
+| --- | --- | --- | --- |
+| `session.revoked` | identity | a session ended: signed out, revoked from the list, deactivated, suspended, left, password changed, MFA reset, account deleted | that session (`session_id`) |
+| `membership.changed` | identity, user | a session was moved off a membership that ended (to another org or the chooser); a role changed | that session, or the person (`user_id`) in that org |
+| `org.suspended` | organization | the org was closed | everyone active in the org (`org_id`) |
 
 ```json
-{"type": "access.revoked", "user_id": "…", "org_id": "…", "session_id": "…",
- "scope": "session" | "user", "code": "deactivated", "message": "Your account in this organization has been deactivated."}
+{"type": "session.revoked", "user_id": "…", "org_id": "…", "session_id": "…",
+ "scope": "session" | "user", "code": "deactivated",
+ "message": "Your account in this organization has been deactivated.", "at": "…"}
 ```
 
-- `scope: session` (signed out on one device, one session revoked from the
-  list): that session's sockets are sent `disconnected {code:
-  "auth.revoked", message}` and closed. The person's other devices stay.
-- `scope: user` (deactivated, suspended, left, every session revoked):
-  every socket the person has open is told the same way, and their presence
-  ends: if they were in a room they are removed from it, and everyone else
-  sees them go.
+`scope: session` is one device signed out, the person's others stay; `scope:
+user` is the person's access in the org ending. `code` is stable and the
+client keys its words on it; `message` is a sentence for anything that
+cannot. Other fields: `membership_id`, and `data` for a product's own
+payload (ids only).
 
-So a person deactivated while sitting in a room is removed and shown why;
-deactivated in their only org they are signed out to a screen that says so;
-deactivated in one of several while active elsewhere, their session is
-switched to a remaining membership and the office they were in is closed
-to them.
+A product registers its own types in the process that publishes them, and
+publishes on the same bus:
 
-## The socket's identity
+```go
+livebus.Default.Register("project.shared", "A project was shared with someone.")
+bus := livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger)
+bus.Publish(ctx, livebus.Event{Type: "project.shared", OrgID: org, UserID: user, Data: map[string]any{"project_id": id}})
+```
 
-A socket presents the platform's access token as its credential
-(`{token, name}`); the realtime service verifies it against the identity
-service's JWKS (ES256; issuer, audience, expiry, signature) with
-`node:crypto` and nothing else, and the person on the socket is whoever the
-token names. The membership adapter (offices and presence at scale) builds
-the rest on this: memberships, roles, restricted offices, guest grants and
-plan limits. Without `AUTH_JWKS_URL` the free office's typed-email identity
-is used, which is acceptable only on a laptop.
+An event is for the most specific id it carries: a session, else a person
+(in the org it names, if it names one), else everyone active in an org.
+
+## The browser's stream
+
+`GET /identity/v1/session/events` is the reference listener: a Server-Sent
+Events stream of the events that concern one open session. The browser
+names its session with the same cookie the refresh uses, so it opens it with
+
+```js
+const events = new EventSource(identityURL + '/v1/session/events', { withCredentials: true })
+events.addEventListener('session.revoked', (e) => signOut(JSON.parse(e.data)))
+events.addEventListener('membership.changed', () => refreshSession())
+events.addEventListener('org.suspended', (e) => signOut(JSON.parse(e.data)))
+```
+
+- It opens with `event: ready` (`{"session_id": "…"}`), and every event
+  after is `event: <type>` with the event as JSON in `data`. A comment line
+  every 25 seconds keeps it open through proxies.
+- It ends after a `session.revoked` for its session; one opened for a
+  session already over gets that event at once and ends. Without a cookie
+  it is 401 `session.none`.
+- The org it filters by is the one the session was active in when the
+  stream opened: the app reopens it after switching org.
+- It lives in the identity service because that service owns sessions and
+  their cookie, checks the session on connect exactly as the refresh does,
+  and publishes the revocations: nothing else has to be asked who the
+  browser is.
+
+Revoking a session reaches its open tabs within a second or two. The
+notification service listens too, and drops a revoked session's push
+devices at once.
 
 Applies to Entra and local accounts alike: both make the same session.

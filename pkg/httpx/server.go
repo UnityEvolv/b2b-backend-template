@@ -68,6 +68,10 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap is the writer underneath, so http.ResponseController reaches its
+// Flush and deadlines: a stream (Server-Sent Events) works through Logged.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 // Logged logs one line per request and turns a panic into the error envelope.
 //
 // It logs the route pattern, never the raw path, so ids in URLs are not

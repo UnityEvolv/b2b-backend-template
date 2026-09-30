@@ -14,14 +14,16 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
 // Sessions are recorded so they can be listed and revoked, rather than only
 // expiring on their own (UO-77). Revocation is pushed: every ended session
-// is published for the realtime service, which tells any open socket and
-// closes it, so nobody is left clicking controls that quietly do nothing.
+// is published on the live-session bus, which closes any tab it has open
+// (GET /v1/session/events), so nobody is left clicking controls that
+// quietly do nothing.
 
 // person is the signed-in person behind a bearer token, never a service.
 func person(ctx context.Context) (auth.Caller, bool) {
@@ -185,17 +187,17 @@ func (s *Server) ended(ctx context.Context, session store.Session, reason string
 	if err != nil {
 		return err
 	}
-	ev := AccessRevoked{UserID: session.UserID.String(), SessionID: session.ID.String(), Scope: scope, Code: reason, Message: message(reason)}
+	ev := livebus.Event{Type: livebus.SessionRevoked, UserID: session.UserID.String(), SessionID: session.ID.String(), Scope: scope, Code: reason, Message: message(reason)}
 	if session.ActiveOrgID.Valid {
 		ev.OrgID = uuid.UUID(session.ActiveOrgID.Bytes).String()
 	}
 	return s.publish(ctx, ev)
 }
 
-// publish pushes a host event; a realtime service that is not listening
-// costs nothing, and a Redis that is down is logged, not fatal: the session
-// is already ended and the next refresh will say so.
-func (s *Server) publish(ctx context.Context, ev AccessRevoked) error {
+// publish pushes a live event; nobody listening costs nothing, and a Redis
+// that is down is logged, not fatal: the session is already ended and the
+// next refresh will say so.
+func (s *Server) publish(ctx context.Context, ev livebus.Event) error {
 	if s.events == nil {
 		return nil
 	}
@@ -279,7 +281,10 @@ func (s *Server) MembershipEnded(ctx context.Context, req api.MembershipEndedReq
 			return nil, err
 		}
 		out.Switched++
-		ev := AccessRevoked{UserID: session.UserID.String(), OrgID: req.Body.OrgId.String(), SessionID: session.ID.String(), Scope: scopeUser, Code: reason, Message: message(reason)}
+		// Not signed out: moved to another org, or to the chooser. The app
+		// reads its session again.
+		ev := livebus.Event{Type: livebus.MembershipChanged, UserID: session.UserID.String(), OrgID: req.Body.OrgId.String(), SessionID: session.ID.String(),
+			MembershipID: req.Body.MembershipId.String(), Scope: scopeUser, Code: reason, Message: message(reason)}
 		if err := s.publish(ctx, ev); err != nil {
 			return nil, err
 		}

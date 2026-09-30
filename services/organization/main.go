@@ -32,6 +32,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/filekms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/gcpkms"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
@@ -65,8 +66,10 @@ func run() error {
 		grace     = env.Duration("SHUTDOWN_GRACE", 20*time.Second)
 		issuer    = env.Required("AUTH_ISSUER")
 		// The product's name and id; the id is the default token audience.
-		brand       = config.BrandFrom(env)
-		audience    = env.String("AUTH_AUDIENCE", brand.ID)
+		brand    = config.BrandFrom(env)
+		audience = env.String("AUTH_AUDIENCE", brand.ID)
+		// The Redis channels shared with the other services, under one prefix.
+		redisNames  = config.RedisFrom(env, brand)
 		jwksURL     = env.Required("AUTH_JWKS_URL")
 		redisURL    = env.Required("REDIS_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
@@ -198,6 +201,7 @@ func run() error {
 			Data:     orgdata.NewClient(tokens, nil),
 			Files:    files,
 			Owners:   dataowner.Default,
+			Live:     livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger),
 		}).
 		WithBranding(branding)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))

@@ -21,6 +21,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -79,7 +80,9 @@ type Offboarding struct {
 	// an export gathers a part from every exporter and a purge empties
 	// every purger, in the registry's order. Nil is dataowner.Default.
 	Owners *dataowner.Registry
-	Now    func() time.Time
+	// Live is the live-session bus a close is pushed on (org.suspended).
+	Live livebus.Publisher
+	Now  func() time.Time
 }
 
 func (s *Server) owners() *dataowner.Registry {
@@ -180,6 +183,13 @@ func (s *Server) CloseOrganization(ctx context.Context, req api.CloseOrganizatio
 		}
 		if err := s.off.Platform.CloseBilling(ctx, org.OrgID); err != nil {
 			s.logger.Error("closing org: subscription not cancelled", "org_id", org.OrgID, "error", err)
+		}
+	}
+	// Everyone with it open is told now, whatever the sessions' state.
+	if s.off.Live != nil {
+		if err := s.off.Live.Publish(ctx, livebus.Event{Type: livebus.OrgSuspended, OrgID: org.OrgID.String(), Code: "organization_closing",
+			Message: "This organization is closing. An Owner can reopen it from the link in the email sent when it closed."}); err != nil {
+			s.logger.Warn("closing org: not pushed live", "org_id", org.OrgID, "error", err)
 		}
 	}
 	s.tellOwners(ctx, org, raw)

@@ -207,7 +207,7 @@ func (r brandRule) caught(line string) bool {
 // again, whatever the name.
 var brandLiterals = []brandRule{
 	{"the template's default product id or name; use config.Brand", regexp.MustCompile(`(?i)b2bapp|"B2B App"`), nil},
-	{"a Redis channel or key under a fixed prefix; use config.Redis", regexp.MustCompile(`"[^"\s]*:(notify|to-members|host-events|focus|seen)\b`), nil},
+	{"a Redis channel or key under a fixed prefix; use config.Redis", regexp.MustCompile(`"[^"\s]*:(notify|to-members|live-events|focus)\b`), nil},
 	{"a fixed domain verification record; use DOMAIN_TXT_PREFIX and DOMAIN_TXT_VALUE_PREFIX", regexp.MustCompile(`"_?[A-Za-z0-9]+[A-Za-z0-9-]*-verify[.=]`), nil},
 	{"a fixed token audience or desktop URL scheme; default them to the product id", regexp.MustCompile(`"(AUTH_AUDIENCE|DESKTOP_SCHEME)",\s*"`), nil},
 	{"a fixed TOTP issuer; use the product name", regexp.MustCompile(`totp\.URI\([^,]+,\s*"`), nil},
@@ -237,8 +237,8 @@ func TestBrandingComesFromConfig(t *testing.T) {
 // look hardcoded under the template's own name.
 func TestBrandingRulesCatchTheOldLiterals(t *testing.T) {
 	old := []string{
-		`const Channel = "acme:host-events"`,
-		`func SeenKey(org, to uuid.UUID) string { return fmt.Sprintf("acme:seen:%s:%s", org, to) }`,
+		`const Channel = "acme:live-events"`,
+		`func FocusKey(org, to uuid.UUID) string { return fmt.Sprintf("acme:focus:%s:%s", org, to) }`,
 		`TXTPrefix: env.String("DOMAIN_TXT_PREFIX", "_acme-verify."),`,
 		`TXTValuePrefix: "acme-verify=",`,
 		`audience = env.String("AUTH_AUDIENCE", "acme")`,

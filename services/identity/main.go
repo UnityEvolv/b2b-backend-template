@@ -34,6 +34,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/filekms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/gcpkms"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/oidc"
@@ -181,9 +182,13 @@ func run() error {
 	}
 	keyring := envelope.New(envelope.OrgKeys(organizationURL, tokens, nil), wrapper)
 	recorder := audit.NewClient(auditURL, tokens, nil)
+	// The live-session bus: revocations out, and in again for the stream to
+	// open browser sessions.
+	bus := livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
-		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), server.RedisPublisher{Client: rdb, Channel: redisNames.HostEvents()}, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
+		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), bus, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
 		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
+	srv.WithLive(bus)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)
@@ -198,6 +203,9 @@ func run() error {
 	for _, p := range server.PublicPaths {
 		root.Handle(p, limiter.Wrap(perIP, api))
 	}
+	// The open session's live events, named by its cookie: a stream, so
+	// outside the generated API.
+	root.Handle("GET /v1/session/events", limiter.Wrap(perIP, srv.SessionEvents()))
 	// The JWKS at the well-known path too, for anything that expects it there.
 	root.Handle("/.well-known/jwks.json", limiter.Wrap(perIP, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, sig.PublicKeys())

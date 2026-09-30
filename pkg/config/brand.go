@@ -66,9 +66,9 @@ func (r Redis) Key(parts ...string) string {
 // Notify is the channel services hand notification events to.
 func (r Redis) Notify() string { return r.Key("notify") }
 
-// HostEvents is the channel for things pushed into a running client, such as
-// a session ending.
-func (r Redis) HostEvents() string { return r.Key("host-events") }
+// LiveEvents is the live-session event bus (pkg/livebus): things pushed to
+// the people who have the product open, such as a session ending.
+func (r Redis) LiveEvents() string { return r.Key("live-events") }
 
 // ToMembers is the channel per-person live events go out on.
 func (r Redis) ToMembers() string { return r.Key("to-members") }

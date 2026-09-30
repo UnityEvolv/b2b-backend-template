@@ -26,6 +26,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/envelope"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/oidc"
@@ -74,21 +75,23 @@ type Server struct {
 	users    Users
 	orgs     Organizations
 	authz    authz.Checker
-	events   Publisher
-	email    email.Sender
-	limiter  *ratelimit.Limiter
-	kms      kms.Wrapper
-	cfg      Config
+	events   livebus.Publisher
+	// live is the bus's listening end, for GET /v1/session/events.
+	live    Subscriber
+	email   email.Sender
+	limiter *ratelimit.Limiter
+	kms     kms.Wrapper
+	cfg     Config
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
 
-// New is the API on cluster. events is where a revocation is pushed for the
-// realtime service; nil pushes nothing, which is for tests only. sender is
+// New is the API on cluster. events is the live-session bus a revocation
+// is pushed on; nil pushes nothing, which is for tests only. sender is
 // the notification service's outbox, for verification and reset links.
 // limiter counts failed sign-ins; nil counts nothing, for tests only.
 // wrapper is the KMS master key, which seals authenticator secrets.
-func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig *signer.Signer, oidcClient *oidc.Client, keyring *envelope.Keyring, users Users, orgs Organizations, checker authz.Checker, events Publisher, sender email.Sender, limiter *ratelimit.Limiter, wrapper kms.Wrapper, cfg Config) *Server {
+func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig *signer.Signer, oidcClient *oidc.Client, keyring *envelope.Keyring, users Users, orgs Organizations, checker authz.Checker, events livebus.Publisher, sender email.Sender, limiter *ratelimit.Limiter, wrapper kms.Wrapper, cfg Config) *Server {
 	if cfg.AccessTTL == 0 {
 		cfg.AccessTTL = 15 * time.Minute
 	}

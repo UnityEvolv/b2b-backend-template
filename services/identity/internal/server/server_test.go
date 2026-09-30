@@ -35,6 +35,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/envelope"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/filekms"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/oidc"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/server"
@@ -342,16 +343,22 @@ func (m *memoryMail) Send(_ context.Context, msg email.Message) (email.Queued, e
 	return email.Queued{ID: uuid.NewString(), State: "queued"}, nil
 }
 
-// memoryEvents is the realtime service's end of the pub/sub bridge.
+// memoryEvents is the live-session bus as the tests see it: every event
+// kept, and passed on to a real bus when a test sets one.
 type memoryEvents struct {
 	mu     sync.Mutex
-	events []server.AccessRevoked
+	events []livebus.Event
+	bus    livebus.Publisher
 }
 
-func (m *memoryEvents) Publish(_ context.Context, ev server.AccessRevoked) error {
+func (m *memoryEvents) Publish(ctx context.Context, ev livebus.Event) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.events = append(m.events, ev)
+	bus := m.bus
+	m.mu.Unlock()
+	if bus != nil {
+		return bus.Publish(ctx, ev)
+	}
 	return nil
 }
 

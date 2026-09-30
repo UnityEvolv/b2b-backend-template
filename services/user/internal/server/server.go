@@ -20,6 +20,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -42,6 +43,7 @@ type Server struct {
 	scimPublic   string
 	groupSync    GroupSync
 	notices      Notifier
+	live         livebus.Publisher
 	haltFraction float64
 	// Account deletion and org offboarding.
 	accounts Accounts

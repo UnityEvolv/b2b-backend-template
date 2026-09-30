@@ -25,6 +25,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
@@ -167,7 +168,8 @@ func run() error {
 	}
 	// SCIM groups are stored and grant nothing until a product carries them to
 	// what they grant, with srv.WithGroupSync.
-	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase)
+	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase).
+		WithLive(livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger))
 	// The data owners that keep something personal under a membership forget
 	// it when the person's account is deleted: every eraser in the registry.
 	erase := server.Erasure{Owners: dataowner.Default, Data: orgdata.NewClient(tokens, nil)}

@@ -3,58 +3,138 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/google/uuid"
+
+	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 )
 
-// Host events go out on config.Redis.HostEvents: things pushed into a
-// running client from outside it. There is no broker between them.
-
-// AccessRevoked is the one event this service publishes: a person's access
-// in an org has ended right now, and any socket they have open there must
-// be told and closed rather than left working until its token expires.
-type AccessRevoked struct {
-	Type string `json:"type"` // always "access.revoked"
-	// Whose access, and where. A listener matches the user; the org narrows
-	// it to their connections in that org.
-	UserID    string `json:"user_id"`
-	OrgID     string `json:"org_id,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
-	// Scope says how far it reaches: one session's sockets (signed out on
-	// one device, the others stay), or every socket the person has open
-	// (their access in the org ended).
-	Scope string `json:"scope"`
-	// A stable code the client shows a message for, and a sentence for
-	// anything that cannot look one up.
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
+// Every revocation is pushed on the live-session bus (pkg/livebus) as
+// session.revoked, and a session moved off a membership that ended as
+// membership.changed: an open app is told at once rather than left working
+// until its access token expires. GET /v1/session/events streams them to
+// the browser.
 
 // The scopes of a revocation.
 const (
-	scopeSession = "session"
-	scopeUser    = "user"
+	scopeSession = livebus.ScopeSession
+	scopeUser    = livebus.ScopeUser
 )
 
-// Publisher pushes host events to the realtime service.
-type Publisher interface {
-	Publish(ctx context.Context, ev AccessRevoked) error
+// Subscriber is the bus's listening end, for the stream.
+type Subscriber interface {
+	Subscribe(ctx context.Context) (<-chan livebus.Event, error)
 }
 
-// RedisPublisher publishes over Redis pub/sub, on Channel.
-type RedisPublisher struct {
-	Client  *redis.Client
-	Channel string
+// WithLive is s streaming the bus to open sessions at GET /v1/session/events.
+func (s *Server) WithLive(sub Subscriber) *Server {
+	s.live = sub
+	return s
 }
 
-// Publish is the event, as JSON, on the host events channel.
-func (p RedisPublisher) Publish(ctx context.Context, ev AccessRevoked) error {
-	ev.Type = "access.revoked"
+// heartbeat is how often an idle stream says it is still there, so proxies
+// keep it open and a dead connection is noticed.
+var heartbeat = 25 * time.Second
+
+// SessionEvents is GET /v1/session/events: a Server-Sent Events stream of
+// the live-session events that concern the browser's session, named by its
+// session cookie as the refresh is. It opens with a "ready" event, carries
+// each event as
+//
+//	event: session.revoked
+//	data: {"type":"session.revoked","user_id":"…","session_id":"…","scope":"session","code":"revoked","message":"…","at":"…"}
+//
+// and ends after a session.revoked for this session, which the app answers
+// by signing out. A session that is already over gets that event at once.
+// The browser opens it with new EventSource(url, {withCredentials: true}).
+func (s *Server) SessionEvents() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.live == nil {
+			httpx.WriteError(w, http.StatusNotImplemented, "session.events_unavailable", "Live events are not available here.")
+			return
+		}
+		c := &cookies{in: map[string]string{}}
+		for _, cookie := range r.Cookies() {
+			c.in[cookie.Name] = cookie.Value
+		}
+		ctx := context.WithValue(r.Context(), cookiesKey{}, c)
+		session, live, err := s.currentSession(ctx)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternal, "Something went wrong.")
+			return
+		}
+		if !live && c.in[sessionCookie] == "" {
+			httpx.WriteError(w, http.StatusUnauthorized, codeNoSession, "Not signed in.")
+			return
+		}
+		var events <-chan livebus.Event
+		if live {
+			// Subscribed before the first byte, so nothing published after
+			// the browser sees "ready" is missed.
+			if events, err = s.live.Subscribe(r.Context()); err != nil {
+				s.logger.Error("live events unavailable", "error", err)
+				httpx.WriteError(w, http.StatusServiceUnavailable, "session.events_unavailable", "Live events are not available right now.")
+				return
+			}
+		}
+		// A stream outlives the server's write timeout; each write is
+		// flushed as it goes.
+		rc := http.NewResponseController(w)
+		_ = rc.SetWriteDeadline(time.Time{})
+		h := w.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Cache-Control", "no-store")
+		h.Set("X-Accel-Buffering", "no")
+		w.WriteHeader(http.StatusOK)
+		if !live {
+			// Over already: say so, and end.
+			writeEvent(w, livebus.Event{Type: livebus.SessionRevoked, Scope: scopeSession, Code: reasonSignedOut, Message: message(""), At: time.Now().UTC()})
+			_ = rc.Flush()
+			return
+		}
+		id, user, org := session.ID.String(), session.UserID.String(), ""
+		if session.ActiveOrgID.Valid {
+			org = uuid.UUID(session.ActiveOrgID.Bytes).String()
+		}
+		fmt.Fprintf(w, "event: ready\ndata: {\"session_id\":%q}\n\n", id)
+		_ = rc.Flush()
+		tick := time.NewTicker(heartbeat)
+		defer tick.Stop()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-tick.C:
+				fmt.Fprint(w, ": still here\n\n")
+				_ = rc.Flush()
+			case ev, ok := <-events:
+				if !ok {
+					return
+				}
+				if !ev.Concerns(id, user, org) {
+					continue
+				}
+				writeEvent(w, ev)
+				_ = rc.Flush()
+				if ev.Type == livebus.SessionRevoked && (ev.SessionID == id || ev.SessionID == "") {
+					return
+				}
+			}
+		}
+	})
+}
+
+// writeEvent is one event in the stream, named by its type.
+func writeEvent(w http.ResponseWriter, ev livebus.Event) {
 	raw, err := json.Marshal(ev)
 	if err != nil {
-		return err
+		return
 	}
-	return p.Client.Publish(ctx, p.Channel, raw).Err()
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Type, raw)
 }
 
 // The reasons a session ends, as stable codes. The client keeps the words.

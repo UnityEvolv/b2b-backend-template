@@ -10,7 +10,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
-	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/server"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 )
 
 // signedIn is a browser with a session at acme and its current access token.
@@ -25,10 +25,10 @@ func signedIn(t *testing.T, f *fixture, email string) (*browser, string) {
 	return b, body(t, rec)["access_token"].(string)
 }
 
-func (f *fixture) revocations(reason string) []server.AccessRevoked {
+func (f *fixture) revocations(reason string) []livebus.Event {
 	f.events.mu.Lock()
 	defer f.events.mu.Unlock()
-	var out []server.AccessRevoked
+	var out []livebus.Event
 	for _, ev := range f.events.events {
 		if ev.Code == reason {
 			out = append(out, ev)

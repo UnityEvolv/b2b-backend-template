@@ -21,6 +21,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/server"
@@ -38,6 +39,7 @@ type offFakes struct {
 	failing   string // a service whose every call fails
 	exported  map[string]int
 	purgeLog  []string // every purge call, in order
+	live      []livebus.Event
 	objects   map[string][]byte
 	deletedAt []string
 }
@@ -50,6 +52,12 @@ func (f *offFakes) RevokeOrgSessions(_ context.Context, org uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.revoked = append(f.revoked, org)
+	return nil
+}
+func (f *offFakes) Publish(_ context.Context, ev livebus.Event) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.live = append(f.live, ev)
 	return nil
 }
 func (f *offFakes) CloseBilling(_ context.Context, org uuid.UUID) error {
@@ -181,7 +189,7 @@ func TestCloseReopenAndPurge(t *testing.T) {
 	h, _, issuer, srv, recorder := newAPIAudited(t)
 	fakes := newOffFakes()
 	clock := &clockT{t: time.Now()}
-	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Owners: offOwners(), Now: clock.now})
+	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Owners: offOwners(), Live: fakes, Now: clock.now})
 	public := srv.Handler(httpx.NewMux())
 
 	operator := platformToken(t, issuer)
@@ -215,6 +223,10 @@ func TestCloseReopenAndPurge(t *testing.T) {
 	}
 	if len(fakes.revoked) != 1 || len(fakes.billed) != 1 {
 		t.Errorf("sessions %v, billing %v", fakes.revoked, fakes.billed)
+	}
+	// Everyone with it open is told on the live-session bus.
+	if len(fakes.live) != 1 || fakes.live[0].Type != livebus.OrgSuspended || fakes.live[0].OrgID != orgID || fakes.live[0].Code != "organization_closing" {
+		t.Errorf("pushed live: %+v", fakes.live)
 	}
 	if !recorder.has("organization.closing") {
 		t.Error("the close is not audited")

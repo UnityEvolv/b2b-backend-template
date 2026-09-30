@@ -26,6 +26,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/notify"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/server"
@@ -519,5 +520,45 @@ func TestPreferencesAndDevices(t *testing.T) {
 	}
 	if _, prefs := f.do(t, http.MethodGet, f.path("/notification-preferences"), token, nil); prefs["push_previews"] != false {
 		t.Errorf("previews forced off: %v", prefs)
+	}
+}
+
+// B2B-25: a session revoked on the live-session bus loses its devices at
+// once, and the person's other session keeps its own.
+func TestARevokedSessionLosesItsDevices(t *testing.T) {
+	f := newNotify(t)
+	id, _ := f.person(t, authz.User)
+	user := uuid.NewString()
+	sessions := []string{uuid.NewString(), uuid.NewString()}
+	for _, sid := range sessions {
+		token, err := f.issuer.Issue(auth.Caller{UserID: user, OrgID: f.org.String(), MembershipID: id.String(), SessionID: sid}, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.device(t, token, "android")
+	}
+	names := config.Redis{Prefix: "test-" + uuid.NewString()}
+	f.router.WithBrand("Test", names)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go f.router.Listen(ctx, f.rdb)
+	bus := livebus.NewBus(f.rdb, names.LiveEvents(), nil, nil)
+	devices := func() int {
+		var n int
+		if err := f.pool.QueryRow(context.Background(), "SELECT count(*) FROM devices WHERE org_id = $1", f.org).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for devices() == 2 && time.Now().Before(deadline) {
+		// Until the listener is subscribed, a publish reaches nobody.
+		if err := bus.Publish(ctx, livebus.Event{Type: livebus.SessionRevoked, UserID: user, SessionID: sessions[0], Scope: livebus.ScopeSession, Code: "revoked"}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := devices(); got != 1 {
+		t.Errorf("devices after one session was revoked: %d", got)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
@@ -61,5 +62,27 @@ func (s *Server) SetMembershipRole(ctx context.Context, req api.SetMembershipRol
 	if lastOwner {
 		return api.SetMembershipRole409JSONResponse{Code: "membership.last_owner", Message: "The organization must keep at least one Owner."}, nil
 	}
+	if row.Membership.Role != after.Role {
+		// The person's open apps read their grant again.
+		s.pushLive(ctx, livebus.Event{Type: livebus.MembershipChanged, OrgID: req.OrgId.String(), UserID: after.UserID.String(),
+			MembershipID: after.ID.String(), Code: "role_changed", Data: map[string]any{"role": after.Role}})
+	}
 	return api.SetMembershipRole200JSONResponse(toMembership(after, row.User)), nil
+}
+
+// WithLive is s pushing membership changes on the live-session bus.
+func (s *Server) WithLive(p livebus.Publisher) *Server {
+	s.live = p
+	return s
+}
+
+// pushLive publishes ev; best effort, since the change stands and the next
+// refresh reads it anyway.
+func (s *Server) pushLive(ctx context.Context, ev livebus.Event) {
+	if s.live == nil {
+		return
+	}
+	if err := s.live.Publish(ctx, ev); err != nil {
+		s.logger.Warn("live event not pushed", "type", ev.Type, "org_id", ev.OrgID, "error", err)
+	}
 }

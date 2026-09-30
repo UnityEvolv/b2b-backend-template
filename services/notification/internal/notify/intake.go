@@ -9,16 +9,17 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
 )
 
 // Listen takes events from Redis until ctx ends: notifications on the
 // notify channel, which services emit events on (every node of this service
-// hears every event; the dedupe key makes each one notification),
-// and ended sessions on the host events channel, whose devices stop getting
-// pushes at once.
+// hears every event; the dedupe key makes each one notification), and ended
+// sessions on the live-session bus, whose devices stop getting pushes at
+// once.
 func (r *Router) Listen(ctx context.Context, client *redis.Client) {
-	sub := client.Subscribe(ctx, r.names.Notify(), r.names.HostEvents())
+	sub := client.Subscribe(ctx, r.names.Notify(), r.names.LiveEvents())
 	defer sub.Close()
 	messages := sub.Channel()
 	for {
@@ -39,29 +40,23 @@ func (r *Router) Listen(ctx context.Context, client *redis.Client) {
 				if err := r.Handle(ctx, ev); err != nil {
 					r.logger.Warn("notification event not handled", "kind", ev.Kind, "org_id", ev.OrgID, "error", err)
 				}
-			case r.names.HostEvents():
-				r.revoked(ctx, m.Payload)
+			case r.names.LiveEvents():
+				var ev livebus.Event
+				if json.Unmarshal([]byte(m.Payload), &ev) == nil && ev.Type == livebus.SessionRevoked {
+					r.Revoked(ctx, ev)
+				}
 			}
 		}
 	}
 }
 
-// revoked removes the devices of a session, or of every session of a
+// Revoked removes the devices of a session, or of every session of a
 // person, when the identity service ends them.
-func (r *Router) revoked(ctx context.Context, payload string) {
-	var ev struct {
-		Type      string `json:"type"`
-		UserID    string `json:"user_id"`
-		SessionID string `json:"session_id"`
-		Scope     string `json:"scope"`
-	}
-	if json.Unmarshal([]byte(payload), &ev) != nil || ev.Type != "access.revoked" {
-		return
-	}
+func (r *Router) Revoked(ctx context.Context, ev livebus.Event) {
 	ctx = db.WithActor(ctx, db.SystemActor("notification"))
 	err := r.cluster.Tx(ctx, auth.PlatformOrg, func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if ev.Scope == "session" && ev.SessionID != "" {
+		if ev.Scope == livebus.ScopeSession && ev.SessionID != "" {
 			_, err := q.DeleteSessionDevicesEverywhere(ctx, ev.SessionID)
 			return err
 		}

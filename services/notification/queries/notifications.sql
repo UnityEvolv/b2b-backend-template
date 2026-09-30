@@ -155,7 +155,7 @@ LIMIT 5000;
 INSERT INTO daily_counts (org_id, day, channel, sent, failed) VALUES (@org_id, @day, @channel, @sent, @failed)
 ON CONFLICT (org_id, day, channel) DO UPDATE SET sent = daily_counts.sent + excluded.sent, failed = daily_counts.failed + excluded.failed;
 
--- Org data (UO-183, UO-184): every row of an org as JSON for its export,
+-- Org data: every row of an org as JSON for its export,
 -- deleted for its purge, one person's own rows for theirs, and a
 -- membership's forgotten for account deletion. Push tokens, their hashes and
 -- session ids never leave; nor do email bodies, which carry sign-in and

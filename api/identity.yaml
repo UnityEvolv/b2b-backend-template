@@ -44,7 +44,7 @@ paths:
         person typed. Redirects the browser to the provider. `next` is the
         path in the app to return to; `app` is which web app asked.
 
-        The desktop app (UO-117) and the mobile app (UO-89) open this in the
+        The desktop app and the mobile app open this in the
         system browser with `client=desktop` or `client=mobile` and a PKCE
         challenge of their own: the callback then
         starts no session in that browser, and instead sends the browser to

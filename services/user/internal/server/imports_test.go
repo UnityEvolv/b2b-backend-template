@@ -54,7 +54,7 @@ func firstError(row map[string]any) string {
 	return errs[0].(map[string]any)["code"].(string)
 }
 
-// The story's "done when": a sheet with mixed valid and invalid rows
+// A sheet with mixed valid and invalid rows
 // imports the valid ones and reports the rest row by row.
 func TestBulkImportInvitesTheValidRowsAndReportsTheRest(t *testing.T) {
 	f := newAPI(t)

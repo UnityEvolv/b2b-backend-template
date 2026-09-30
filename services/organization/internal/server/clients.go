@@ -18,7 +18,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 )
 
-// What self-serve signup (UO-55) needs of the other services, and of DNS.
+// What self-serve signup needs of the other services, and of DNS.
 
 // Users is what this service needs of the user service.
 type Users interface {

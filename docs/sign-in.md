@@ -1,7 +1,7 @@
 # Sign-in
 
 Employees sign in with their work identity through the organization's
-identity provider (UO-51). The identity service runs the OpenID Connect
+identity provider. The identity service runs the OpenID Connect
 authorization code flow with PKCE, records the sign-in with the user
 service, starts a session, and issues the tokens every other service
 verifies. It replaces the stub issuer.
@@ -54,7 +54,7 @@ tenant (id or verified domain), the application (client) id and its secret.
 The discovery document is fetched before anything is saved (422 when it is
 not); the secret is encrypted under the organization's data key and never
 returned. The response carries the `redirect_uri` to register on the app
-registration. A platform operator's action until the roles story. The
+registration. Needs the single sign-on permission (an Admin by default). The
 directory attributes (`jobTitle`, `department`, `employeeType`, `country`,
 `city`) arrive when the app registration asks for them as optional claims.
 
@@ -69,12 +69,11 @@ its calls to the user and organization services.
 
 Locally (`LOCAL_SERVICE_TOKENS=true`, compose only), `POST /identity/token`
 mints service tokens for the other containers and development tokens for a
-person, exactly as the stub issuer did. Deployed, that endpoint is off; the
-session lifetime story teaches it to take a Cloud Run identity token, which
-is needed before the first cloud deploy.
+person, exactly as the stub issuer did. Deployed, it takes a Cloud Run
+identity token instead (services/identity/workload.go).
 
 ## Not here
 
 Session lifetime, the sessions list and revocation pushed over the socket:
 [sessions.md](sessions.md). Local accounts, MFA, invites, the sign-in page
-itself: their own stories.
+itself: [local-accounts.md](local-accounts.md).

@@ -49,7 +49,7 @@ func (f *fixture) audited(action string) int {
 	return n
 }
 
-// The story's first "done when": revoking a session stops the next call
+// Revoking a session stops the next call
 // from that device. Sessions are listed with the device; one can be ended,
 // or all the others; each end is audited and pushed.
 func TestSessionsAreListedAndRevoked(t *testing.T) {
@@ -143,7 +143,7 @@ func TestSessionsAreListedAndRevoked(t *testing.T) {
 	}
 }
 
-// The second and third "done when": deactivating a person ends their
+// Deactivating a person ends their
 // access at once. With another org they are switched there; with none they
 // are signed out; either way the sockets in the org that ended are told.
 func TestDeactivationEndsAccessAtOnce(t *testing.T) {
@@ -213,7 +213,7 @@ func TestDeactivationEndsAccessAtOnce(t *testing.T) {
 	}
 }
 
-// The fourth "done when": an org changes its session lifetime and it applies
+// An org changes its session lifetime and it applies
 // to new sign-ins only. And an idle session ends on its own.
 func TestSessionPolicyAppliesToNewSessions(t *testing.T) {
 	f := newAPI(t)

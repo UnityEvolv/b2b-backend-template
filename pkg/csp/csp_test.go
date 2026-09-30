@@ -8,8 +8,8 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/csp"
 )
 
-// What two bring-your-own providers would declare. The real plugins arrive
-// with their own stories; the shape is what matters here.
+// What two bring-your-own providers would declare, as a product built on
+// the template would; the shape is what matters here.
 var (
 	livekit = csp.Origins{Connect: []string{"wss://acme.livekit.cloud", "https://acme.livekit.cloud"}}
 	ably    = csp.Origins{Connect: []string{"wss://realtime.ably.io", "https://rest.ably.io"}}

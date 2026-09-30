@@ -1,4 +1,4 @@
-// Package csp assembles the Content Security Policy for the web apps (UO-120).
+// Package csp assembles the Content Security Policy for the web apps.
 //
 // The apps are served with a fixed base policy plus, per org, the origins each
 // provider plugin the org has configured declares. Nothing else. A free org on

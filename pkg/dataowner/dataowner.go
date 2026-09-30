@@ -1,5 +1,5 @@
 // Package dataowner is the registry of services that hold an org's or a
-// person's data (UO-183, UO-184): the one list offboarding, exports, account
+// person's data: the one list offboarding, exports, account
 // deletion, key access and service tokens read, so a product's own service
 // joins all of them by being registered, and nothing in the template names
 // it.

@@ -1,4 +1,4 @@
--- Org offboarding and account deletion (UO-183, UO-184).
+-- Org offboarding and account deletion.
 
 -- name: ListMembershipsOfOrg :many
 -- Every membership of an org with its person, for the org's export and purge.

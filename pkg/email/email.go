@@ -1,4 +1,4 @@
-// Package email is the one call a service makes to send mail (UO-112).
+// Package email is the one call a service makes to send mail.
 //
 //	err := sender.Send(ctx, email.Message{
 //	    OrgID: orgID, OrgName: "Acme", To: address, Template: "notice",

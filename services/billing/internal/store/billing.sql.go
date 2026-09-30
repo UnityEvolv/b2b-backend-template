@@ -205,7 +205,7 @@ const purgeAccount = `-- name: PurgeAccount :execrows
 DELETE FROM accounts WHERE org_id = $1
 `
 
-// The org's account, for its purge (UO-183). Webhook events already applied
+// The org's account, for its purge. Webhook events already applied
 // carry no org and are not the org's data.
 func (q *Queries) PurgeAccount(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, purgeAccount, orgID)

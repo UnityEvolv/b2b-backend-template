@@ -145,7 +145,7 @@ func (l *lifecycle) membership(t *testing.T, org uuid.UUID, mbr string) map[stri
 	return out
 }
 
-// UO-184: asking to delete an account. DELETE must be typed; the last
+// Asking to delete an account. DELETE must be typed; the last
 // Owner of an org is refused; asking twice keeps the first date and sends
 // one email; the date shows on /v1/me; cancelling, signing in through a
 // provider, and signing in with a password each cancel it; a platform
@@ -244,7 +244,7 @@ func TestAccountDeletionIsAskedForAndCancelled(t *testing.T) {
 	}
 }
 
-// UO-184: fourteen days on, the daily pass deletes the account: every
+// Fourteen days on, the daily pass deletes the account: every
 // membership ended and anonymised, every service told to forget it, the
 // person a tombstone, their account gone at the identity service. The
 // membership still resolves, to "Former member". Not a day before.
@@ -312,7 +312,7 @@ func TestDeletionIsCarriedOutAfterFourteenDays(t *testing.T) {
 	}
 }
 
-// UO-183: a membership that ended more than thirty days ago loses the
+// A membership that ended more than thirty days ago loses the
 // person's details; the person is forgotten when nothing else is left.
 func TestEndedMembershipsAreAnonymisedAfterThirtyDays(t *testing.T) {
 	l := newLifecycle(t)
@@ -354,7 +354,7 @@ func TestEndedMembershipsAreAnonymisedAfterThirtyDays(t *testing.T) {
 	}
 }
 
-// UO-183: an org's export is its directory; a purge leaves nothing of it,
+// An org's export is its directory; a purge leaves nothing of it,
 // deletes the people who then belong nowhere, and keeps everyone else.
 func TestOrgDataExportAndPurge(t *testing.T) {
 	l := newLifecycle(t)
@@ -412,7 +412,7 @@ func TestOrgDataExportAndPurge(t *testing.T) {
 	}
 }
 
-// UO-184: the identity service changes a person's address once the new one
+// The identity service changes a person's address once the new one
 // is proven, and asks who has one.
 func TestEmailEndpointsForIdentity(t *testing.T) {
 	l := newLifecycle(t)

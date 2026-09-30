@@ -1,7 +1,6 @@
 // Package sheet reads a spreadsheet, CSV or XLSX, into rows of text for
-// the bulk imports: users (UO-69) and offices (UO-115). No dependency: an
-// XLSX is a zip of XML,
-// and the little of it an import needs is read here.
+// the bulk import of users. No dependency: an XLSX is a zip of XML, and the
+// little of it an import needs is read here.
 package sheet
 
 import (

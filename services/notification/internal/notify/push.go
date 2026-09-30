@@ -27,7 +27,7 @@ func (p Payload) TTL(now time.Time) time.Duration {
 	return p.Expires.Sub(now)
 }
 
-// Vendor errors, classified as the push story asks.
+// Vendor errors, classified by what the router does next.
 var (
 	// ErrInvalidToken: the device is gone; delete it.
 	ErrInvalidToken = errors.New("push: invalid token")

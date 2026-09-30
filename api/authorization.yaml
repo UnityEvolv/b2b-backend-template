@@ -93,8 +93,8 @@ paths:
       operationId: setRole
       summary: Give a membership another org role (Owner only)
       description: |
-        Owner is not assigned here: ownership is transferred, in its own
-        story. The last Owner cannot be demoted. Audited.
+        Owner is not assigned here: ownership is transferred instead
+        (the ownership-transfer endpoints). The last Owner cannot be demoted. Audited.
       tags: [roles]
       parameters:
         - $ref: '#/components/parameters/OrgId'

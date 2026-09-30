@@ -1,4 +1,4 @@
--- Self-serve signups (UO-55). Global: a signup precedes the org it creates.
+-- Self-serve signups. Global: a signup precedes the org it creates.
 
 -- name: InsertSignup :one
 -- global: a signup precedes the org it creates.

@@ -1,6 +1,6 @@
 // Command billing is the billing service: the account each org has, the
 // payment provider behind it (Stripe), and the subscription state the plan
-// follows (UO-168 to UO-171). Copied from the organization template; see
+// follows. Copied from the organization template; see
 // services/README.md.
 package main
 

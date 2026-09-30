@@ -96,7 +96,7 @@ func Authorize(ctx context.Context, source TokenSource, req *http.Request) error
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	// The call is part of this request's trace (UO-49).
+	// The call is part of this request's trace.
 	httpx.Propagate(ctx, req)
 	return nil
 }

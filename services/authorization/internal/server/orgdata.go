@@ -17,7 +17,7 @@ import (
 
 // An org's permission configuration and ownership transfers in its export
 // and its purge, and the transfers a person started or was offered in their
-// own export (UO-183, UO-184). All for the organization service only. Roles
+// own export. All for the organization service only. Roles
 // themselves live on the membership, in the user service.
 
 const serviceName = "authorization"

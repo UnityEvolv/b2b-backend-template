@@ -1,4 +1,4 @@
-// Command dbinit gives every service its schema and its role (UO-35): the
+// Command dbinit gives every service its schema and its role: the
 // services registered in pkg/db.Default, which are the template's own. A
 // product with services of its own runs pkg/db/dbcmd from its own command
 // with them registered.

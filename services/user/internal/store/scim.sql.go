@@ -358,7 +358,7 @@ type InsertScimTokenParams struct {
 	Hash   []byte
 }
 
-// SCIM provisioning (UO-180, UO-181).
+// SCIM provisioning.
 func (q *Queries) InsertScimToken(ctx context.Context, arg InsertScimTokenParams) (ScimToken, error) {
 	row := q.db.QueryRow(ctx, insertScimToken,
 		arg.OrgID,

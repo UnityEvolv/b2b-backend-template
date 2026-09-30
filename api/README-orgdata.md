@@ -1,4 +1,4 @@
-# The data endpoints every service keeps (UO-183, UO-184)
+# The data endpoints every service keeps
 
 Each service that holds anything about an org or a person adds these to its
 own contract, word for word apart from the service name, and answers with the

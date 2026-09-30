@@ -22,7 +22,7 @@ scheduler and no queue; two nodes running the loop lock what they claim.
 
 `pkg/email/templates.go`. Each template has a subject, an HTML body and a
 plain-text body, rendered from the same data, and every one shows the org's
-name so the recipient knows who wrote. A story that needs a new kind of email
+name so the recipient knows who wrote. A change that needs a new kind of email
 adds a template there; a test holds every template to having all three parts.
 
 ## Transports
@@ -45,8 +45,8 @@ mailbox) changes nothing. The endpoint is mounted only when
 
 Mail sends from a subdomain of the product hostname with its own SPF, DKIM and
 DMARC, so the product's reputation is separate from the company's. The records
-go into the delegated DNS zone with the cloud environment story; until then,
-Resend delivers only to the account owner from its onboarding sender.
+go into the product's DNS zone when it is deployed; until then, Resend
+delivers only to the account owner from its onboarding sender.
 
 ## Never in a log
 

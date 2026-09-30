@@ -38,7 +38,7 @@ func TestEveryCategoryFitsTheFeed(t *testing.T) {
 	}
 }
 
-// B2B-23: the registered categories are listed for the preferences pages,
+// The registered categories are listed for the preferences pages,
 // the template's first, with where each goes and may go; an event or a
 // preference naming a category nobody registered is refused.
 func TestCategoriesAreRegistered(t *testing.T) {

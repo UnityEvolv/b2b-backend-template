@@ -23,7 +23,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// The SCIM endpoint (UO-180): what an org's identity provider calls, at
+// The SCIM endpoint: what an org's identity provider calls, at
 // /scim/v2/{org_id}, with the org's own bearer token instead of a session.
 // Everything it does is audited as the identity provider's action.
 

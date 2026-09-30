@@ -16,7 +16,7 @@ import (
 
 // Sessions is what this service needs of the identity service: to say a
 // membership ended, so every session carrying it moves or ends at once and
-// the person's open sockets in that org are told (UO-77). Without it, a
+// the person's open sockets in that org are told. Without it, a
 // deactivated person keeps working until their next token refresh.
 type Sessions interface {
 	MembershipEnded(ctx context.Context, orgID, membershipID, userID uuid.UUID, reason string) error
@@ -65,7 +65,7 @@ func (s *httpSessions) MembershipEnded(ctx context.Context, orgID, membershipID,
 }
 
 // Invites is what the bulk import needs of the identity service: an invite
-// per valid row (UO-69).
+// per valid row.
 type Invites interface {
 	CreateInvite(ctx context.Context, in NewInvite) error
 }

@@ -119,7 +119,7 @@ type InsertSignupParams struct {
 	ExpiresAt time.Time
 }
 
-// Self-serve signups (UO-55). Global: a signup precedes the org it creates.
+// Self-serve signups. Global: a signup precedes the org it creates.
 // global: a signup precedes the org it creates.
 func (q *Queries) InsertSignup(ctx context.Context, arg InsertSignupParams) (Signup, error) {
 	row := q.db.QueryRow(ctx, insertSignup,

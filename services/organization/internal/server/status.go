@@ -14,7 +14,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// SetOrganizationStatus suspends or reactivates an org (UO-84): platform
+// SetOrganizationStatus suspends or reactivates an org: platform
 // operators only, audited on the org with the reason. Nothing is deleted
 // and nobody is removed; identity refuses sessions in a suspended org.
 func (s *Server) SetOrganizationStatus(ctx context.Context, req api.SetOrganizationStatusRequestObject) (api.SetOrganizationStatusResponseObject, error) {
@@ -90,7 +90,7 @@ func (s *Server) SetOrganizationStatus(ctx context.Context, req api.SetOrganizat
 }
 
 // supportViewed records on the org's own log that a platform operator, not
-// a member, looked at it (UO-84): the customer sees that staff looked and when.
+// a member, looked at it: the customer sees that staff looked and when.
 func (s *Server) supportViewed(ctx context.Context, org store.Organization) error {
 	c, ok := auth.CallerFrom(ctx)
 	if !ok || c.IsService() || strings.EqualFold(c.OrgID, org.OrgID.String()) || !strings.EqualFold(c.OrgID, auth.PlatformOrg) {

@@ -1,7 +1,7 @@
 # Sessions
 
 Sessions are recorded so they can be listed and revoked, rather than only
-expiring on their own (UO-77). Revocation is pushed, not waited for: a
+expiring on their own. Revocation is pushed, not waited for: a
 person whose access has gone is told and disconnected, never left clicking
 controls that quietly do nothing.
 

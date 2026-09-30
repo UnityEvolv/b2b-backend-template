@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Service metrics (UO-49): request rate, latency, errors and the process's
+// Service metrics: request rate, latency, errors and the process's
 // own resource use, kept in memory and served in the Prometheus text format
 // at /metrics. Cloud Run's built-in metrics cover the same ground in the
 // cloud; these are what a laptop, or a scraping sidecar, reads.

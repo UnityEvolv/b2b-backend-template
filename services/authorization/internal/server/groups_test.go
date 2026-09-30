@@ -11,7 +11,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 )
 
-// The story's "done when": a product registers a permission group, the
+// A product registers a permission group, the
 // admin UI lists it, and each org's Owner configures it; a product endpoint
 // gated on it sees the change on the next request.
 func TestProductPermissionGroup(t *testing.T) {

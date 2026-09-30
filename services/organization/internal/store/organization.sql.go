@@ -30,7 +30,7 @@ type CloseOrganizationParams struct {
 	OrgID           uuid.UUID
 }
 
-// Closing: nothing deleted, reopenable until purge_after (UO-183).
+// Closing: nothing deleted, reopenable until purge_after.
 func (q *Queries) CloseOrganization(ctx context.Context, arg CloseOrganizationParams) (Organization, error) {
 	row := q.db.QueryRow(ctx, closeOrganization,
 		arg.ClosingAt,

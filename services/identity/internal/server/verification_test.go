@@ -34,7 +34,7 @@ func (f *fixture) sentCount() int {
 	return len(f.mail.sent)
 }
 
-// The story's "done when": an unverified account is refused, and verifying
+// An unverified account is refused, and verifying
 // it allows it. Here: the account starts unverified, the link proves the
 // address once, and the account reads as verified after.
 func TestEmailIsVerifiedByTheLinkOnce(t *testing.T) {

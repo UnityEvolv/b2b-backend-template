@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     The notification service: transactional email from its own outbox, and
-    notifications (UO-175 to UO-179), the one place that decides who is told
+    notifications, the one place that decides who is told
     about what, on which channel, and whether at all: the in-app feed, push to
     browsers and Android, and email, immediate or in a daily digest.
 

@@ -19,7 +19,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/audit/internal/store"
 )
 
-// Reading the log (UO-85): the org's own entries, to whoever holds its audit
+// Reading the log: the org's own entries, to whoever holds its audit
 // permission, and to platform operators for the org detail page. A page at
 // a time newest or oldest first, or every match as CSV for a compliance
 // request.

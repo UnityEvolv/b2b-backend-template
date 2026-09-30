@@ -36,7 +36,7 @@ type Check struct {
 //	/readyz   every check passes; a load balancer stops sending traffic otherwise
 //	/metrics  request and process metrics, to a direct scrape only
 func Health(mux *http.ServeMux, checks ...Check) {
-	// Request rate, latency, errors and resource use (UO-49).
+	// Request rate, latency, errors and resource use.
 	mux.HandleFunc("GET /metrics", metricsHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})

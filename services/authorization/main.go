@@ -1,4 +1,4 @@
-// Command authorization is the authorization service (UO-53): what each org
+// Command authorization is the authorization service: what each org
 // role may do, configured per organization by its Owner, and the permission
 // check every other service makes.
 package main
@@ -66,7 +66,7 @@ func run() error {
 		auditURL    = env.Required("AUDIT_URL")
 		userURL     = env.Required("USER_URL")
 		tokenURL    = env.Required("SERVICE_TOKEN_URL")
-		// Ownership transfers (UO-86) email both parties on the org's behalf and
+		// Ownership transfers email both parties on the org's behalf and
 		// link into the admin app.
 		notificationURL = env.Required("NOTIFICATION_URL")
 		organizationURL = env.Required("ORGANIZATION_URL")

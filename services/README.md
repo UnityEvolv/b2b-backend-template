@@ -61,6 +61,7 @@ or schema registered twice panics at start.
 | Services never import each other | `internal/repocheck` |
 | Every service has a schema, a role and a contract | `internal/repocheck` |
 | Every query names `org_id`, or says `-- global: <reason>` | `internal/repocheck` |
+| No tracked file names the product the template was carved from, its tickets or its hosts; branding, cookie names and app names come from config | `internal/repocheck` |
 | Every table follows [the table conventions](../docs/tables.md) | `pkg/db.CheckConventions`, in CI |
 | Generated code is never edited by hand | CI regenerates and fails on any difference |
 | Every error is `{ code, message, fields? }` | `pkg/httpx`, and the contract's `Error` schema |

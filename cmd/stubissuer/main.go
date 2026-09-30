@@ -1,5 +1,5 @@
-// Command stubissuer mints tokens for local development (UO-41), until the
-// identity service issues real ones (UO-51).
+// Command stubissuer mints tokens for local development, until the
+// identity service issues real ones.
 //
 // It refuses to start unless STUB_ISSUER_LOCAL_ONLY=true, which only the
 // compose stack sets. Its keys are generated at start, so restarting it

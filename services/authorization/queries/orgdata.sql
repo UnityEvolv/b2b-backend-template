@@ -1,5 +1,5 @@
--- An org's data, for its export and its purge (UO-183), and a person's
--- ownership transfers, for their own export (UO-184).
+-- An org's data, for its export and its purge, and a person's
+-- ownership transfers, for their own export.
 
 -- name: ExportPermissionConfigs :many
 SELECT * FROM permission_configs WHERE org_id = @org_id;

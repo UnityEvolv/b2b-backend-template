@@ -673,7 +673,7 @@ type InsertDesktopSignInCodeParams struct {
 	ExpiresAt          time.Time
 }
 
-// global: a sign-in is a person's, like the session it becomes (UO-117).
+// global: a sign-in is a person's, like the session it becomes.
 func (q *Queries) InsertDesktopSignInCode(ctx context.Context, arg InsertDesktopSignInCodeParams) error {
 	_, err := q.db.Exec(ctx, insertDesktopSignInCode,
 		arg.ID,
@@ -1096,7 +1096,7 @@ const listInvitesOfOrg = `-- name: ListInvitesOfOrg :many
 SELECT org_id, id, email, role, app, token_hash, expires_at, accepted_at, accepted_user_id, accepted_membership_id, revoked_at, invited_by_membership_id, created_by, created_at, last_modified_by, last_modified_at FROM invites WHERE org_id = $1 ORDER BY created_at, id
 `
 
-// Org offboarding, account deletion, email change (UO-183, UO-184).
+// Org offboarding, account deletion, email change.
 // Every invite of an org, for its export.
 func (q *Queries) ListInvitesOfOrg(ctx context.Context, orgID uuid.UUID) ([]Invite, error) {
 	rows, err := q.db.Query(ctx, listInvitesOfOrg, orgID)
@@ -1635,7 +1635,7 @@ const revokeSessionsOfUser = `-- name: RevokeSessionsOfUser :execrows
 UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 `
 
-// global: a session is a person's; the session story revokes them all at once.
+// global: a session is a person's; this revokes them all at once.
 func (q *Queries) RevokeSessionsOfUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeSessionsOfUser, userID)
 	if err != nil {

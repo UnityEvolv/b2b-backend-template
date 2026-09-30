@@ -9,7 +9,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 )
 
-// The staff sign-in story's "done when", on the server side: a platform
+// Staff sign-in, on the server side: a platform
 // operator cannot get a session without a second factor, whatever the
 // platform org's stored policy says, and their wrong passwords are audited
 // on the platform's log while a customer's are not.
@@ -40,7 +40,7 @@ func TestStaffNeedASecondFactorAndFailuresAreAudited(t *testing.T) {
 	}
 }
 
-// The org detail story: a suspended org's members get no session there.
+// A suspended org's members get no session there.
 // An open session loses it at the next refresh, a fresh sign-in is refused
 // with its own reason, switching into it is refused, and reactivation
 // lets them back in.

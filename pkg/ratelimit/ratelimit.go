@@ -1,4 +1,4 @@
-// Package ratelimit is the one rate limiter every service uses (UO-119).
+// Package ratelimit is the one rate limiter every service uses.
 //
 // A Rule is "limit requests per window", enforced in Redis so every node
 // shares the count. The realtime service runs the same Lua script, so a limit

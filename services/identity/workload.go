@@ -11,7 +11,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 )
 
-// The deployed /token (the cloud deploy story): a service proves who it is
+// The deployed /token: a service proves who it is
 // with the identity token its platform signs for its own service account,
 // and gets this platform's service token in exchange. On Cloud Run that is
 // a Google-signed OpenID token for the service's account, fetched from the

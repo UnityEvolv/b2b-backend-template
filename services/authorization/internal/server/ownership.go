@@ -17,7 +17,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/authorization/internal/store"
 )
 
-// Ownership transfer (UO-86): ownership moves to another member who
+// Ownership transfer: ownership moves to another member who
 // accepts, never dumped on someone unaware. This is the escape hatch for
 // the last-Owner rule: an Owner who wants to leave transfers first.
 

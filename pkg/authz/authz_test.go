@@ -42,7 +42,7 @@ func TestDefaultsAndEffectivePermissions(t *testing.T) {
 	}
 }
 
-// The story's "done when": an Owner grants billing to the Admin role and it
+// An Owner grants billing to the Admin role and it
 // takes effect; a configuration leaving nobody but the Owner able warns.
 func TestGrantingBillingToAdminTakesEffect(t *testing.T) {
 	c := authz.Defaults()

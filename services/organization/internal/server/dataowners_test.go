@@ -59,7 +59,7 @@ func (f *offFakes) archive(t *testing.T) map[string]bool {
 	return names
 }
 
-// B2B-24: with only the template's data owners registered, an export
+// With only the template's data owners registered, an export
 // gathers a part from each and a purge empties each, audit last, and both
 // complete. Nothing in the organization service names an owner.
 func TestOffboardingWithTheTemplatesOwnersOnly(t *testing.T) {
@@ -107,7 +107,7 @@ func TestOffboardingWithTheTemplatesOwnersOnly(t *testing.T) {
 	}
 }
 
-// B2B-24: a data owner whose call fails blocks the export and the purge,
+// A data owner whose call fails blocks the export and the purge,
 // and is named: on the export (blocked_by), in the pass's error and, for a
 // purge, in the org's audit log. Nothing is skipped; once it answers,
 // both complete.

@@ -1,4 +1,4 @@
-// Package authz is the platform's roles and permissions (UO-53): the roles
+// Package authz is the platform's roles and permissions: the roles
 // fixed in code, the permission groups an Owner may toggle for the Admin
 // and Billing Admin roles, and the check every service makes before a
 // protected action. Enforced on the server, never on the client.

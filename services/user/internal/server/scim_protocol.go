@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// SCIM 2.0 as RFC 7643 and 7644 define it (UO-180): resources as plain JSON
+// SCIM 2.0 as RFC 7643 and 7644 define it: resources as plain JSON
 // objects, attribute names matched without regard to case, filters and
 // PATCH paths parsed here. Standards-shaped, so Entra, Okta and Google
 // Workspace all work; where a provider bends the standard, the bend is

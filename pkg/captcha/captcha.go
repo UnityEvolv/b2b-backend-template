@@ -1,4 +1,4 @@
-// Package captcha is bot protection for public forms (UO-75): self-serve
+// Package captcha is bot protection for public forms: self-serve
 // signup, forgot password, invite acceptance. The browser gets a token from
 // the provider's widget and sends it with the request; the server verifies
 // it with the provider, because a token checked only in the browser proves

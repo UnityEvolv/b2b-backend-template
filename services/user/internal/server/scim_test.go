@@ -142,7 +142,7 @@ func patch(ops ...map[string]any) map[string]any {
 	return map[string]any{"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"}, "Operations": list}
 }
 
-// SCIM provisioning (UO-180): tokens on the Enterprise plan only; users
+// SCIM provisioning: tokens on the Enterprise plan only; users
 // created, linked to an existing account, updated, deactivated and deleted
 // as a provider does it, with Entra's quirks; a replayed create changes
 // nothing.

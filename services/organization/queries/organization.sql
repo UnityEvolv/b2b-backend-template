@@ -1,6 +1,6 @@
 
 -- name: CloseOrganization :one
--- Closing: nothing deleted, reopenable until purge_after (UO-183).
+-- Closing: nothing deleted, reopenable until purge_after.
 UPDATE organizations
 SET status = 'closing', closing_at = @closing_at, purge_after = @purge_after, close_reason = sqlc.narg('reason'),
     closed_by_user_id = sqlc.narg('closed_by_user_id'), reopen_token_hash = @reopen_token_hash

@@ -83,7 +83,7 @@ func run() error {
 		tokenURL = env.Required("SERVICE_TOKEN_URL")
 		// The authorization service, for who may change the org.
 		authorizationURL = env.Required("AUTHORIZATION_URL")
-		// Self-serve signup (UO-55): the user service makes the Owner, the
+		// Self-serve signup: the user service makes the Owner, the
 		// identity service their account, the notification service sends the
 		// link, and the link opens in an app.
 		userURL         = env.Required("USER_URL")
@@ -209,7 +209,7 @@ func run() error {
 	// The daily tick: closing orgs purged and audit retention applied. No
 	// scheduler: this process, on start and once a day, and a day late is fine.
 	go housekeeping(ctx, logger, srv)
-	// Exports are made within the hour (UO-184).
+	// Exports are made within the hour.
 	go func() {
 		tick := time.NewTicker(time.Hour)
 		defer tick.Stop()
@@ -279,7 +279,7 @@ func housekeeping(ctx context.Context, logger *slog.Logger, srv *server.Server) 
 	defer tick.Stop()
 	for {
 		// Closing orgs past their 30 days are purged, and each org's audit
-		// retention applied (UO-183).
+		// retention applied.
 		if err := srv.RunPurges(ctx); err != nil {
 			logger.Error("purge pass incomplete", "error", err)
 		}

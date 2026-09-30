@@ -86,7 +86,7 @@ func (s *Server) WithBranding(b Branding) *Server {
 // hands the same one to the service under test.
 func (s *Server) Wrapper() kms.Wrapper { return s.wrapper }
 
-// Limits is this API's rate limits: one line per endpoint (UO-119). An
+// Limits is this API's rate limits: one line per endpoint. An
 // endpoint not listed is limited only by the per-address ceiling.
 var Limits = map[string]ratelimit.Bound{
 	"POST /v1/organizations":                        ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
@@ -141,7 +141,7 @@ func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error
 //
 // A token for another org gets 403, not 404, and the same 403 whether or not
 // that org exists, so a caller learns nothing about orgs they are not in.
-// Which members may read it is UO-53's role check.
+// Which members may read it is the role check in pkg/authz.
 func (s *Server) GetOrganization(ctx context.Context, req api.GetOrganizationRequestObject) (api.GetOrganizationResponseObject, error) {
 	if err := auth.RequireOrgOrPlatform(ctx, req.OrgId.String()); err != nil {
 		return api.GetOrganization403JSONResponse{Code: httpx.CodeForbidden, Message: "Not permitted for this organization."}, nil

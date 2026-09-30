@@ -20,7 +20,7 @@ import (
 )
 
 // Sessions are recorded so they can be listed and revoked, rather than only
-// expiring on their own (UO-77). Revocation is pushed: every ended session
+// expiring on their own. Revocation is pushed: every ended session
 // is published on the live-session bus, which closes any tab it has open
 // (GET /v1/session/events), so nobody is left clicking controls that
 // quietly do nothing.

@@ -1,4 +1,4 @@
-// Package password hashes and checks passwords for local accounts (UO-56).
+// Package password hashes and checks passwords for local accounts.
 //
 // argon2id, in the standard encoded form, so a hash carries its own
 // parameters and the parameters can change without a migration: a hash made

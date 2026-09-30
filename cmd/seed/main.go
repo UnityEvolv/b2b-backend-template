@@ -1,4 +1,4 @@
-// Command seed fills a local stack with something to look at (UO-203): one
+// Command seed fills a local stack with something to look at: one
 // organization, and its Owner and one colleague who can sign in with a password.
 //
 // Everything goes in through the services' own APIs, the way a person would

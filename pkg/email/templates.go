@@ -24,7 +24,7 @@ type Rendered struct {
 	Text    string
 }
 
-// Templates is every template a service may send. A story that needs a new
+// Templates is every template a service may send. A change that needs a new
 // kind of email adds one here, with both bodies.
 var Templates = map[string]Template{
 	// A plain notice: a heading and some lines. The first consumer, and what

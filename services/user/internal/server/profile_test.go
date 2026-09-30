@@ -28,7 +28,7 @@ func decode(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return out
 }
 
-// The story's "done when": a person sets a photo, time zone and working
+// A person sets a photo, time zone and working
 // hours, and those persist, the same in every org.
 func TestProfileFieldsPersistAcrossOrgs(t *testing.T) {
 	f := newAPI(t)

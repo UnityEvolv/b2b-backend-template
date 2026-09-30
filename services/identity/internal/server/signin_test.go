@@ -12,7 +12,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 )
 
-// The story's first "done when": a person signs in with the org's provider
+// A person signs in with the org's provider
 // and reaches an authenticated endpoint with the token they get back.
 func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T) {
 	f := newAPI(t)
@@ -86,7 +86,7 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 	}
 }
 
-// The second "done when": with two memberships, the person lands in the one
+// With two memberships, the person lands in the one
 // they used last, and can switch without signing in again.
 func TestTwoMembershipsLandInTheOneUsedLast(t *testing.T) {
 	f := newAPI(t)

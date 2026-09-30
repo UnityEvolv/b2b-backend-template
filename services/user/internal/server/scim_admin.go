@@ -20,7 +20,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// The SCIM settings page's API (UO-180, UO-181): tokens, status, group
+// The SCIM settings page's API: tokens, status, group
 // mapping, the sync log, and halted changes. Any Owner or Admin (the
 // settings permission); changing anything needs a plan with SCIM, and
 // the API refuses it the same way the page does.

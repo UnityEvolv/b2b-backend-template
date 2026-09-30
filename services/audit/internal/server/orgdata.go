@@ -16,7 +16,7 @@ import (
 )
 
 // An org's audit log in its export, its purge, its retention, and a
-// person's own entries (UO-183, UO-184). All for the organization service
+// person's own entries. All for the organization service
 // only.
 //
 // The table refuses every DELETE unless the transaction has set

@@ -1,5 +1,5 @@
 // Package errtrack sends unhandled errors to Sentry with enough context to
-// debug them (UO-44): the service, the release, the environment, the org and
+// debug them: the service, the release, the environment, the org and
 // user ids and the request id. Never a name, an email, a token or a body.
 //
 // It is wired once per service in main, and everything else reaches it

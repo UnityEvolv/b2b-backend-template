@@ -83,7 +83,7 @@ func (s *sse) next(t *testing.T, within time.Duration) (string, map[string]any) 
 	}
 }
 
-// B2B-25: revoking a session reaches that session's open stream within
+// Revoking a session reaches that session's open stream within
 // seconds, over the live-session bus in Redis, and ends it; the same
 // person's other session and somebody else's hear nothing. A stream opened
 // for a session already over is told so at once.

@@ -145,7 +145,7 @@ type ExpireAuditEventsParams struct {
 	Before time.Time
 }
 
-// Retention and purge (UO-183). The transaction first runs
+// Retention and purge. The transaction first runs
 // SET LOCAL audit.retention = 'on', without which the table refuses a DELETE.
 // The org's entries older than its retention allows.
 func (q *Queries) ExpireAuditEvents(ctx context.Context, arg ExpireAuditEventsParams) (int64, error) {

@@ -49,7 +49,7 @@ func (s *Server) WithProduct(product string) *Server {
 }
 
 // Limits is this API's rate limits: the outbox endpoints are for services,
-// which are not limited; the rest are people's (UO-119).
+// which are not limited; the rest are people's.
 var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations/{org_id}/notifications":                  ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/notifications/read":            ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),

@@ -38,7 +38,7 @@ WHERE org_id = $1
 ORDER BY occurred_at ASC, id ASC
 LIMIT $2;
 
--- Retention and purge (UO-183). The transaction first runs
+-- Retention and purge. The transaction first runs
 -- SET LOCAL audit.retention = 'on', without which the table refuses a DELETE.
 
 -- name: ExpireAuditEvents :execrows

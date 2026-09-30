@@ -283,7 +283,7 @@ func TestStubIssuerMintsServiceTokens(t *testing.T) {
 	}
 }
 
-// B2B-22's gap, closed by B2B-24: a product's service owns no schema in
+// A product's service owns no schema in
 // this process, so the template's services know it only from the
 // data-owner registry, which they read from DATA_OWNERS. Once it is there,
 // its tokens are accepted.

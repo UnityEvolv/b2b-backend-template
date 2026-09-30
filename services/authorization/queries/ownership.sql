@@ -1,4 +1,4 @@
--- Ownership transfers (UO-86).
+-- Ownership transfers.
 
 -- name: InsertOwnershipTransfer :one
 INSERT INTO ownership_transfers (org_id, id, from_membership_id, to_membership_id, expires_at)

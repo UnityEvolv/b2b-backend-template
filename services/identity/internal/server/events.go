@@ -144,7 +144,7 @@ const (
 	reasonRevokedEverywhere = "revoked_everywhere" // sign out everywhere else
 	reasonIdle              = "idle"
 	reasonNoMembership      = "no_membership" // their last org ended
-	// UO-183, UO-184.
+	// Offboarding, account deletion and email change.
 	reasonAccountDeleted    = "account_deleted"
 	reasonOrgClosing        = "organization_closing"
 	reasonEmailChangeUndone = "email_change_undone"

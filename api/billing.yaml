@@ -3,7 +3,7 @@ info:
   title: billing
   version: 1.0.0
   description: |
-    The billing service (UO-168 to UO-171): one account per org, the payment
+    The billing service: one account per org, the payment
     provider behind an interface (Stripe first), and the subscription state
     the plan follows. Card details never reach us: a payment method is added
     on the provider's hosted form.

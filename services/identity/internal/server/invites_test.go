@@ -24,7 +24,7 @@ func (f *fixture) owner(t *testing.T, org uuid.UUID) (string, string) {
 	return raw, id
 }
 
-// The story's "done when": an invite can be created, accepted once, and
+// An invite can be created, accepted once, and
 // refused on a second attempt, after expiry, or at the org's user cap.
 func TestInviteIsCreatedAcceptedOnceAndRefusedAfter(t *testing.T) {
 	f := newAPI(t)

@@ -14,8 +14,8 @@ import (
 )
 
 // GetMembershipByEmail is the membership an address has in an org, whatever
-// its status, so an invite to someone already in is refused with a reason
-// (UO-54). Services only: an address is not something a member looks up.
+// its status, so an invite to someone already in is refused with a reason.
+// Services only: an address is not something a member looks up.
 func (s *Server) GetMembershipByEmail(ctx context.Context, req api.GetMembershipByEmailRequestObject) (api.GetMembershipByEmailResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.GetMembershipByEmail403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil

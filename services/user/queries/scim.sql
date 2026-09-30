@@ -1,4 +1,4 @@
--- SCIM provisioning (UO-180, UO-181).
+-- SCIM provisioning.
 
 -- name: InsertScimToken :one
 INSERT INTO scim_tokens (org_id, id, prefix, hash) VALUES (@org_id, @id, @prefix, @hash)

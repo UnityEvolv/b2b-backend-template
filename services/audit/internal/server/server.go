@@ -45,7 +45,7 @@ func New(cluster *db.Cluster, logger *slog.Logger, checker authz.Checker) *Serve
 var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations/{org_id}/audit-events":        ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"GET /v1/organizations/{org_id}/audit-events/export": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	// The organization service's data endpoints (UO-183, UO-184).
+	// The organization service's data endpoints.
 	"GET /v1/internal/organizations/{org_id}/data":          ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"DELETE /v1/internal/organizations/{org_id}/data":       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"GET /v1/internal/users/{user_id}/data":                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),

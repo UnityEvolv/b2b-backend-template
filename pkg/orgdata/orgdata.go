@@ -1,5 +1,5 @@
 // Package orgdata is the one contract every service keeps for data it
-// holds about an org or a person (UO-183, UO-184): hand it over for an
+// holds about an org or a person: hand it over for an
 // export, delete it for a purge, and forget a member. The organization
 // service drives the first two from its daily loop, the user service the
 // third; no service reaches into another's tables. Which services answer

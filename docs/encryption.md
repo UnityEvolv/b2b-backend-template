@@ -22,7 +22,7 @@ cannot be decrypted with another's key, and no human has a path to the plaintext
    │   data key ──AES-256-GCM──► secret        │   every decrypt is in the cloud audit log
    └──────────────────────────────────────────┘
                               ▲
-   Cloud KMS master key (HSM, never exported): projects/example-project/locations/europe-west2/keyRings/b2bapp/cryptoKeys/org-data-keys
+   Cloud KMS master key (HSM, never exported): projects/<project>/locations/<region>/keyRings/<ring>/cryptoKeys/<key>
 ```
 
 - **Master key:** Google Cloud KMS, HSM protection level, 90-day automatic
@@ -50,7 +50,7 @@ secret, err := ring.Decrypt(ctx, orgID, blob, "provider_credentials")
 Never log the plaintext, never return it from an API. An admin page shows
 that a value is set, not the value.
 
-## Who may do what (KMS IAM, set by the environment story)
+## Who may do what (KMS IAM, set by the deployment)
 
 | Service identity | KMS permission | Why |
 |---|---|---|

@@ -280,7 +280,7 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 const importSample = 5
 
 // ReadImportColumns reads a sheet's header and first rows so the admin can
-// map its columns before importing (UO-70). Nothing is stored or sent.
+// map its columns before importing. Nothing is stored or sent.
 func (s *Server) ReadImportColumns(ctx context.Context, req api.ReadImportColumnsRequestObject) (api.ReadImportColumnsResponseObject, error) {
 	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users); err != nil {
 		return api.ReadImportColumns403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to import users."}, nil

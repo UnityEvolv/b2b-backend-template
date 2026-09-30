@@ -140,7 +140,7 @@ paths:
       summary: Change an organization's settings
       description: |
         Only the fields sent change. Sending null for display_name or domain
-        clears it. The plan is not a setting; the plan story changes it.
+        clears it. The plan is not a setting; billing changes it.
       tags: [organizations]
       parameters:
         - $ref: '#/components/parameters/OrgId'

@@ -130,7 +130,7 @@ type InsertOwnershipTransferParams struct {
 	ExpiresAt        time.Time
 }
 
-// Ownership transfers (UO-86).
+// Ownership transfers.
 func (q *Queries) InsertOwnershipTransfer(ctx context.Context, arg InsertOwnershipTransferParams) (OwnershipTransfer, error) {
 	row := q.db.QueryRow(ctx, insertOwnershipTransfer,
 		arg.OrgID,

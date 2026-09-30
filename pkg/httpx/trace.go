@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Distributed tracing (UO-49), without an SDK: every request carries a W3C
+// Distributed tracing, without an SDK: every request carries a W3C
 // trace context, taken from the caller or begun here, and every call to
 // another service passes it on as a child span. Each request's log line
 // names its trace in the form Cloud Logging correlates, so one trace in

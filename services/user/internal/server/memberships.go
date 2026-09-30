@@ -65,7 +65,7 @@ func (s *Server) admit(ctx context.Context, q *store.Queries, orgID uuid.UUID, k
 	}
 	if err := plan.CheckUsers(band, int(active)); err != nil {
 		// Past the cap: billing upgrades where the org has that on, and
-		// only then is the member let in (UO-169).
+		// only then is the member let in.
 		if s.capacity != nil {
 			ok, cerr := s.capacity.MakeRoom(ctx, orgID, int(active)+1)
 			if cerr != nil {
@@ -196,7 +196,7 @@ func (s *Server) RecordSignIn(ctx context.Context, req api.RecordSignInRequestOb
 			return nil, err
 		}
 	}
-	// Signing in cancels a pending account deletion (UO-184).
+	// Signing in cancels a pending account deletion.
 	if user.DeletionAfter.Valid {
 		if err := s.cancelDeletion(ctx, user.ID, "signed_in"); err != nil {
 			return nil, err
@@ -349,7 +349,7 @@ func (s *Server) CreateMembership(ctx context.Context, req api.CreateMembershipR
 // ListUserMemberships is every org a person belongs to, most recently
 // active first: what the identity service reads to decide where a sign-in
 // lands, and the organization service reads to reach a person for a notice
-// or build their own export (UO-183, UO-184).
+// or build their own export.
 func (s *Server) ListUserMemberships(ctx context.Context, req api.ListUserMembershipsRequestObject) (api.ListUserMembershipsResponseObject, error) {
 	if err := auth.RequireService(ctx, "identity", "organization"); err != nil {
 		return api.ListUserMemberships403JSONResponse{Code: httpx.CodeForbidden, Message: "The identity and organization services only."}, nil
@@ -432,7 +432,7 @@ func (s *Server) GetMe(ctx context.Context, _ api.GetMeRequestObject) (api.GetMe
 
 // ListMemberships is one org's memberships for its people and the platform:
 // cursor paginated, sorted by name or by when they joined, searched and
-// filtered. Which members may see the whole list is the roles story. The
+// filtered. Which members may see the whole list is the role check. The
 // notification service reads it too, for who an admin event reaches.
 func (s *Server) ListMemberships(ctx context.Context, req api.ListMembershipsRequestObject) (api.ListMembershipsResponseObject, error) {
 	if err := auth.RequireOrgOrPlatform(ctx, req.OrgId.String()); err != nil && auth.RequireService(ctx, "notification") != nil {

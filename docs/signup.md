@@ -1,6 +1,6 @@
 # Self-serve signup and domain claim
 
-Someone creates an organization without talking to sales (UO-55). The
+Someone creates an organization without talking to sales. The
 organization service owns it; the user, identity and notification
 services do their parts.
 

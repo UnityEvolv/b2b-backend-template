@@ -15,7 +15,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/notification/internal/store"
 )
 
-// The org data endpoints (UO-183, UO-184): an org's notification rows for
+// The org data endpoints: an org's notification rows for
 // its export, deleted for its purge, a person's own for theirs, and a
 // membership's forgotten for account deletion. For the organization service
 // only, and forgetting for the user service too.

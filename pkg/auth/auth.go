@@ -1,11 +1,11 @@
-// Package auth checks who is calling (UO-41).
+// Package auth checks who is calling.
 //
 // Every request to a service API carries a bearer token. The middleware
 // verifies it against the issuer's published keys and puts the caller in the
 // request context: who they are, which org the token is for, and which
 // membership. Anything without a valid token is refused before a handler runs.
 //
-// The issuer is the identity service once sign-in lands (UO-51). Until then a
+// The issuer is the identity service once sign-in lands. Until then a
 // stub issuer (cmd/stubissuer) mints tokens for local development; services do
 // not know the difference, because they only ever see the keys and the issuer
 // name they are configured with.
@@ -35,7 +35,7 @@ import (
 const (
 	ClaimOrg        = "org" // org_id the token is scoped to
 	ClaimMembership = "mbr" // membership id in that org
-	ClaimSession    = "sid" // session, for revocation (UO-77)
+	ClaimSession    = "sid" // session, for revocation
 	ClaimService    = "svc" // a service calling another service, by name
 )
 
@@ -94,7 +94,7 @@ var ErrForbidden = errors.New("auth: not permitted for this org")
 // RequireOrg is nil when the caller's token is for orgID.
 //
 // This is the tenant boundary, not the permission model: whether a member may
-// do a particular thing in their org is UO-53's role check, layered on top.
+// do a particular thing in their org is the role check in pkg/authz, layered on top.
 func RequireOrg(ctx context.Context, orgID string) error {
 	c, ok := CallerFrom(ctx)
 	if !ok {
@@ -268,9 +268,9 @@ func unauthenticated(w http.ResponseWriter) {
 	httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "Sign in to continue.")
 }
 
-// PlatformOrg is the org id of the platform itself: the tenant that owns no
-// office and whose members run the platform. A token for it is a platform
-// operator's. It routes to shard 0 and is never a customer.
+// PlatformOrg is the org id of the platform itself: the tenant that is no
+// customer and whose members run the platform. A token for it is a platform
+// operator's. It routes to shard 0.
 const PlatformOrg = "00000000-0000-7000-8000-000000000000"
 
 // RequirePlatform is nil when the caller is a person signed in to the

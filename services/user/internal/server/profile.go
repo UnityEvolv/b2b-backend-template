@@ -25,7 +25,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// Profile fields (UO-57): what a person controls themselves, the same in
+// Profile fields: what a person controls themselves, the same in
 // every org they belong to. Directory attributes from an identity provider
 // are the membership's and not editable here.
 

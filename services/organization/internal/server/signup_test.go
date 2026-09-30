@@ -92,7 +92,7 @@ func (d *testDeps) lastLink(t *testing.T) (email.Message, string) {
 	return m, u.Query().Get("token")
 }
 
-// The story's "done when": a new org from a cold start, and a second
+// A new org from a cold start, and a second
 // signup on the same domain blocked.
 func TestSelfServeSignupFromAColdStart(t *testing.T) {
 	h, _, issuer, _, recorder := newAPIAudited(t)

@@ -220,7 +220,7 @@ func has(list any, want string) bool {
 	return false
 }
 
-// The story's "done when", end to end: a User is refused an Admin action, an
+// End to end: a User is refused an Admin action, an
 // Admin cannot modify another Admin, an Owner grants billing to Admin and it
 // takes effect, the last Owner cannot be demoted, and an Admin in one org
 // has no admin rights in another.

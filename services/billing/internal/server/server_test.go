@@ -280,7 +280,7 @@ func (f *fixture) customer(t *testing.T, owner string) string {
 	return strings.Split(strings.Split(out["url"].(string), "c=")[1], "&")[0]
 }
 
-// The payment story's "done when": a card, a subscription to team, the
+// Paying: a card, a subscription to team, the
 // account matching the provider, and a replayed webhook changing nothing.
 func TestSubscribe(t *testing.T) {
 	f := newAPI(t)
@@ -322,7 +322,7 @@ func TestSubscribe(t *testing.T) {
 	}
 }
 
-// The automatic upgrade story's "done when".
+// Passing the plan's member cap moves the org up a plan.
 func TestAutomaticUpgrade(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
@@ -368,7 +368,7 @@ func TestAutomaticUpgrade(t *testing.T) {
 	}
 }
 
-// The dunning story: three emails over the grace, recovery with one, and
+// Dunning: three emails over the grace, recovery with one, and
 // the drop to free with nothing deleted.
 func TestDunningAndTrial(t *testing.T) {
 	f := newAPI(t)

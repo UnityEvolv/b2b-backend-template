@@ -1,4 +1,4 @@
-// Package notifycat is the notification categories (UO-175): what a
+// Package notifycat is the notification categories: what a
 // notification can be about, the rows of the preferences grid. Each is
 // registered with who it is for, where it goes until the person or their
 // org decides otherwise, whether quiet hours hold it, and its words. The

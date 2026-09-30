@@ -22,7 +22,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
-// Email change (UO-184): a person with a local account signs in with
+// Email change: a person with a local account signs in with
 // another address from now on. The new address proves itself with a link;
 // the old one is told and can undo the change within the hour. A person
 // whose address an identity provider manages changes it there instead.

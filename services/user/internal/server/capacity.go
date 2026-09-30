@@ -17,7 +17,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// Capacity is what this service needs of the billing service (UO-169): room
+// Capacity is what this service needs of the billing service: room
 // for more members when the cap is reached, by an automatic upgrade where
 // the org has one on, and word of the count so billing can warn at 80%.
 type Capacity interface {

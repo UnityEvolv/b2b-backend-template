@@ -1,6 +1,6 @@
 # Roles and permissions
 
-Roles are fixed in code and live on the membership, one per org (UO-53):
+Roles are fixed in code and live on the membership, one per org:
 the same person can be an Owner in one org and a Guest in another. What
 the configurable roles may do is set per org by its Owner. Every check is
 made on the server, at the moment of the action, against the caller's
@@ -104,8 +104,8 @@ refuses to deactivate the last active Owner.
 
 ## Ownership transfer
 
-Ownership moves to another person without stranding the organization
-(UO-86), and this is the escape hatch for the last-Owner rule: an Owner
+Ownership moves to another person without stranding the organization,
+and this is the escape hatch for the last-Owner rule: an Owner
 who wants to leave transfers first, then can be demoted or removed.
 
 - `POST /authorization/v1/organizations/{org}/ownership-transfers

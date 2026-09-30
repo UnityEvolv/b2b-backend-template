@@ -21,9 +21,9 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
-// Email ownership is proven before a local account becomes usable (UO-67).
+// Email ownership is proven before a local account becomes usable.
 // A link is sent on the org's behalf, works once, and expires; verifying is
-// what lets the local accounts story sign the person in.
+// what lets the person sign in with a password.
 
 const (
 	verificationTTL = 24 * time.Hour
@@ -199,7 +199,7 @@ func (s *Server) sendVerification(ctx context.Context, account store.LocalAccoun
 }
 
 // GetLocalAccount is whether a person has a local account and whether it
-// is verified; the local accounts story reads it before a sign-in.
+// is verified; local sign-in reads it first.
 func (s *Server) GetLocalAccount(ctx context.Context, req api.GetLocalAccountRequestObject) (api.GetLocalAccountResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.GetLocalAccount403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil

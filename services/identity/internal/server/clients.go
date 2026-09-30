@@ -33,7 +33,7 @@ type Users interface {
 	// Refusal with 409 means somebody else has it.
 	SetEmail(ctx context.Context, userID uuid.UUID, email string) error
 	// SignedIn says a person signed in without an identity provider, which
-	// cancels a pending account deletion (UO-184).
+	// cancels a pending account deletion.
 	SignedIn(ctx context.Context, userID uuid.UUID) error
 	// CountMembers is how many active members an org has: for the platform
 	// org, whether there is any operator yet.
@@ -47,7 +47,7 @@ const (
 )
 
 // OrgStatus is an org's standing: active, suspended, or closing with the
-// date its data is deleted (UO-183).
+// date its data is deleted.
 type OrgStatus struct {
 	Status     string     `json:"status"`
 	PurgeAfter *time.Time `json:"purge_after,omitempty"`
@@ -59,7 +59,7 @@ type Organizations interface {
 	// Name is the org's name, for emails sent on its behalf.
 	Name(ctx context.Context, orgID uuid.UUID) (string, error)
 	// Status is the org's standing: active, suspended by a platform
-	// operator, or closing (UO-183) with the date it is deleted.
+	// operator, or closing with the date it is deleted.
 	Status(ctx context.Context, orgID uuid.UUID) (OrgStatus, error)
 }
 

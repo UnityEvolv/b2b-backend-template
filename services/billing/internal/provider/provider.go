@@ -1,4 +1,4 @@
-// Package provider is the payment provider behind billing (UO-168): Stripe
+// Package provider is the payment provider behind billing: Stripe
 // first, Razorpay later behind the same interface. Nothing here assumes one
 // provider's object model; each implementation maps its own to these.
 package provider

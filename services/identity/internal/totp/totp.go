@@ -1,5 +1,5 @@
 // Package totp is RFC 6238 time-based one-time passwords, as authenticator
-// apps make them (UO-68), and the recovery codes that stand in for a lost
+// apps make them, and the recovery codes that stand in for a lost
 // device. Nothing here needs a dependency: HMAC-SHA1, thirty-second steps,
 // six digits is what every app speaks.
 package totp

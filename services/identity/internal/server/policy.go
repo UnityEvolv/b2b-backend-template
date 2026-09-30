@@ -41,7 +41,7 @@ type policy struct {
 var platformPolicy = policy{Lifetime: DefaultLifetime, Idle: DefaultIdle}
 
 // policyFor is the org's policy, or the platform's when it has none. The
-// platform org itself always demands a second factor (UO-82): its members
+// platform org itself always demands a second factor: its members
 // can see every organization, so nobody can configure that away.
 func (s *Server) policyFor(ctx context.Context, org uuid.UUID) (policy, error) {
 	p, err := s.storedPolicy(ctx, org)

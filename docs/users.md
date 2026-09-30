@@ -1,6 +1,6 @@
 # Users and memberships
 
-Identity is separate from membership (UO-52). One person is one `users` row
+Identity is separate from membership. One person is one `users` row
 across the platform, keyed by email; each organization they belong to is one
 `memberships` row. Leaving one org touches one membership and nothing else.
 This is the wrapper's identity, and it is what the identity adapter answers
@@ -49,15 +49,13 @@ back on the new terms.
 - `GET /v1/organizations/{org}/memberships`: cursor paginated, sorted by
   name (A to Z) or by when they joined (newest first), searched by part of
   the name or a prefix of the email, filtered by department, role and
-  status. For the org's people and platform operators; which members see the
-  whole list is the roles story.
+  status. For the org's people and platform operators.
 - `PUT …/memberships/{id}/status`: deactivate, suspend, reactivate; per
-  membership; audited. A platform operator's action until the roles story
-  hands it to the org's Admin.
+  membership; audited. Needs the users permission (an Admin by default).
 
 ## Profile
 
-The fields a person controls themselves (UO-57), as opposed to the
+The fields a person controls themselves, as opposed to the
 directory attributes a provider sends: a display name, a time zone (an
 IANA name; quiet hours, digests and stats weeks follow it), working hours
 (`{days, start, end}` in that zone), and a photo. They are on the user,
@@ -72,7 +70,7 @@ deleted when replaced or removed.
 
 ## Bulk import
 
-An admin seeds many people at once from a spreadsheet (UO-69) instead of
+An admin seeds many people at once from a spreadsheet instead of
 inviting one by one: `POST /v1/organizations/{org}/imports` (the users
 permission) with a CSV or XLSX as a `file` part (first sheet, header row
 first, at most 5000 rows and 5 MB; no dependency, the XLSX is read as the

@@ -31,7 +31,7 @@ func (f *fixture) account(t *testing.T, email string, org uuid.UUID, pw string) 
 	return m.User.ID
 }
 
-// The story's "done when": an invited person verifies, sets a password,
+// An invited person verifies, sets a password,
 // signs in, and resets it.
 func TestLocalAccountVerifiesSetsPasswordSignsInAndResets(t *testing.T) {
 	f := newAPI(t)

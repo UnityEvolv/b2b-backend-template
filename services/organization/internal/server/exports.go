@@ -28,7 +28,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// Exports (UO-184): an org's whole data for its Owner, or everything about
+// Exports: an org's whole data for its Owner, or everything about
 // one person for them, made by the loop rather than on request, since a
 // large org's export is not a request's work, and emailed as a link.
 

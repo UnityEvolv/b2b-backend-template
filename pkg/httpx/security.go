@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// The headers every API response carries (UO-120). An API serves JSON to
+// The headers every API response carries. An API serves JSON to
 // scripts, never a page to a browser, so the policy is the strictest one: no
 // framing, no content of any kind, no sniffing, no referrer.
 var apiHeaders = map[string]string{

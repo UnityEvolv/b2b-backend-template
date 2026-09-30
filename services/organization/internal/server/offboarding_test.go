@@ -181,7 +181,7 @@ func offOwners() *dataowner.Registry {
 	return r
 }
 
-// Closing an org (UO-183): the Owner types its name; sessions end and the
+// Closing an org: the Owner types its name; sessions end and the
 // subscription is cancelled at once; the Owner is emailed a link that
 // reopens it within 30 days; after 30 days the purge empties every service,
 // checked, and keeps only the fact that the org existed.
@@ -317,7 +317,7 @@ func TestCloseReopenAndPurge(t *testing.T) {
 	}
 }
 
-// The schedule (UO-183): shown to the org's admins; the audit retention is
+// The schedule: shown to the org's admins; the audit retention is
 // lengthened by an operator on enterprise only; the daily pass applies it.
 func TestRetention(t *testing.T) {
 	h, _, issuer, srv, _ := newAPIAudited(t)
@@ -357,7 +357,7 @@ func TestRetention(t *testing.T) {
 	}
 }
 
-// Exports (UO-184): the Owner asks, once per key and a few a day; the pass
+// Exports: the Owner asks, once per key and a few a day; the pass
 // gathers every service's part and files into a zip, stores it and emails
 // a link; a person's own export covers their memberships.
 func TestExports(t *testing.T) {

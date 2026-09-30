@@ -1,5 +1,5 @@
 // Command notification is the notification service: today, transactional
-// email from its own outbox with retries (UO-112). Copied from the
+// email from its own outbox with retries. Copied from the
 // organization template; see services/README.md.
 package main
 

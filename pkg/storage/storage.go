@@ -1,5 +1,5 @@
 // Package storage is the object store every service uses for files people
-// upload or services write (UO-80): profile photos and data exports in the
+// upload or services write: profile photos and data exports in the
 // template, and whatever a product registers (see Registry).
 //
 // It speaks the S3 API, which is what keeps it portable: RustFS on a laptop,
@@ -109,7 +109,7 @@ type Purpose struct {
 var (
 	// ProfilePhoto is a person's photo, kept until they change or remove it.
 	ProfilePhoto = Purpose{Name: "profile-photo", ContentTypes: []string{"image/jpeg", "image/png", "image/webp"}, MaxBytes: 5 << 20}
-	// DataExport is an org or personal export (UO-184): written by the
+	// DataExport is an org or personal export: written by the
 	// organization service, never uploaded by a person, and gone when its
 	// link expires.
 	DataExport = Purpose{Name: "data-export", ContentTypes: []string{"application/zip"}, MaxBytes: 10 << 30, Retention: 7 * 24 * time.Hour}

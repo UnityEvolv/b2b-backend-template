@@ -24,7 +24,7 @@ func (f *fixture) pushed(code string) int {
 	return n
 }
 
-// UO-183: a closing org gives no session. A fresh sign-in, local or through
+// A closing org gives no session. A fresh sign-in, local or through
 // the provider, is refused with its own code and the date it is deleted; an
 // open session loses it at the next refresh; switching into it is refused.
 func TestClosingOrgIsRefusedAtSignIn(t *testing.T) {
@@ -66,7 +66,7 @@ func TestClosingOrgIsRefusedAtSignIn(t *testing.T) {
 	}
 }
 
-// UO-183: closing an org ends every session working in it, pushed, for the
+// Closing an org ends every session working in it, pushed, for the
 // organization service only.
 func TestClosingAnOrgRevokesItsSessions(t *testing.T) {
 	f := newAPI(t)
@@ -100,7 +100,7 @@ func TestClosingAnOrgRevokesItsSessions(t *testing.T) {
 	}
 }
 
-// UO-183, UO-184: deleting a person ends their sessions, pushed, and
+// Deleting a person ends their sessions, pushed, and
 // removes the account; a second call does nothing.
 func TestDeletingAPersonRemovesTheirAccount(t *testing.T) {
 	f := newAPI(t)
@@ -130,7 +130,7 @@ func TestDeletingAPersonRemovesTheirAccount(t *testing.T) {
 	}
 }
 
-// UO-183: an org's export has its provider without the secret and its
+// An org's export has its provider without the secret and its
 // invites without their links; a purge leaves nothing of it and nothing of
 // another org is touched.
 func TestOrgDataExportAndPurge(t *testing.T) {
@@ -178,7 +178,7 @@ func TestOrgDataExportAndPurge(t *testing.T) {
 	}
 }
 
-// UO-184: a person's export has their account, sessions and whether a
+// A person's export has their account, sessions and whether a
 // second factor is enrolled, and no secret.
 func TestUserDataExport(t *testing.T) {
 	f := newAPI(t)
@@ -212,7 +212,7 @@ func TestUserDataExport(t *testing.T) {
 	}
 }
 
-// UO-184: an email change is confirmed from the new address, told to the
+// An email change is confirmed from the new address, told to the
 // old one, and undone from there within the hour, which signs the person
 // out everywhere.
 func TestEmailChangeConfirmAndUndo(t *testing.T) {
@@ -294,7 +294,7 @@ func TestEmailChangeConfirmAndUndo(t *testing.T) {
 	}
 }
 
-// UO-184: a person whose address an identity provider manages changes it
+// A person whose address an identity provider manages changes it
 // there; a person without a local account has nothing to change here.
 func TestEmailChangeRefusals(t *testing.T) {
 	f := newAPI(t)

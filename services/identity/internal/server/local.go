@@ -151,8 +151,8 @@ func (s *Server) SignInLocal(ctx context.Context, req api.SignInLocalRequestObje
 	if land != nil {
 		signedIn = land.OrgID
 	}
-	// A second factor, when the person has one or the org demands one
-	// (UO-68): the sign-in parks here until the code is right.
+	// A second factor, when the person has one or the org demands one:
+	// the sign-in parks here until the code is right.
 	_, enrolled, err := s.enrolled(ctx, account.UserID)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (s *Server) SignInLocal(ctx context.Context, req api.SignInLocalRequestObje
 }
 
 // auditStaffFailure writes a wrong password for a platform operator to the
-// platform's audit log (UO-82). A customer's failures stay out of it: they
+// platform's audit log. A customer's failures stay out of it: they
 // are the throttle's business, and the platform log is about staff.
 func (s *Server) auditStaffFailure(ctx context.Context, userID uuid.UUID) error {
 	all, err := s.users.ListMemberships(ctx, userID)
@@ -221,7 +221,7 @@ func (s *Server) completeSignInVia(ctx context.Context, userID, signedIn uuid.UU
 			s.logger.Warn("could not record activity", "error", err)
 		}
 	}
-	// Signing in cancels a pending account deletion (UO-184). A failure is
+	// Signing in cancels a pending account deletion. A failure is
 	// logged loudly: the deletion would otherwise go ahead.
 	if err := s.users.SignedIn(ctx, userID); err != nil {
 		s.logger.Error("could not record a sign-in with the user service", "error", err, "user_id", userID)

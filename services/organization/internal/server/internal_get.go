@@ -13,7 +13,7 @@ import (
 )
 
 // GetOrganizationInternal is the record for a service acting on the org's
-// behalf: the name for an email, the time zone for a schedule (UO-54).
+// behalf: the name for an email, the time zone for a schedule.
 func (s *Server) GetOrganizationInternal(ctx context.Context, req api.GetOrganizationInternalRequestObject) (api.GetOrganizationInternalResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.GetOrganizationInternal403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil

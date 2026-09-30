@@ -1,5 +1,5 @@
 // Package dbcmd is the dbinit and migrate commands as functions over a
-// service registry (UO-35, UO-36), so a product's own commands run them with
+// service registry, so a product's own commands run them with
 // its services registered and nothing in the template changes:
 //
 //	func main() {

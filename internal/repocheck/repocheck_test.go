@@ -128,10 +128,18 @@ func TestQueriesAreOrgScoped(t *testing.T) {
 	}
 }
 
-// productWord is a name of the product this template was carved from, or
-// the product word "ofis" on its own. Neither belongs in the template: the
-// product's name comes from config (pkg/config.Brand), and nothing names it.
-var productWord = regexp.MustCompile(`(?i)unity` + `ofis|\bofis\b`)
+// internalIdentifier finds what names the product this template was carved
+// from, its internal ticket keys or its company's hostnames. None of it
+// belongs in a public, product-neutral template: a product's name comes from
+// config (pkg/config.Brand), and nothing names it. The repository's own
+// paths, github.com/UnityEvolv/..., are its public name and do not match.
+// Each pattern has a one-character class so that this file does not match
+// itself.
+var internalIdentifier = regexp.MustCompile(`(?i)unity[o]fis|\b[o]fis\b|\bU[O]-[0-9]|unityevolv[.]com`)
+
+// allowedIdentifiers are the tracked files allowed to match, each with the
+// reason. Keep it empty: an entry is a debt with a named way to pay it off.
+var allowedIdentifiers = map[string]string{}
 
 // shipped is whether path is a file the template ships as text: code,
 // queries, contracts, scripts, deploy files and docs.
@@ -177,15 +185,63 @@ func walkShipped(t *testing.T, fn func(rel string, n int, line string)) {
 	}
 }
 
-// The product's name is configuration, never a literal: not in code, tests,
-// queries, contracts, deploy files or docs. This package, which spells the
-// rule out, is the one exception.
-func TestNoProductNameInCode(t *testing.T) {
-	walkShipped(t, func(rel string, n int, line string) {
-		if !strings.HasPrefix(rel, "internal/repocheck/") && productWord.MatchString(line) {
-			t.Errorf("%s:%d: names the product; read it from config instead", rel, n)
+// No tracked file names the product this template was carved from, its
+// internal ticket keys or its company's hostnames: not code, tests, specs,
+// docs, workflows or deploy files. Every file git tracks is read, whatever
+// its kind, so nothing slips through as an unusual extension.
+func TestNoInternalIdentifiers(t *testing.T) {
+	root := repoRoot(t)
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("not a git checkout: %v", err)
+	}
+	files := strings.Split(strings.TrimRight(string(out), "\x00"), "\x00")
+	for _, rel := range files {
+		if _, ok := allowedIdentifiers[rel]; ok || rel == "" {
+			continue
 		}
-	})
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue // deleted in the working tree
+		}
+		if strings.IndexByte(string(body), 0) >= 0 {
+			continue // binary
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if internalIdentifier.MatchString(line) {
+				t.Errorf("%s:%d: names the original product, its tickets or its hosts; read the name from config, and describe the behaviour instead of a ticket", rel, i+1)
+			}
+		}
+	}
+}
+
+// The identifier rule catches what it is meant to, and not the
+// repository's own public paths or ordinary words. The samples are split
+// so that this file does not match itself.
+func TestIdentifierRuleCatchesTheOldNames(t *testing.T) {
+	for _, line := range []string{
+		"unityo" + "fis-verify=",
+		"app: o" + "fis",
+		"// see U" + "O-123",
+		"https://app.unityevolv" + ".com/",
+		"UNITYO" + "FIS",
+	} {
+		if !internalIdentifier.MatchString(line) {
+			t.Errorf("not caught: %s", line)
+		}
+	}
+	for _, line := range []string{
+		"github.com/UnityEvolv/b2b-backend-template/pkg/config",
+		"https://github.com/UnityEvolv/b2b-frontend-template",
+		"profiles, offices and a UUID-4 id",
+		"Copyright (c) 2026 UnityEvolv",
+	} {
+		if internalIdentifier.MatchString(line) {
+			t.Errorf("caught: %s", line)
+		}
+	}
 }
 
 // brandRule is one literal that must stay configuration: what it is, the
@@ -213,14 +269,14 @@ var brandLiterals = []brandRule{
 	{"a fixed TOTP issuer; use the product name", regexp.MustCompile(`totp\.URI\([^,]+,\s*"`), nil},
 	{"a fixed Stripe metadata source; use the product id", regexp.MustCompile(`metadata\[source\]":\s*\{"`), nil},
 	{"a MIME boundary that names something; keep it neutral", regexp.MustCompile(`boundary\s*:?=\s*"`), regexp.MustCompile(`boundary\s*:?=\s*"part-"`)},
-	{"an advisory lock named for a product; name the job", regexp.MustCompile(`pg_advisory_(un)?lock\(hashtext\('[^'.]*(ofis|unity|b2b)`), nil},
+	{"an advisory lock named for a product; name the job", regexp.MustCompile(`pg_advisory_(un)?lock\(hashtext\('[^'.]*([o]fis|unity|b2b)`), nil},
 	{"the realtime or TURN subdomain; a product declares its own app origins", regexp.MustCompile(`Subdomain(Realtime|TURN)\b|"(rt|turn)\."`), nil},
 	{"a fixed session or sign-in cookie name; use config.Cookies (COOKIE_PREFIX)", regexp.MustCompile(`"[A-Za-z0-9-]*_(session|signin)"`), nil},
 	{"a fixed SCIM token prefix; use config.SCIMTokenPrefixFrom (SCIM_TOKEN_PREFIX)", regexp.MustCompile(`"[A-Za-z0-9-]+_?scim_`), nil},
 	{"a fixed web app name; APP_NAMES names them and config.DefaultApps is the default", regexp.MustCompile(`(MainApp|PlatformApp|DefaultApps)\s*(:|=|:=)\s*(\[\]string\{)?"[a-z]`), nil},
 }
 
-// B2B-19's audit items stay configuration: this fails when one of them is
+// The branding literals stay configuration: this fails when one of them is
 // written as a literal again.
 func TestBrandingComesFromConfig(t *testing.T) {
 	walkShipped(t, func(rel string, n int, line string) {

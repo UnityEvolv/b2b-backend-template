@@ -264,7 +264,7 @@ func mention(to uuid.UUID, conv string) notify.Event {
 	return notify.Event{Kind: "message", Category: chat, Recipients: []uuid.UUID{to}, Link: "/chat/" + conv, Group: "conv:" + conv, Data: map[string]any{"by": "Ana", "where": "Design"}}
 }
 
-// The routing story's "done when".
+// Routing, from intake to each channel.
 func TestRouting(t *testing.T) {
 	f := newNotify(t)
 	reader, readerToken := f.person(t, authz.User)
@@ -523,7 +523,7 @@ func TestPreferencesAndDevices(t *testing.T) {
 	}
 }
 
-// B2B-25: a session revoked on the live-session bus loses its devices at
+// A session revoked on the live-session bus loses its devices at
 // once, and the person's other session keeps its own.
 func TestARevokedSessionLosesItsDevices(t *testing.T) {
 	f := newNotify(t)

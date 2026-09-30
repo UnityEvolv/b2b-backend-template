@@ -349,8 +349,8 @@ paths:
       summary: Deactivate, suspend or reactivate one membership
       description: |
         Per membership: the person's other organizations are untouched.
-        Until the roles story, a platform operator's action; an org's Admin
-        then. Audited.
+        Needs the users permission (an Admin by default), or a platform
+        operator. Audited.
       tags: [memberships]
       parameters:
         - $ref: '#/components/parameters/OrgId'

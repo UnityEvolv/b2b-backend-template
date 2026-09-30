@@ -43,7 +43,7 @@ DELETE FROM processed_events WHERE provider = @provider AND event_id = @event_id
 SELECT * FROM accounts WHERE org_id = @org_id;
 
 -- name: PurgeAccount :execrows
--- The org's account, for its purge (UO-183). Webhook events already applied
+-- The org's account, for its purge. Webhook events already applied
 -- carry no org and are not the org's data.
 DELETE FROM accounts WHERE org_id = @org_id;
 

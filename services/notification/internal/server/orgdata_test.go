@@ -17,7 +17,7 @@ import (
 // An org's notification rows go out in its export with no push token or
 // email body; a purge leaves nothing of it and another org untouched; a
 // person's export has only their own rows; forgetting a membership deletes
-// them (UO-183, UO-184).
+// them.
 func TestOrgData(t *testing.T) {
 	f := newNotify(t)
 	service := func(name string) string {

@@ -1,5 +1,5 @@
 // Command user is the user service: who a person is, and which organizations
-// they belong to (UO-52).
+// they belong to.
 package main
 
 import (
@@ -88,7 +88,7 @@ func run() error {
 		notificationURL = env.Required("NOTIFICATION_URL")
 		dataOwners      = env.String("DATA_OWNERS", "")
 		tokenURL        = env.Required("SERVICE_TOKEN_URL")
-		// Profile photos (UO-57), in the upload bucket.
+		// Profile photos, in the upload bucket.
 		s3 = storage.Config{
 			Endpoint: env.String("S3_ENDPOINT", ""), Region: env.String("S3_REGION", ""),
 			Bucket: env.Required("S3_BUCKET"), AccessKey: env.Required("S3_ACCESS_KEY"), SecretKey: env.Required("S3_SECRET_KEY"),

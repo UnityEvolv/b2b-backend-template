@@ -1,4 +1,4 @@
-// Package server implements the authorization API (UO-53): each org's
+// Package server implements the authorization API: each org's
 // permission configuration, role assignment, and the grant every other
 // service asks for before a protected action.
 package server
@@ -60,7 +60,7 @@ type Server struct {
 	logger      *slog.Logger
 	recorder    audit.Recorder
 	memberships Memberships
-	// For ownership transfers (UO-86): the outbox, the org's name for the
+	// For ownership transfers: the outbox, the org's name for the
 	// emails, and the admin app's origin for the link.
 	email email.Sender
 	orgs  Organizations
@@ -97,7 +97,7 @@ func (s *Server) WithGroups(groups *authz.Registry) *Server {
 	return s
 }
 
-// Limits is this API's rate limits: one line per endpoint (UO-119).
+// Limits is this API's rate limits: one line per endpoint.
 var Limits = map[string]ratelimit.Bound{
 	"GET /v1/permission-groups":                                                ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"GET /v1/organizations/{org_id}/permissions":                               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
@@ -107,7 +107,7 @@ var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations/{org_id}/ownership-transfers":                       ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/ownership-transfers/{transfer_id}/accept": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"DELETE /v1/organizations/{org_id}/ownership-transfers/{transfer_id}":      ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	// The organization service's data endpoints (UO-183, UO-184).
+	// The organization service's data endpoints.
 	"GET /v1/internal/organizations/{org_id}/data":    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"DELETE /v1/internal/organizations/{org_id}/data": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"GET /v1/internal/users/{user_id}/data":           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),

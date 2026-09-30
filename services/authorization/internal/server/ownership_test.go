@@ -11,7 +11,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 )
 
-// The story's "done when": an Owner transfers to a member who accepts, the
+// An Owner transfers to a member who accepts, the
 // previous Owner ends as an Admin, and an unaccepted request expires
 // without changing anything.
 func TestOwnershipTransfer(t *testing.T) {

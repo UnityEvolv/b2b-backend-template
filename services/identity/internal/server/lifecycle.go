@@ -17,7 +17,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
-// Org offboarding and account deletion (UO-183, UO-184): this service's
+// Org offboarding and account deletion: this service's
 // share of an org's export and purge, of a person's export, and of deleting
 // a person. Only the organization service asks for data; the user service
 // and the organization service delete people.

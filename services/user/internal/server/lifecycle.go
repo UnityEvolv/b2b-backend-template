@@ -23,7 +23,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
 )
 
-// Account deletion (UO-184) and forgetting people who left (UO-183). A
+// Account deletion and forgetting people who left. A
 // person asks, types DELETE, and has fourteen days to change their mind by
 // signing in; then every membership is ended and anonymised, the services
 // that keep something under a membership forget it, and the user row
@@ -560,7 +560,7 @@ func (s *Server) hardDelete(ctx context.Context, u store.User) error {
 	})
 }
 
-// The data endpoints (UO-183, UO-184), for the organization service only.
+// The data endpoints, for the organization service only.
 
 func part(v any, files []orgdata.File) (api.DataPart, error) {
 	p, err := orgdata.Marshal(serviceName, v, files)

@@ -1,4 +1,4 @@
-// Package server implements the user API (UO-52): the generated interface in
+// Package server implements the user API: the generated interface in
 // internal/api, backed by the generated queries in internal/store.
 package server
 
@@ -69,7 +69,7 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, plan
 	return &Server{cluster: cluster, logger: logger, recorder: recorder, plans: plans, authz: checker, sessions: sessions, invites: invites, uploads: uploads, accounts: accounts, now: time.Now}
 }
 
-// Limits is this API's rate limits: one line per endpoint (UO-119).
+// Limits is this API's rate limits: one line per endpoint.
 var Limits = map[string]ratelimit.Bound{
 	"GET /v1/me":                                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"PATCH /v1/me/profile":                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),

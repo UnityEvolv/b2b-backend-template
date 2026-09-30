@@ -280,7 +280,7 @@ type ListMembershipsOfOrgRow struct {
 	User       User
 }
 
-// Org offboarding and account deletion (UO-183, UO-184).
+// Org offboarding and account deletion.
 // Every membership of an org with its person, for the org's export and purge.
 func (q *Queries) ListMembershipsOfOrg(ctx context.Context, orgID uuid.UUID) ([]ListMembershipsOfOrgRow, error) {
 	rows, err := q.db.Query(ctx, listMembershipsOfOrg, orgID)

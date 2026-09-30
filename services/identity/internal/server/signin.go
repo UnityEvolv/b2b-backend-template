@@ -28,7 +28,7 @@ import (
 const (
 	attemptTTL = 10 * time.Minute
 	// desktopCodeTTL is how long the desktop app has to take up a sign-in
-	// the browser finished (UO-117).
+	// the browser finished.
 	desktopCodeTTL = time.Minute
 	// codeExchangeInvalid refuses a desktop exchange, whatever was wrong.
 	codeExchangeInvalid = "signin.exchange_invalid"
@@ -48,7 +48,7 @@ const (
 
 // codeOrgSuspended is the refusal when every org the person could use is
 // suspended: they belong, but nobody may work there until it is reactivated.
-// codeOrgClosing is the same for an org that is closing (UO-183): its
+// codeOrgClosing is the same for an org that is closing: its
 // Owner can still reopen it until the date it is deleted.
 const (
 	codeOrgSuspended = "organization.suspended"
@@ -137,7 +137,7 @@ func (s *Server) StartSignIn(ctx context.Context, req api.StartSignInRequestObje
 		return api.StartSignIn400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Not an app.", Fields: &fields}}, nil
 	}
 	// The desktop app starts here in the system browser with a PKCE
-	// challenge of its own (UO-117); the callback hands it a code instead
+	// challenge of its own; the callback hands it a code instead
 	// of starting a session in this browser.
 	client := string(api.Web)
 	var challenge pgtype.Text
@@ -279,7 +279,7 @@ func (s *Server) backFor(attempt store.SignInAttempt, code string, extra url.Val
 }
 
 // appClient is the desktop or mobile app, which sign in through the system
-// browser and take the session up with a one-time code (UO-117, UO-89).
+// browser and take the session up with a one-time code.
 func appClient(client string) bool {
 	return client == string(api.Desktop) || client == string(api.Mobile)
 }
@@ -482,7 +482,7 @@ func (s *Server) desktopCode(ctx context.Context, userID, signedIn uuid.UUID, la
 }
 
 // ExchangeDesktopSignIn is the desktop app taking up a sign-in the system
-// browser finished (UO-117): the one-time code, and the PKCE verifier whose
+// browser finished: the one-time code, and the PKCE verifier whose
 // challenge started the attempt. Starts the session as local sign-in does.
 func (s *Server) ExchangeDesktopSignIn(ctx context.Context, req api.ExchangeDesktopSignInRequestObject) (api.ExchangeDesktopSignInResponseObject, error) {
 	refused := api.ExchangeDesktopSignIn400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{
@@ -550,14 +550,14 @@ func directoryOf(c oidc.Claims) map[string]string {
 
 // statusOrgSuspended marks a membership whose org a platform operator has
 // suspended: the membership itself is untouched, but no session may use it.
-// statusOrgClosing is the same for an org that is closing (UO-183).
+// statusOrgClosing is the same for an org that is closing.
 const (
 	statusOrgSuspended = "org_suspended"
 	statusOrgClosing   = "org_closing"
 )
 
 // screen is the memberships with those in suspended or closing orgs marked
-// unusable (UO-84, UO-183), so landing, refresh and switching all pass them
+// unusable, so landing, refresh and switching all pass them
 // by. Read at the moment of use, so a suspension or a closure takes effect
 // within one access token's life and a reactivation at the next sign-in or
 // refresh.

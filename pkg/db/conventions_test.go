@@ -278,7 +278,7 @@ CREATE UNIQUE INDEX convention_probe_by_domain ON convention_probe (domain);`
 }
 
 // Every table every service creates follows the conventions. This is what
-// holds future stories to them.
+// holds every future table to them.
 func TestRepositorySchemasFollowConventions(t *testing.T) {
 	url := bootstrap(t)
 	ctx := context.Background()

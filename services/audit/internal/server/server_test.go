@@ -326,7 +326,7 @@ func TestEntriesCannotBeChangedOrRemoved(t *testing.T) {
 	}
 }
 
-// The audit viewer story: only whoever holds the audit permission reads the
+// Only whoever holds the audit permission reads the
 // log, by date range and in either order, and exports it as CSV.
 func TestReadingNeedsTheAuditPermission(t *testing.T) {
 	f := newFixture(t)

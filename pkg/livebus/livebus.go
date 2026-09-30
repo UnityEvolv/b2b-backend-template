@@ -1,4 +1,4 @@
-// Package livebus is the live-session event bus (UO-77): what a service
+// Package livebus is the live-session event bus: what a service
 // pushes to the people who have the product open right now, such as a
 // session that has just ended. One Redis pub/sub channel under the
 // configurable prefix (config.Redis.LiveEvents); no broker and nothing

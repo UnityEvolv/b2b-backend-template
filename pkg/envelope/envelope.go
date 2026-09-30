@@ -1,5 +1,4 @@
-// Package envelope encrypts a customer's secrets under that customer's own
-// key (UO-45).
+// Package envelope encrypts a customer's secrets under that customer's own key.
 //
 // Each org has a data key, generated when the org is created and stored
 // wrapped by the KMS master key in the organization service. A service that

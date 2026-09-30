@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// Desktop sign-in through the system browser (UO-117): the browser finishes
+// Desktop sign-in through the system browser: the browser finishes
 // the provider's sign-in but holds no session; the app gets a one-time code
 // on its scheme and exchanges it with the PKCE verifier it started with.
 func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
@@ -115,7 +115,7 @@ func mustQuery(t *testing.T, raw, key string) string {
 	return u.Query().Get(key)
 }
 
-// The mobile app (UO-89) signs in the same way, and is recorded as mobile.
+// The mobile app signs in the same way, and is recorded as mobile.
 func TestMobileSignInUsesTheSameHandOff(t *testing.T) {
 	f := newAPI(t)
 	f.configure(acme)

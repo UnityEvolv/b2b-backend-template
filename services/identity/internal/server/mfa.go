@@ -19,7 +19,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/totp"
 )
 
-// TOTP MFA for local accounts (UO-68): enrol with an authenticator app,
+// TOTP MFA for local accounts: enrol with an authenticator app,
 // be challenged at sign-in, recover with a code, and be reset by an admin.
 // Entra users get their second factor from Microsoft and never come here.
 

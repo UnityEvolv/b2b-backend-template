@@ -38,7 +38,7 @@ type table struct {
 // means the schema conforms.
 //
 // It is run in CI against every service schema after every migration is
-// applied, so a story that adds a table cannot forget them.
+// applied, so a change that adds a table cannot forget them.
 func CheckConventions(ctx context.Context, q Querier, schema string) ([]string, error) {
 	tables, err := loadTables(ctx, q, schema)
 	if err != nil {
@@ -170,7 +170,7 @@ func indexesNotLedByOrg(ctx context.Context, q Querier, oid uint32) ([]string, e
 		WHERE i.indrelid = $1 AND coalesce(a.attname, '') <> 'org_id'
 		  -- A platform-wide lookup (a domain claim, the platform's list of
 		  -- orgs) is allowed when the index says so; it lives on shard 0's
-		  -- copy of the table the sharding story keeps global.
+		  -- copy of the table, which stays global when the data is sharded.
 		  AND coalesce(obj_description(ic.oid, 'pg_class'), '') NOT LIKE 'global:%'
 		ORDER BY ic.relname`, oid)
 	if err != nil {

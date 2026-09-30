@@ -65,8 +65,8 @@ const exportPermissionConfigs = `-- name: ExportPermissionConfigs :many
 SELECT org_id, admin_permissions, billing_admin_permissions, known_groups, created_by, created_at, last_modified_by, last_modified_at FROM permission_configs WHERE org_id = $1
 `
 
-// An org's data, for its export and its purge (UO-183), and a person's
-// ownership transfers, for their own export (UO-184).
+// An org's data, for its export and its purge, and a person's
+// ownership transfers, for their own export.
 func (q *Queries) ExportPermissionConfigs(ctx context.Context, orgID uuid.UUID) ([]PermissionConfig, error) {
 	rows, err := q.db.Query(ctx, exportPermissionConfigs, orgID)
 	if err != nil {

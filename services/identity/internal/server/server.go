@@ -1,4 +1,4 @@
-// Package server implements the identity API (UO-51): sign-in through an
+// Package server implements the identity API: sign-in through an
 // org's identity provider, the sessions that follow, the tokens every other
 // service verifies.
 package server
@@ -120,7 +120,7 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	return &Server{cluster: cluster, logger: logger, recorder: recorder, signer: sig, oidc: oidcClient, keyring: keyring, users: users, orgs: orgs, authz: checker, events: events, email: sender, limiter: limiter, kms: wrapper, cfg: cfg}
 }
 
-// Limits is this API's rate limits: one line per endpoint (UO-119). The
+// Limits is this API's rate limits: one line per endpoint. The
 // public endpoints are limited by address; a wrong sign-in is a failed
 // sign-in and closes hard.
 var Limits = map[string]ratelimit.Bound{

@@ -22,7 +22,7 @@ func (m *memoryLive) Publish(_ context.Context, ev livebus.Event) error {
 	return nil
 }
 
-// B2B-25: a role change is pushed as membership.changed, so the person's
+// A role change is pushed as membership.changed, so the person's
 // open apps read their grant again; setting the same role pushes nothing.
 func TestARoleChangeIsPushedLive(t *testing.T) {
 	f := newAPI(t)

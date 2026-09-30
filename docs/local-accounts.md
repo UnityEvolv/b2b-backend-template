@@ -4,14 +4,14 @@ Organizations without Microsoft Entra use local accounts: a person is
 invited by email, proves the address, then sets a password. Guests in any
 org sign in this way too. Entra users never get one.
 
-## Email verification (UO-67)
+## Email verification
 
 Ownership of the address is proven before the account can sign in.
 
 1. A service starts the account: `POST /identity/v1/internal/local-accounts`
    with the user (made by the user service), the address, the organization
    that asked (id and name, shown in the email), and which app the link
-   opens. The invite, bulk import and self-serve signup stories call it.
+   opens. Invites, the bulk import and self-serve signup call it.
    The account starts unverified.
 2. A link is queued through the notification service's outbox
    (`verify_email` template, on the org's behalf): `app/verify-email?token=…`.
@@ -37,7 +37,7 @@ over, and the password stays.
 Changing an email address after verification is not in the MVP: global
 uniqueness and IdP-linked accounts make it more than a field edit.
 
-## Passwords and sign-in (UO-56)
+## Passwords and sign-in
 
 - **Setting the first password.** `POST /identity/v1/local/password {token,
   password}` with the `setup_token` from verification (one use, fifteen
@@ -67,7 +67,7 @@ uniqueness and IdP-linked accounts make it more than a field edit.
   password with the reset link ends every session of the person
   (`password_changed`, pushed to their sockets) and is audited.
 
-## Second factor (UO-68)
+## Second factor
 
 TOTP with an authenticator app, for local accounts only; Entra users get
 theirs from Microsoft. RFC 6238 as every app speaks it (SHA-1, thirty

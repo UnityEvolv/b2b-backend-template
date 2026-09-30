@@ -23,7 +23,7 @@ import (
 )
 
 // An org's billing account in its export and its purge, and cancelling its
-// subscription when it closes (UO-183, UO-184). All for the organization
+// subscription when it closes. All for the organization
 // service only. Billing is org-level: nothing here is about one person.
 
 const serviceName = "billing"

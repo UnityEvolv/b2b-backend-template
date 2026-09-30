@@ -1,5 +1,5 @@
-// Package audit is the one call a service makes to record who did what
-// (UO-46). Entries go to the audit service, which owns the append-only store;
+// Package audit is the one call a service makes to record who did what.
+// Entries go to the audit service, which owns the append-only store;
 // nothing else can write to it.
 //
 //	if err := recorder.Record(ctx, audit.Event{

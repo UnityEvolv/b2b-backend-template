@@ -24,7 +24,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// Self-serve signup (UO-55): someone creates an organization without
+// Self-serve signup: someone creates an organization without
 // talking to sales. The address is proven before anything exists; the
 // signer-up becomes Owner; the address's domain is claimed unless it is a
 // public mailbox provider, so two people from one company cannot make two

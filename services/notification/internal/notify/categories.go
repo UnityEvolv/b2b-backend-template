@@ -1,5 +1,5 @@
-// Package notify decides who is told about what, how, and whether at all
-// (UO-175): intake, routing by preference, quiet hours, suppression while
+// Package notify decides who is told about what, how, and whether at all:
+// intake, routing by preference, quiet hours, suppression while
 // someone is looking, dedupe and batching, and delivery to the feed, push,
 // email and the daily digest. Nothing else in the platform sends a
 // notification.

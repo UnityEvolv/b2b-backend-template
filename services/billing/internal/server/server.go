@@ -1,4 +1,4 @@
-// Package server implements the billing API (UO-168 to UO-171): the account
+// Package server implements the billing API: the account
 // each org has, the payment provider behind it, and the subscription state
 // the plan follows. The plan field itself is the organization service's;
 // billing is the one path, besides a platform operator, that moves it.
@@ -100,7 +100,7 @@ func (s *Server) WithClock(now func() time.Time) *Server {
 	return s
 }
 
-// Limits is this API's rate limits: one line per endpoint (UO-119).
+// Limits is this API's rate limits: one line per endpoint.
 var Limits = map[string]ratelimit.Bound{
 	"GET /v1/organizations/{org_id}/billing":              ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"POST /v1/organizations/{org_id}/billing/setup":       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
@@ -110,7 +110,7 @@ var Limits = map[string]ratelimit.Bound{
 	"POST /v1/organizations/{org_id}/billing/trial":       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/billing/auto-upgrade": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"GET /v1/organizations/{org_id}/billing/invoices":     ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	// The organization service's data endpoints and closing (UO-183, UO-184).
+	// The organization service's data endpoints and closing.
 	"GET /v1/internal/organizations/{org_id}/data":    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"DELETE /v1/internal/organizations/{org_id}/data": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"GET /v1/internal/users/{user_id}/data":           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
@@ -479,7 +479,7 @@ func (s *Server) ChangeBand(ctx context.Context, req api.ChangeBandRequestObject
 		return nil, err
 	}
 	if a.State == "invoiced" {
-		return api.ChangeBand409JSONResponse(conflict(codeInvoiced, "Your plan is invoiced by contract; ask your UnityEvolv contact to change it.")), nil
+		return api.ChangeBand409JSONResponse(conflict(codeInvoiced, "Your plan is invoiced by contract; ask your account manager to change it.")), nil
 	}
 	from := plan.Band(a.Band)
 	switch {

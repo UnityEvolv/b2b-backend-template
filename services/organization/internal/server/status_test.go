@@ -7,7 +7,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 )
 
-// The org detail story: an operator suspends and reactivates an org, with
+// An operator suspends and reactivates an org, with
 // the reason audited; members cannot; the platform itself cannot be
 // suspended; the list filters by status; and an operator reading the org
 // leaves a support entry on its log while a member reading it does not.

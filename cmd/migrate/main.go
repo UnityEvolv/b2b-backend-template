@@ -1,5 +1,5 @@
-// Command migrate applies schema migrations, each service as its own role
-// (UO-36): the services registered in pkg/db.Default, which are the
+// Command migrate applies schema migrations, each service as its own role:
+// the services registered in pkg/db.Default, which are the
 // template's own. A product with services of its own runs pkg/db/dbcmd from
 // its own command with them registered.
 //

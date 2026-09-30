@@ -29,7 +29,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// Offboarding and retention (UO-183): closing an org, reopening it within
+// Offboarding and retention: closing an org, reopening it within
 // the grace, the schedule of what is kept, and the purge at the end.
 
 // closeGrace is how long a closing org can be reopened before it is purged.

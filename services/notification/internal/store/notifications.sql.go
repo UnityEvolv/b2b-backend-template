@@ -485,7 +485,7 @@ const exportOrgSettings = `-- name: ExportOrgSettings :many
 SELECT to_jsonb(s) AS row FROM org_settings s WHERE s.org_id = $1
 `
 
-// Org data (UO-183, UO-184): every row of an org as JSON for its export,
+// Org data: every row of an org as JSON for its export,
 // deleted for its purge, one person's own rows for theirs, and a
 // membership's forgotten for account deletion. Push tokens, their hashes and
 // session ids never leave; nor do email bodies, which carry sign-in and

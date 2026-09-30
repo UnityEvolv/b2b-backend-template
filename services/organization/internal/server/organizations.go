@@ -350,7 +350,7 @@ func (s *Server) UpdateOrganization(ctx context.Context, req api.UpdateOrganizat
 	}
 	if body.Domain.IsSpecified() {
 		changed = append(changed, "domain")
-		// A claim must be proven (UO-55): an org sets its domain through the
+		// A claim must be proven: an org sets its domain through the
 		// domain endpoints and a TXT record; an operator may set it directly.
 		if !mayEditDomainDirectly(ctx) {
 			return api.UpdateOrganization403JSONResponse{Code: codeDomainDirect, Message: "A domain is claimed by verifying it: use the domain settings."}, nil

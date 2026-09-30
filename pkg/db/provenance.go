@@ -36,7 +36,7 @@ func (a Actor) valid() bool {
 }
 
 // ErrNoActor means a write was attempted without anyone to attribute it to.
-// The auth middleware (UO-41) puts the caller in the context; background work
+// The auth middleware puts the caller in the context; background work
 // names itself with SystemActor.
 var ErrNoActor = errors.New("db: no actor in context; every write is attributed")
 

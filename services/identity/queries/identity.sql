@@ -39,7 +39,7 @@ RETURNING *;
 DELETE FROM sign_in_attempts WHERE expires_at < now() - interval '1 day';
 
 -- name: InsertDesktopSignInCode :exec
--- global: a sign-in is a person's, like the session it becomes (UO-117).
+-- global: a sign-in is a person's, like the session it becomes.
 INSERT INTO desktop_sign_in_codes (id, code_hash, user_id, signed_in_org_id, active_org_id, active_membership_id, provider, client, app_challenge, expires_at)
 VALUES (@id, @code_hash, @user_id, @signed_in_org_id, sqlc.narg('active_org_id'), sqlc.narg('active_membership_id'), @provider, @client, @app_challenge, @expires_at);
 
@@ -83,7 +83,7 @@ RETURNING *;
 UPDATE sessions SET revoked_at = now() WHERE id = @id AND revoked_at IS NULL;
 
 -- name: RevokeSessionsOfUser :execrows
--- global: a session is a person's; the session story revokes them all at once.
+-- global: a session is a person's; this revokes them all at once.
 UPDATE sessions SET revoked_at = now() WHERE user_id = @user_id AND revoked_at IS NULL;
 
 -- name: DeleteExpiredSessions :execrows
@@ -331,7 +331,7 @@ WHERE org_id = @org_id
 ORDER BY created_at DESC, id DESC
 LIMIT @page_limit;
 
--- Org offboarding, account deletion, email change (UO-183, UO-184).
+-- Org offboarding, account deletion, email change.
 
 -- name: ListInvitesOfOrg :many
 -- Every invite of an org, for its export.

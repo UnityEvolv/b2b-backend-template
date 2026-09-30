@@ -26,7 +26,7 @@ services:
       timeout: 3s
       retries: 20
 
-  # A schema and a login role per service, on every start (UO-35). Idempotent,
+  # A schema and a login role per service, on every start. Idempotent,
   # so it also repairs a role or a grant edited by hand.
   dbinit:
     build:
@@ -44,7 +44,7 @@ services:
         condition: service_healthy
     restart: 'no'
 
-  # Every service's migrations, each as its own role (UO-36), after dbinit.
+  # Every service's migrations, each as its own role, after dbinit.
   migrate:
     build:
       context: ..
@@ -61,12 +61,12 @@ services:
         condition: service_completed_successfully
     restart: 'no'
 
-  # Mints tokens for local development until the identity service does (UO-41).
+  # Mints tokens for local development until the identity service does.
   #   curl -X POST localhost:8090/token -d '{"org_id":"<uuid>"}'
   # Its key is generated at start: restarting it invalidates every token.
   # Go services. Each connects as its own role; copy this block for a new one.
   # Sign-in through an org's identity provider, sessions, and the tokens
-  # every other service verifies (UO-51). Locally it also mints service and
+  # every other service verifies. Locally it also mints service and
   # development tokens at POST /token, as the stub issuer did.
   identity:
     build:
@@ -137,7 +137,7 @@ services:
       # service token it presents there.
       AUDIT_URL: http://audit:8080
       SERVICE_TOKEN_URL: http://identity:8080
-      # Self-serve signup (UO-55): the Owner, their account, the link, and
+      # Self-serve signup: the Owner, their account, the link, and
       # where it opens. No CAPTCHA on a laptop.
       AUTHORIZATION_URL: http://authorization:8080
       USER_URL: http://user:8080
@@ -147,7 +147,7 @@ services:
       APP_ORIGIN_ADMIN: http://localhost:5174
       APP_ORIGIN_PLATFORM: http://localhost:5175
       CAPTCHA_PROVIDER: 'off'
-      # Offboarding and exports (UO-183, UO-184): every service with data,
+      # Offboarding and exports: every service with data,
       # and the bucket the archives go to.
       BILLING_URL: http://billing:8080
       S3_ENDPOINT: http://s3:9000
@@ -172,7 +172,7 @@ services:
       redis:
         condition: service_healthy
 
-  # Who a person is and which organizations they belong to (UO-52). The
+  # Who a person is and which organizations they belong to. The
   # identity service records sign-ins here; the engine's identity adapter
   # writes where people are.
   user:
@@ -198,11 +198,11 @@ services:
       AUTHORIZATION_URL: http://authorization:8080
       IDENTITY_URL: http://identity:8080
       BILLING_URL: http://billing:8080
-      # Account deletion (UO-184): the notice, and what each service forgets.
+      # Account deletion: the notice, and what each service forgets.
       NOTIFICATION_URL: http://notification:8080
       SERVICE_TOKEN_URL: http://identity:8080
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-      # Profile photos, in the local bucket (UO-57).
+      # Profile photos, in the local bucket.
       S3_ENDPOINT: http://s3:9000
       S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
       S3_PATH_STYLE: 'true'
@@ -218,7 +218,7 @@ services:
         condition: service_healthy
 
   # What each org role may do, configured per org by its Owner, and the
-  # permission check every service makes (UO-53).
+  # permission check every service makes.
   authorization:
     build:
       context: ..
@@ -240,7 +240,7 @@ services:
       AUDIT_URL: http://audit:8080
       USER_URL: http://user:8080
       SERVICE_TOKEN_URL: http://identity:8080
-      # Ownership transfers (UO-86) email both parties and link into the admin app.
+      # Ownership transfers email both parties and link into the admin app.
       NOTIFICATION_URL: http://notification:8080
       ORGANIZATION_URL: http://organization:8080
       APP_ORIGIN_ADMIN: http://localhost:5174
@@ -253,7 +253,7 @@ services:
       redis:
         condition: service_healthy
 
-  # The append-only record of who did what (UO-46). Services record through
+  # The append-only record of who did what. Services record through
   # its API with a service token; an org's admins read their own entries.
   audit:
     build:
@@ -274,7 +274,7 @@ services:
       AUTH_AUDIENCE: b2bapp
       AUTH_JWKS_URL: http://identity:8080/v1/jwks
       REDIS_URL: redis://redis:6379/0
-      # Who may read an org's log, asked with this service's own token (UO-85).
+      # Who may read an org's log, asked with this service's own token.
       AUTHORIZATION_URL: http://authorization:8080
       SERVICE_TOKEN_URL: http://identity:8080
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
@@ -286,7 +286,7 @@ services:
       redis:
         condition: service_healthy
 
-  # Transactional email from its own outbox with retries (UO-112). Locally
+  # Transactional email from its own outbox with retries. Locally
   # everything goes to Mailpit; deployed, to Resend.
   notification:
     build:
@@ -310,7 +310,7 @@ services:
       EMAIL_TRANSPORT: smtp
       SMTP_ADDR: mailpit:1025
       EMAIL_FROM: b2bapp <no-reply@b2bapp.local>
-      # Notifications (UO-175 to UO-179): who people are, links into the
+      # Notifications: who people are, links into the
       # apps, the unsubscribe key, and web push with a local VAPID key from
       # deploy/.env (push is off without one).
       USER_URL: http://user:8080
@@ -420,7 +420,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
       APP_ORIGIN_ADMIN: http://localhost:5174
       # Stripe test mode, from the git-ignored deploy/.env; without a key,
-      # paid plans cannot be bought locally (UO-168).
+      # paid plans cannot be bought locally.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICES: ${STRIPE_PRICES:-}
@@ -433,7 +433,7 @@ services:
         condition: service_healthy
 
   # One org, its Owner and a colleague, through the services'
-  # own APIs (UO-203). Local only; run it on demand, twice changes nothing:
+  # own APIs. Local only; run it on demand, twice changes nothing:
   #   docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
   seed:
     profiles: ['seed']

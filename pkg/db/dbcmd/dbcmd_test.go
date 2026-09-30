@@ -66,7 +66,7 @@ func refused(t *testing.T, conn *pgx.Conn, sql string) {
 	}
 }
 
-// The story's "done when": a product service registers itself, and dbinit
+// A product service registers itself, and dbinit
 // and migrate give it its own schema and role and run its migrations, with
 // the same boundary as the template's services, both ways.
 func TestProductServiceGetsItsOwnSchemaAndRole(t *testing.T) {

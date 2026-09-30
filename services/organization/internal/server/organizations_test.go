@@ -284,7 +284,7 @@ func TestUpdateOrganization(t *testing.T) {
 	if status, out := do(t, h, http.MethodPatch, path, operator, map[string]any{"domain": "acme.co.uk"}, ""); status != http.StatusOK || out["domain"] != "acme.co.uk" || out["name"] != "Acme Ltd" {
 		t.Errorf("operator patch: %d %v", status, out)
 	}
-	// An org's own admin claims a domain by verifying it (UO-55), so the
+	// An org's own admin claims a domain by verifying it, so the
 	// settings take one from an operator only.
 	if status, out := do(t, h, http.MethodPatch, path, member, map[string]any{"domain": nil}, ""); status != http.StatusForbidden || out["code"] != "domain.verify_first" {
 		t.Errorf("member changing the domain: %d %v", status, out)

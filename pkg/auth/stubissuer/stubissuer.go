@@ -1,5 +1,5 @@
 // Package stubissuer mints tokens for local development and tests, until the
-// identity service issues real ones (UO-51).
+// identity service issues real ones.
 //
 // It signs with a key it generates at start and publishes the public half as a
 // JWKS, exactly as the real issuer will, so services verify its tokens with the

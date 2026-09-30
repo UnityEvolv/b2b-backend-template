@@ -9,7 +9,7 @@ the build with a message saying which rule and how to fix it.
 
 ```sql
 -- +goose Up
-CREATE TABLE offices (
+CREATE TABLE projects (
     org_id           uuid        NOT NULL,
     id               uuid        NOT NULL,
     name             text        NOT NULL,
@@ -20,12 +20,12 @@ CREATE TABLE offices (
     last_modified_at timestamptz NOT NULL,
     PRIMARY KEY (org_id, id)
 );
-CREATE INDEX offices_by_name ON offices (org_id, name);
-CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON offices
+CREATE INDEX projects_by_name ON projects (org_id, name);
+CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON projects
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
 -- +goose Down
-DROP TABLE offices;
+DROP TABLE projects;
 ```
 
 ## org_id: the sharding seam
@@ -55,7 +55,7 @@ changes the map, not the call sites.
 ```go
 cluster := db.SingleShard(pool)
 err := cluster.Tx(ctx, orgID, func(tx pgx.Tx) error {
-    return queries.WithTx(tx).CreateOffice(ctx, params)
+    return queries.WithTx(tx).CreateProject(ctx, params)
 })
 ```
 
@@ -67,7 +67,7 @@ err := cluster.Tx(ctx, orgID, func(tx pgx.Tx) error {
   `set_provenance()` in every service schema; the table's `provenance` trigger
   runs it on every insert and update. Whatever a query sends for these columns
   is overwritten, and an update cannot change `created_*`.
-- The actor comes from the request context. The auth middleware (UO-41) puts
+- The actor comes from the request context. The auth middleware puts
   the caller there with `db.WithActor`; `cluster.Tx` hands it to Postgres for
   that transaction only, so a pooled connection never carries it into the next.
 - A write with no actor is refused, both by `cluster.Tx` and, for anything that
@@ -88,5 +88,5 @@ err := cluster.Tx(ctx, orgID, func(tx pgx.Tx) error {
 ## Deleting
 
 Soft delete (`deleted_at timestamptz`) only where a record must stay
-referenceable: users, memberships, offices, templates. Everything transient is
+referenceable: users, memberships and the like. Everything transient is
 deleted for real.

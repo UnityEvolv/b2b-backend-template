@@ -47,7 +47,7 @@ func (f *fixture) admin(t *testing.T, org uuid.UUID) string {
 	return raw
 }
 
-// The story's "done when": a local user enrols, is challenged at sign-in,
+// A local user enrols, is challenged at sign-in,
 // recovers with a code, and an admin can reset their MFA.
 func TestMfaEnrolChallengeRecoverAndReset(t *testing.T) {
 	f := newAPI(t)

@@ -1,0 +1,10 @@
+# Accepted vulnerability risks, read by the dependency scan in
+# .github/workflows/security.yml. CI fails any entry without a statement and
+# an expired_at, and any entry whose expiry has passed.
+#
+# vulnerabilities:
+#   - id: CVE-0000-00000
+#     statement: Why the risk is accepted, and what would end it.
+#     expired_at: 2027-01-01
+
+vulnerabilities: []

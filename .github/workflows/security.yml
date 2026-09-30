@@ -1,13 +1,17 @@
-# Secrets, dependency and container scanning.
+# Secrets, licence, dependency and container scanning.
 #
-# Runs on every ready PR into main, before a human reviews anything, and by
-# hand from the Actions tab (workflow_dispatch) for a full scan of main.
-# Each job fails the build on a finding; the findings are also posted as one
-# comment on the PR, because code scanning is not available on this repo.
+# Runs on every ready PR into main, before a human reviews anything, weekly on
+# main so new gitleaks rules and advisories reach the old history too, and by
+# hand from the Actions tab (workflow_dispatch). Each job fails the build on a
+# finding; the findings are written to the job summary and, on a PR from this
+# repository, posted as one comment. No repository secret is used, so every
+# scan runs on a fork's PR too.
 #
-# Accepted risks, once there are any, live in .trivyignore.yaml and must name a
-# reason and an expiry.
-# Accepted secret findings (a key already rotated) go in .gitleaksignore.
+# Accepted risks live in .trivyignore.yaml and must name a reason and an
+# expiry. An accepted secret finding (a key already rotated) would go in
+# .gitleaksignore with a comment saying why; there are none, so there is no
+# such file. Licence exceptions are the --ignore flags of the licence check,
+# each with its reason beside it.
 
 name: security
 
@@ -17,6 +21,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '23 5 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -30,6 +36,8 @@ env:
   TRIVY_IMAGE: aquasec/trivy:0.74.0
   GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1
   COMPOSE_FILE: deploy/docker-compose.yml
+  GO_LICENSES: github.com/google/go-licenses/v2@v2.0.1
+  GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
 jobs:
   secrets:
@@ -61,6 +69,53 @@ jobs:
           path: secrets.md
           if-no-files-found: ignore
 
+  licences:
+    name: licences and identifiers
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Every Go module the code or its tests import must be under a licence
+      # on this list; anything else, GPL, AGPL, SSPL or a licence the
+      # classifier does not recognise, fails. Weak copyleft (LGPL, MPL) is
+      # allowed: it binds changes to that library's own files, never the
+      # code that uses it.
+      #
+      # Ignored, each with its reason (its own dependencies are still checked):
+      # - github.com/oapi-codegen/nullable: Apache-2.0, stated in the short
+      #   notice form the classifier does not recognise.
+      - name: every Go module has a licence the template can carry
+        run: |
+          set +e
+          go run "$GO_LICENSES" check ./... --include_tests \
+            --allowed_licenses=0BSD,Apache-2.0,BlueOak-1.0.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,ISC,LGPL-2.1,LGPL-3.0,MIT,MIT-0,MPL-2.0,Unlicense,Zlib \
+            --ignore github.com/oapi-codegen/nullable \
+            > licences.txt 2>&1
+          status=$?
+          set -e
+          grep -v -e 'contains non-Go code' -e '\.s$' licences.txt > licences.clean || true
+          {
+            echo '#### Licences'
+            echo
+            if [ "$status" -eq 0 ]; then echo 'Every Go module has an allowed licence.'; else echo '```'; cat licences.clean; echo '```'; fi
+          } > licences.md
+          cat licences.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      # Here as well as in the go workflow, which skips PRs that change only
+      # docs: no tracked file names the original product, its tickets or hosts.
+      - name: no file names the original product or its infrastructure
+        run: go test -count=1 -run 'TestNoInternalIdentifiers|TestIdentifierRuleCatchesTheOldNames' ./internal/repocheck/
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-licences
+          path: licences.md
+          if-no-files-found: ignore
+
   dependencies:
     name: dependencies
     if: ${{ !github.event.pull_request.draft }}
@@ -68,6 +123,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Known vulnerabilities in code this repository actually calls, from the
+      # Go vulnerability database; trivy below reads every module in go.sum.
+      - name: govulncheck
+        run: go run "$GOVULNCHECK" ./...
       - name: accepted risks are justified and dated
         run: python3 .github/scripts/check_ignores.py .trivyignore.yaml
       - name: trivy (Go modules)
@@ -166,7 +228,7 @@ jobs:
   comment:
     name: comment
     if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [secrets, dependencies, images]
+    needs: [secrets, licences, dependencies, images]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -181,7 +243,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-          RESULTS: ${{ needs.secrets.result }} ${{ needs.dependencies.result }} ${{ needs.images.result }}
+          RESULTS: ${{ needs.secrets.result }} ${{ needs.licences.result }} ${{ needs.dependencies.result }} ${{ needs.images.result }}
         run: |
           marker='<!-- security-scan -->'
           {
@@ -191,7 +253,7 @@ jobs:
               *) echo "### Security scan: clean" ;;
             esac
             echo
-            cat secrets.md dependencies.md images.md 2>/dev/null || true
+            cat secrets.md licences.md dependencies.md images.md 2>/dev/null || true
           } > body.md
           existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
             --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)

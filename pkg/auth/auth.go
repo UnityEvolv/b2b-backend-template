@@ -47,7 +47,7 @@ type Caller struct {
 	OrgID        string // empty for a token not scoped to an org
 	MembershipID string // empty when OrgID is
 	SessionID    string
-	// Service is the calling service's name from pkg/db.Services, for an
+	// Service is the calling service's name as registered in pkg/db, for an
 	// internal call. Such a caller is in no org and is not rate limited.
 	Service string
 }
@@ -298,7 +298,7 @@ func RequireOrgOrPlatform(ctx context.Context, orgID string) error {
 }
 
 // serviceOnly are the services that call others but own no database schema,
-// so they are not in pkg/db.Services: a product's own service written in
+// so they are not registered in pkg/db: a product's own service written in
 // another language, say. The template has none.
 var serviceOnly = []string{}
 

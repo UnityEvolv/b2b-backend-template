@@ -1,4 +1,7 @@
-// Command dbinit gives every service its schema and its role (UO-35).
+// Command dbinit gives every service its schema and its role (UO-35): the
+// services registered in pkg/db.Default, which are the template's own. A
+// product with services of its own runs pkg/db/dbcmd from its own command
+// with them registered.
 //
 // Idempotent: run it on every start and every deploy. It connects as an
 // administrator from DATABASE_ADMIN_URL. Each role's password comes from
@@ -8,43 +11,19 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbcmd"
 )
 
 func main() {
-	if err := run(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := dbcmd.Init(ctx, db.Default); err != nil {
 		slog.Error("dbinit failed", "error", err)
 		os.Exit(1)
 	}
-}
-
-func run() error {
-	url := os.Getenv("DATABASE_ADMIN_URL")
-	if url == "" {
-		return fmt.Errorf("DATABASE_ADMIN_URL is not set")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	admin, err := pgx.Connect(ctx, url)
-	if err != nil {
-		return fmt.Errorf("connect: %w", err)
-	}
-	defer admin.Close(ctx)
-
-	local := db.LocalPasswords()
-	password := func(s db.Service) (string, error) { return db.PasswordFromEnv(s, local) }
-
-	if err := db.Bootstrap(ctx, admin, password); err != nil {
-		return err
-	}
-	slog.Info("schemas and roles in place", "services", len(db.Services))
-	return nil
 }

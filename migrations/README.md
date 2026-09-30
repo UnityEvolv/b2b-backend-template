@@ -1,8 +1,11 @@
 # Migrations
 
-One directory per service schema, named after the schema in
-[pkg/db/services.go](../pkg/db/services.go). Plain SQL, run by
-[goose](https://github.com/pressly/goose), compiled into the `migrate` binary.
+One directory per schema of the template's services, named after the schema;
+[pkg/db/services.go](../pkg/db/services.go) registers each service with its
+directory here. Plain SQL, run by [goose](https://github.com/pressly/goose),
+compiled into the `migrate` binary. A product's own service keeps its
+migrations beside it and registers them the same way (see
+[services/README.md](../services/README.md#a-new-service)).
 
 ```
 migrations/

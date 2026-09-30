@@ -13,10 +13,10 @@ import (
 )
 
 // ErrNotDeployed, from Bootstrap's password function, skips a service: one
-// whose schema is reserved in Services but which has nothing to own yet.
+// that is registered but has nothing to own yet.
 var ErrNotDeployed = errors.New("db: service not deployed here")
 
-// Bootstrap makes the database match Services: a login role and an owned
+// Bootstrap makes the database match Default: a login role and an owned
 // schema per service, and no way for any of them to reach anything else.
 //
 // It is idempotent, so it runs on every start rather than once on an empty
@@ -25,6 +25,13 @@ var ErrNotDeployed = errors.New("db: service not deployed here")
 //
 // password returns the password for a role. It is called once per role.
 func Bootstrap(ctx context.Context, admin *pgx.Conn, password func(Service) (string, error)) error {
+	return Default.Bootstrap(ctx, admin, password)
+}
+
+// Bootstrap makes the database match r: a login role and an owned schema
+// per registered service, and no way for any of them to reach anything
+// else. See the package function.
+func (r *Registry) Bootstrap(ctx context.Context, admin *pgx.Conn, password func(Service) (string, error)) error {
 	database := admin.Config().Database
 
 	// Two runs against one database at once (two deploys) would alter the same
@@ -47,7 +54,8 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, password func(Service) (str
 		}
 	}
 
-	for _, service := range Services {
+	services := r.Services()
+	for _, service := range services {
 		secret, err := password(service)
 		if errors.Is(err, ErrNotDeployed) {
 			continue
@@ -56,7 +64,7 @@ func Bootstrap(ctx context.Context, admin *pgx.Conn, password func(Service) (str
 			return err
 		}
 		if err := retryConcurrentUpdate(ctx, func() error {
-			return bootstrapService(ctx, admin, database, service, secret)
+			return bootstrapService(ctx, admin, database, service, services, secret)
 		}); err != nil {
 			return fmt.Errorf("service %s: %w", service.Name, err)
 		}
@@ -90,7 +98,7 @@ func retryConcurrentUpdate(ctx context.Context, fn func() error) error {
 	return err
 }
 
-func bootstrapService(ctx context.Context, admin *pgx.Conn, database string, service Service, secret string) error {
+func bootstrapService(ctx context.Context, admin *pgx.Conn, database string, service Service, all []Service, secret string) error {
 	role, schema := ident(service.Role()), ident(service.Schema)
 
 	var exists bool
@@ -137,7 +145,7 @@ func bootstrapService(ctx context.Context, admin *pgx.Conn, database string, ser
 	)
 	// An owner can grant on its own schema. Any grant to another service is
 	// taken back on every run, so the boundary cannot be opened from inside.
-	for _, other := range Services {
+	for _, other := range all {
 		if other.Schema == service.Schema {
 			continue
 		}

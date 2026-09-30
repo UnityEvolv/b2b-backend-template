@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth/stubissuer"
@@ -60,7 +59,7 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	migrator, err := db.Migrator(stdlib.OpenDBFromPool(pool), service, migrations.FS)
+	migrator, err := db.Migrator(stdlib.OpenDBFromPool(pool), service)
 	if err != nil {
 		t.Fatal(err)
 	}

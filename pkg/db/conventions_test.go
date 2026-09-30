@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 )
 
@@ -283,10 +282,10 @@ CREATE UNIQUE INDEX convention_probe_by_domain ON convention_probe (domain);`
 func TestRepositorySchemasFollowConventions(t *testing.T) {
 	url := bootstrap(t)
 	ctx := context.Background()
-	for _, s := range db.Services {
+	for _, s := range db.Services() {
 		t.Run(s.Name, func(t *testing.T) {
 			conn := openAs(t, url, &s)
-			migrator, err := db.Migrator(conn, s, migrations.FS)
+			migrator, err := db.Migrator(conn, s)
 			if errors.Is(err, db.ErrNoMigrations) {
 				t.Skip("no migrations yet")
 			}

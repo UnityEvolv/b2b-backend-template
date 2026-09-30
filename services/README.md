@@ -19,12 +19,33 @@ migrations/organization/  the schema, one file per change
 
 ## A new service
 
-1. Add it to `pkg/db/services.go`. That gives it a schema and a role.
-2. Copy `services/organization/` to `services/<name>/`. Change `const name` in
+Every service that owns a schema is registered in `pkg/db`: its name, its
+schema and its migrations. Being registered is what gives it a schema and a
+login role (`dbinit`, `pkg/db.Bootstrap`), grants that role nothing outside
+its own schema, and runs its migrations (`migrate`). `db.Default` holds the
+template's seven; a product adds its own without editing any of them.
+
+1. Copy `services/organization/` to `services/<name>/`. Change `const name` in
    `main.go`, the paths in `sqlc.yaml`, and the package imports.
-3. Write `api/<name>.yaml` and the first `migrations/<name>/00001_*.sql`.
-4. Run `scripts/generate.sh`.
-5. Copy the `organization` block in `deploy/docker-compose.yml`.
+2. Write `api/<name>.yaml` and the first migration,
+   `services/<name>/migrations/00001_baseline.sql`, embedded by a
+   `migrations.go` in that directory (`//go:embed *.sql`, `var FS embed.FS`).
+3. Register it first thing in its `main`, before `db.ServiceByName(name)`:
+
+   ```go
+   db.Default.Register(db.Service{Name: "projects", Schema: "projects", Migrations: projectsmigrations.FS})
+   ```
+
+4. Give the product its own `dbinit` and `migrate` commands, which register
+   the same service and run [pkg/db/dbcmd](../pkg/db/dbcmd/dbcmd.go); run them
+   where the template's run (`dbcmd.Migrate(ctx, db.Default, os.Args[1:])`,
+   `dbcmd.Init(ctx, db.Default)`). Its role's password is
+   `DB_PASSWORD_<SCHEMA>` like every other.
+5. Run `scripts/generate.sh`.
+6. Copy the `organization` block in `deploy/docker-compose.yml`.
+
+A schema is a plain lower-case name that is not `public` or `pg_*`; a name
+or schema registered twice panics at start.
 
 ## The rules, and what enforces them
 

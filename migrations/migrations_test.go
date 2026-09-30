@@ -15,7 +15,7 @@ var fileName = regexp.MustCompile(`^\d{5}_[a-z0-9_]+\.sql$`)
 // The shape every migration file must have, checked without a database.
 func TestMigrationFiles(t *testing.T) {
 	schemas := map[string]bool{}
-	for _, s := range db.Services {
+	for _, s := range db.Services() {
 		schemas[s.Schema] = true
 	}
 
@@ -28,7 +28,7 @@ func TestMigrationFiles(t *testing.T) {
 			continue
 		}
 		if !schemas[dir.Name()] {
-			t.Errorf("%s/: not a service schema; directories are named after pkg/db.Services", dir.Name())
+			t.Errorf("%s/: not a service schema; directories are named after the schemas registered in pkg/db", dir.Name())
 			continue
 		}
 		files, err := fs.ReadDir(migrations.FS, dir.Name())

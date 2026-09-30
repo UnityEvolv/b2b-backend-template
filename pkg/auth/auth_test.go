@@ -206,7 +206,7 @@ func TestServiceTokens(t *testing.T) {
 		t.Fatalf("actor %q", c.Actor())
 	}
 
-	// A name not in pkg/db.Services is not a service.
+	// A name not registered in pkg/db is not a service.
 	if _, err := verifier.Verify(token(t, i, auth.Caller{Service: "not-a-service"})); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Fatalf("unknown service accepted: %v", err)
 	}

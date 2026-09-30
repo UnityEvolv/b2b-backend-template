@@ -20,7 +20,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth/stubissuer"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
@@ -132,7 +131,7 @@ func newNotify(t *testing.T) *notifyFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	migrator, _ := db.Migrator(stdlib.OpenDBFromPool(pool), service, migrations.FS)
+	migrator, _ := db.Migrator(stdlib.OpenDBFromPool(pool), service)
 	if _, err := migrator.Up(ctx); err != nil {
 		t.Fatal(err)
 	}

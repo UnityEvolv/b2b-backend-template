@@ -111,7 +111,7 @@ func TestNoRoleHoldsPrivilegesOnAnotherServicesSchema(t *testing.T) {
 	url := bootstrap(t)
 	admin := connect(t, url, nil)
 
-	for _, s := range db.Services {
+	for _, s := range db.Services() {
 		rows, err := admin.Query(context.Background(), `
 			SELECT grantee.rolname
 			FROM pg_namespace n

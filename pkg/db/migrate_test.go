@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 )
 
@@ -39,7 +38,7 @@ func TestOneFileAddsATableAndRollsItBack(t *testing.T) {
 	url := bootstrap(t)
 	billing := service(t, "billing")
 	files := fstest.MapFS{
-		"billing/00001_create_migration_probe.sql": {Data: []byte(`
+		"00001_create_migration_probe.sql": {Data: []byte(`
 -- +goose Up
 CREATE TABLE migration_probe (id uuid PRIMARY KEY);
 
@@ -49,7 +48,8 @@ DROP TABLE migration_probe;
 	}
 
 	conn := openAs(t, url, billing)
-	migrator, err := db.Migrator(conn, *billing, files)
+	billing.Migrations = files
+	migrator, err := db.Migrator(conn, *billing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestMigrationCannotReachAnotherSchema(t *testing.T) {
 	url := bootstrap(t)
 	billing := service(t, "billing")
 	files := fstest.MapFS{
-		"billing/00001_reach_across.sql": {Data: []byte(`
+		"00001_reach_across.sql": {Data: []byte(`
 -- +goose Up
 CREATE TABLE organization.planted (id int);
 
@@ -96,7 +96,8 @@ DROP TABLE organization.planted;
 	}
 
 	conn := openAs(t, url, billing)
-	migrator, err := db.Migrator(conn, *billing, files)
+	billing.Migrations = files
+	migrator, err := db.Migrator(conn, *billing)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +109,9 @@ DROP TABLE organization.planted;
 }
 
 func TestServiceWithoutMigrationsIsSkipped(t *testing.T) {
-	_, err := db.Migrator(nil, *service(t, "billing"), fstest.MapFS{})
+	billing := *service(t, "billing")
+	billing.Migrations = nil
+	_, err := db.Migrator(nil, billing)
 	if !errors.Is(err, db.ErrNoMigrations) {
 		t.Fatalf("want ErrNoMigrations, got %v", err)
 	}
@@ -120,10 +123,10 @@ func TestRepositoryMigrationsRoundTrip(t *testing.T) {
 	url := bootstrap(t)
 	ctx := context.Background()
 
-	for _, s := range db.Services {
+	for _, s := range db.Services() {
 		t.Run(s.Name, func(t *testing.T) {
 			conn := openAs(t, url, &s)
-			migrator, err := db.Migrator(conn, s, migrations.FS)
+			migrator, err := db.Migrator(conn, s)
 			if errors.Is(err, db.ErrNoMigrations) {
 				t.Skip("no migrations yet")
 			}

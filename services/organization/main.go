@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
@@ -39,7 +38,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/server"
 )
 
-// name is this service's entry in pkg/db.Services. It is the only line that
+// name is this service's name as registered in pkg/db. It is the only line that
 // changes when this directory is copied to make a new service.
 const name = "organization"
 
@@ -53,7 +52,7 @@ func main() {
 func run() error {
 	service, ok := db.ServiceByName(name)
 	if !ok {
-		return fmt.Errorf("%s is not in pkg/db.Services", name)
+		return fmt.Errorf("%s is not registered in pkg/db", name)
 	}
 
 	env := &config.Env{}
@@ -284,7 +283,7 @@ func housekeeping(ctx context.Context, logger *slog.Logger, srv *server.Server) 
 func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) error {
 	conn := stdlib.OpenDBFromPool(pool)
 	defer conn.Close()
-	migrator, err := db.Migrator(conn, service, migrations.FS)
+	migrator, err := db.Migrator(conn, service)
 	if errors.Is(err, db.ErrNoMigrations) {
 		return nil
 	}

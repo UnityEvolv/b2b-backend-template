@@ -83,11 +83,14 @@ func serviceOf(importPath string) string {
 	return name
 }
 
-// Every Go service has its schema and role, and its contract.
+// Every Go service has its schema and role, and its contract. The
+// template's are in pkg/db.Default; a product's registers itself in its own
+// main.
 func TestEveryServiceIsRegistered(t *testing.T) {
 	for _, name := range goServices(t) {
-		if _, ok := db.ServiceByName(name); !ok {
-			t.Errorf("services/%s: add it to pkg/db.Services so it gets a schema and a role", name)
+		main, _ := os.ReadFile(filepath.Join(repoRoot(t), "services", name, "main.go"))
+		if _, ok := db.ServiceByName(name); !ok && !strings.Contains(string(main), "db.Default.Register(") {
+			t.Errorf("services/%s: register it with db.Default.Register in its main so it gets a schema and a role", name)
 		}
 		if _, err := os.Stat(filepath.Join(repoRoot(t), "api", name+".yaml")); err != nil {
 			t.Errorf("services/%s: no api/%s.yaml; the contract comes first", name, name)

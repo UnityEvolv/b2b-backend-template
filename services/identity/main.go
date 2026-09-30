@@ -21,7 +21,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/api/idtoken"
 
-	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
@@ -53,7 +52,7 @@ func main() {
 func run() error {
 	service, ok := db.ServiceByName(name)
 	if !ok {
-		return fmt.Errorf("%s is not in pkg/db.Services", name)
+		return fmt.Errorf("%s is not registered in pkg/db", name)
 	}
 
 	env := &config.Env{}
@@ -355,7 +354,7 @@ func bootstrap(ctx context.Context, logger *slog.Logger, srv *server.Server, add
 func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) error {
 	conn := stdlib.OpenDBFromPool(pool)
 	defer conn.Close()
-	migrator, err := db.Migrator(conn, service, migrations.FS)
+	migrator, err := db.Migrator(conn, service)
 	if errors.Is(err, db.ErrNoMigrations) {
 		return nil
 	}

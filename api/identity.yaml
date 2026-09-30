@@ -2419,7 +2419,7 @@ components:
           type: boolean
         field:
           type: string
-          description: When it failed, the input to fix (issuer, tenant_id, client_id, client_secret).
+          description: When it failed, the input to fix (issuer, tenant_id, client_id, client_secret). Absent when no input explains it, such as Google being unreachable.
         message:
           type: string
           description: A sentence for the admin. Never a secret or a token.

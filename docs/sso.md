@@ -85,7 +85,11 @@ is what to register with the provider. The test answers:
 ```
 
 A check after a failed one is not run. When the save fails, the same
-messages come back as the 422's `fields`, keyed by the input to fix.
+messages come back as the 422's `fields`, keyed by the input to fix. The
+discovery, issuer and keys checks name the input the issuer came from:
+`issuer` for generic, `tenant_id` for entra, and none for google, whose
+issuer is Google's own; a failure no input explains is only in the 422's
+`message`.
 
 ## What a save requires
 

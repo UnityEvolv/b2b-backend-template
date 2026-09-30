@@ -97,7 +97,9 @@ type candidate struct {
 	settings     oidc.Settings
 	tenant       string
 	hostedDomain string
-	// issuerField is the input the issuer came from, for a failed test.
+	// issuerField is the input the issuer came from, for a failed test:
+	// issuer (generic), tenant_id (Entra), or none (Google, whose issuer is
+	// fixed).
 	issuerField string
 }
 
@@ -144,6 +146,9 @@ func (s *Server) candidateOf(body api.NewIdentityProvider) (candidate, map[strin
 			fields["hosted_domain"] = "the Google Workspace domain"
 		}
 		c.hostedDomain = hd
+		// The issuer is Google's own, not an input: a discovery, issuer or
+		// keys failure is not the admin's to fix, so it names no field.
+		c.issuerField = ""
 		issuer = s.cfg.GoogleIssuer
 		if str(body.Issuer) != "" {
 			fields["issuer"] = "left out: Google's is used"

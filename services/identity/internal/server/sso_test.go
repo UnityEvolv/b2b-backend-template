@@ -299,3 +299,36 @@ func TestGooglePreset(t *testing.T) {
 		t.Errorf("wrong secret: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// A failed discovery names the input the issuer came from, so the form
+// marks the field the admin can change: tenant_id for Entra, and none for
+// Google, whose issuer is Google's own; never issuer, which neither has.
+func TestIssuerFailuresNameThePresetsInput(t *testing.T) {
+	f := newAPI(t)
+	b := f.browser()
+	path := "/v1/organizations/" + acme.String() + "/identity-provider"
+
+	entra := map[string]any{"preset": "entra", "tenant_id": "no-such-tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}
+	got := body(t, b.do(http.MethodPost, path+"/test", f.platform(), entra))
+	if c := checks(t, got)["discovery"]; got["ok"] != false || c == nil || c["field"] != "tenant_id" {
+		t.Errorf("entra tested: %v", got)
+	}
+	rec := b.do(http.MethodPut, path, f.platform(), entra)
+	got = body(t, rec)
+	if fields, _ := got["fields"].(map[string]any); rec.Code != http.StatusUnprocessableEntity || fields["tenant_id"] == nil || fields["issuer"] != nil {
+		t.Errorf("entra saved: %d %v", rec.Code, got)
+	}
+
+	// Google cannot be reached: nothing the admin typed is at fault.
+	f.idp.srv.Close()
+	google := map[string]any{"preset": "google", "hosted_domain": "acme.com", "client_id": f.idp.clientID, "client_secret": f.idp.secret}
+	got = body(t, b.do(http.MethodPost, path+"/test", f.platform(), google))
+	if c := checks(t, got)["discovery"]; got["ok"] != false || c == nil || c["field"] != nil {
+		t.Errorf("google tested: %v", got)
+	}
+	rec = b.do(http.MethodPut, path, f.platform(), google)
+	got = body(t, rec)
+	if rec.Code != http.StatusUnprocessableEntity || got["code"] != "identity_provider.test_failed" || got["fields"] != nil || got["message"] == "" {
+		t.Errorf("google saved: %d %v", rec.Code, got)
+	}
+}

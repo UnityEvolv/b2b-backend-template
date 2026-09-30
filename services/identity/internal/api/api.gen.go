@@ -323,7 +323,7 @@ type IdentityProviderCheck struct {
 	// Check `discovery`, `issuer`, `keys` or `client`.
 	Check string `json:"check"`
 
-	// Field When it failed, the input to fix (issuer, tenant_id, client_id, client_secret).
+	// Field When it failed, the input to fix (issuer, tenant_id, client_id, client_secret). Absent when no input explains it, such as Google being unreachable.
 	Field *string `json:"field,omitempty"`
 
 	// Message A sentence for the admin. Never a secret or a token.

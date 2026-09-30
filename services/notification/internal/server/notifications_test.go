@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -279,8 +280,23 @@ func TestRouting(t *testing.T) {
 	if got := f.pushed.take("android"); len(got) != 0 {
 		t.Errorf("pushed to someone looking: %v", got)
 	}
-	if _, feed := f.do(t, http.MethodGet, f.path("/notifications"), readerToken, nil); feed["unread"].(float64) != 1 {
+	_, feed := f.do(t, http.MethodGet, f.path("/notifications"), readerToken, nil)
+	if feed["unread"].(float64) != 1 {
 		t.Errorf("feed: %v", feed)
+	}
+	// The entry in words, from the category's copy, as its push and email say it.
+	if e := feed["entries"].([]any)[0].(map[string]any); e["heading"] != "Ana wrote in Design" || e["line"] != "Open the conversation to reply." {
+		t.Errorf("the entry's words: %v", e)
+	}
+	// A preview, the message itself, is for a push the person allows it on;
+	// the feed's words never carry it.
+	private := mention(reader, uuid.NewString())
+	private.Preview = "the launch slips to May"
+	f.emit(t, private)
+	f.pushed.take("android")
+	_, feed = f.do(t, http.MethodGet, f.path("/notifications"), readerToken, nil)
+	if raw, _ := json.Marshal(feed); strings.Contains(string(raw), "launch slips") {
+		t.Errorf("the feed carries a preview: %s", raw)
 	}
 
 	// On a backgrounded phone: one push. Three in two minutes: still one,
@@ -292,10 +308,13 @@ func TestRouting(t *testing.T) {
 	if got := f.pushed.take("android"); len(got) != 1 || got[0].Link != "/chat/"+conv || got[0].Title != "Ana wrote in Design" || got[0].Category != chat {
 		t.Errorf("pushes for three mentions: %v", got)
 	}
-	_, feed := f.do(t, http.MethodGet, f.path("/notifications"), awayToken, nil)
+	_, feed = f.do(t, http.MethodGet, f.path("/notifications"), awayToken, nil)
 	entries := feed["entries"].([]any)
 	if len(entries) != 1 || entries[0].(map[string]any)["count"].(float64) != 3 || feed["unread"].(float64) != 1 {
 		t.Errorf("a batch is one entry: %v", feed)
+	}
+	if e := entries[0].(map[string]any); e["heading"] != "3 new messages in Design" {
+		t.Errorf("a batch's words: %v", e)
 	}
 	// Chat is not emailed at once: it waits for the digest.
 	if got := f.outbox(t, away); len(got) != 0 {

@@ -254,11 +254,17 @@ type FeedEntry struct {
 
 	// Data What the entry is about, for the app to put into words.
 	Data map[string]interface{} `json:"data"`
-	Id   openapi_types.UUID     `json:"id"`
+
+	// Heading The entry in words, as its push and email say it, from the category's copy for the kind and the entry's data (a batch's heading counts it). Never a preview.
+	Heading string             `json:"heading"`
+	Id      openapi_types.UUID `json:"id"`
 
 	// Items A batch's individual items, newest first.
 	Items []map[string]interface{} `json:"items"`
 	Kind  string                   `json:"kind"`
+
+	// Line The sentence under the heading, from the same copy. May be empty.
+	Line string `json:"line"`
 
 	// Link Where it opens, a path in the app.
 	Link       string    `json:"link"`

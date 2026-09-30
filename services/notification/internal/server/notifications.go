@@ -61,13 +61,19 @@ func (s *Server) member(ctx context.Context, org uuid.UUID) (uuid.UUID, auth.Cal
 	return id, c, nil
 }
 
-func toEntry(e store.FeedEntry) api.FeedEntry {
+// toEntry is a feed entry as the bell shows it, in words: the category's
+// copy for its kind, filled from the entry's own data and count, exactly as
+// its email is (Router.emailEntry). The data is what the emitting service
+// sent and the router added (who did it), nothing more; a push preview is
+// never stored, so it is never here.
+func toEntry(cats *notifycat.Registry, e store.FeedEntry) api.FeedEntry {
 	out := api.FeedEntry{Id: e.ID, Category: api.Category(e.Category), Kind: e.Kind, Link: e.Link, Count: int(e.Count), OccurredAt: e.OccurredAt, Read: e.ReadAt.Valid}
 	_ = json.Unmarshal(e.Data, &out.Data)
 	_ = json.Unmarshal(e.Items, &out.Items)
 	if out.Data == nil {
 		out.Data = map[string]any{}
 	}
+	out.Heading, out.Line = cats.Words(e.Category, e.Kind, out.Data, int(e.Count))
 	if out.Items == nil {
 		out.Items = []map[string]any{}
 	}
@@ -119,7 +125,7 @@ func (s *Server) ListNotifications(ctx context.Context, req api.ListNotification
 			page.NextCursor = &next
 			break
 		}
-		page.Entries = append(page.Entries, toEntry(r))
+		page.Entries = append(page.Entries, toEntry(s.n.Router.Categories(), r))
 	}
 	return page, nil
 }

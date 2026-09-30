@@ -360,6 +360,10 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 		if got := fmt.Sprint(entries()); !strings.Contains(got, "Gemini II") {
 			t.Errorf("the entry does not name the project: %s", got)
 		}
+		// In the words of the product's copy, as the push and the email say it.
+		if got := entries(); len(got) != 1 || !strings.HasSuffix(fmt.Sprint(got[0]["heading"]), "shared Gemini II with you") || got[0]["line"] != product.SharedCategory.Copy[product.Shared].Line {
+			t.Errorf("the entry's words: %v", got)
+		}
 		// Sharing again is the same share: no second notice.
 		if r := s.call(http.MethodPut, member, owner.token, nil); r.status != http.StatusOK {
 			t.Errorf("share again: %s", r)

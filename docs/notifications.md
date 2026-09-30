@@ -29,7 +29,7 @@ What a notification can be about is a registry,
 | `QuietHours` | whether the person's quiet hours hold its push and email |
 | `Batched` | whether events with the same group within three minutes are one entry and one push |
 | `Platforms` | the push platforms it goes to (empty is every one) |
-| `Copy` | the words for push and email, per kind: `{Title, Line, Many}` with `{key}` and `{key\|fallback}` from the event's data and `{count}` for a batch; `Copy[""]` for any other kind; with none, the event's own `data.heading` and `data.line` |
+| `Copy` | the words for push, email and the feed entry, per kind: `{Title, Line, Many}` with `{key}` and `{key\|fallback}` from the event's data and `{count}` for a batch; `Copy[""]` for any other kind; with none, the event's own `data.heading` and `data.line` |
 
 The template registers four:
 
@@ -103,6 +103,12 @@ every category.
 
 ## Endpoints
 
+- `GET /notification/v1/organizations/{org}/notifications`: the caller's
+  feed, newest first. Each entry carries `heading` and `line`, its words from
+  the category's copy for its kind, filled from the entry's data and count
+  exactly as its email is (a batch's heading counts it). A push preview is
+  never stored, so it is never in the feed; `data` stays for an app that
+  words it itself.
 - `GET /notification/v1/notification-categories`: every registered category,
   in order, as `{id, label, description, audience, default_channels,
   channels, quiet_hours, batched}`, where `default_channels` is `{in_app,

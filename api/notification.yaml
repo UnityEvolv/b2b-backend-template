@@ -647,7 +647,7 @@ components:
             $ref: '#/components/schemas/NotificationCategory'
     FeedEntry:
       type: object
-      required: [id, category, kind, data, link, count, items, occurred_at, read]
+      required: [id, category, kind, heading, line, data, link, count, items, occurred_at, read]
       properties:
         id:
           type: string
@@ -656,6 +656,12 @@ components:
           $ref: '#/components/schemas/Category'
         kind:
           type: string
+        heading:
+          type: string
+          description: The entry in words, as its push and email say it, from the category's copy for the kind and the entry's data (a batch's heading counts it). Never a preview.
+        line:
+          type: string
+          description: The sentence under the heading, from the same copy. May be empty.
         data:
           type: object
           additionalProperties: true

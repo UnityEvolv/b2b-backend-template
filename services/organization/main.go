@@ -92,8 +92,8 @@ func run() error {
 		// record that proves a domain claim.
 		branding = server.Branding{
 			Product:        brand.Name,
-			TXTPrefix:      env.String("DOMAIN_TXT_PREFIX", "_"+brand.ID+"-verify."),
-			TXTValuePrefix: env.String("DOMAIN_TXT_VALUE_PREFIX", brand.ID+"-verify="),
+			TXTPrefix:      env.String("DOMAIN_TXT_PREFIX", brand.TXTPrefix()),
+			TXTValuePrefix: env.String("DOMAIN_TXT_VALUE_PREFIX", brand.TXTValuePrefix()),
 		}
 		// The KMS master key: "gcp" with the full crypto key name, or "file"
 		// with a path, which is for a laptop only.

@@ -127,13 +127,23 @@ func TestQueriesAreOrgScoped(t *testing.T) {
 
 // productWord is a name of the product this template was carved from, or
 // the product word "ofis" on its own. Neither belongs in the template: the
-// product's name comes from config (pkg/config.Brand), and code names it
-// nowhere.
-var productWord = regexp.MustCompile(`(?i)unityofis|\bofis\b`)
+// product's name comes from config (pkg/config.Brand), and nothing names it.
+var productWord = regexp.MustCompile(`(?i)unity` + `ofis|\bofis\b`)
 
-// The product's name is configuration, never a literal. Tests may still use
-// a made-up one.
-func TestNoProductNameInCode(t *testing.T) {
+// shipped is whether path is a file the template ships as text: code,
+// queries, contracts, scripts, deploy files and docs.
+func shipped(path string) bool {
+	switch filepath.Ext(path) {
+	case ".go", ".sql", ".yaml", ".yml", ".sh", ".md", ".lua", ".py", ".json", ".tmpl", ".html", ".txt":
+		return true
+	}
+	return strings.HasSuffix(path, "Dockerfile")
+}
+
+// walkShipped calls fn with every line of every shipped file under the
+// repository root, by its slash-separated path from the root.
+func walkShipped(t *testing.T, fn func(rel string, n int, line string)) {
+	t.Helper()
 	root := repoRoot(t)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -145,22 +155,117 @@ func TestNoProductNameInCode(t *testing.T) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if !shipped(path) {
 			return nil
 		}
 		body, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
 		for i, line := range strings.Split(string(body), "\n") {
-			if productWord.MatchString(line) {
-				rel, _ := filepath.Rel(root, path)
-				t.Errorf("%s:%d: names the product; read it from config instead", filepath.ToSlash(rel), i+1)
-			}
+			fn(rel, i+1, line)
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The product's name is configuration, never a literal: not in code, tests,
+// queries, contracts, deploy files or docs. This package, which spells the
+// rule out, is the one exception.
+func TestNoProductNameInCode(t *testing.T) {
+	walkShipped(t, func(rel string, n int, line string) {
+		if !strings.HasPrefix(rel, "internal/repocheck/") && productWord.MatchString(line) {
+			t.Errorf("%s:%d: names the product; read it from config instead", rel, n)
+		}
+	})
+}
+
+// brandRule is one literal that must stay configuration: what it is, the
+// pattern that finds it, and the one spelling allowed, when there is one.
+type brandRule struct {
+	what   string
+	re     *regexp.Regexp
+	except *regexp.Regexp
+}
+
+func (r brandRule) caught(line string) bool {
+	return r.re.MatchString(line) && (r.except == nil || !r.except.MatchString(line))
+}
+
+// brandLiterals are the strings a product shows its users or stamps on
+// shared infrastructure, each of which comes from config (pkg/config.Brand,
+// Redis, AppsFrom) derived from the product's name and base hostname. Any
+// of them spelled out in Go outside pkg/config is a product name hardcoded
+// again, whatever the name.
+var brandLiterals = []brandRule{
+	{"the template's default product id or name; use config.Brand", regexp.MustCompile(`(?i)b2bapp|"B2B App"`), nil},
+	{"a Redis channel or key under a fixed prefix; use config.Redis", regexp.MustCompile(`"[^"\s]*:(notify|to-members|host-events|focus|seen)\b`), nil},
+	{"a fixed domain verification record; use DOMAIN_TXT_PREFIX and DOMAIN_TXT_VALUE_PREFIX", regexp.MustCompile(`"_?[A-Za-z0-9]+[A-Za-z0-9-]*-verify[.=]`), nil},
+	{"a fixed token audience or desktop URL scheme; default them to the product id", regexp.MustCompile(`"(AUTH_AUDIENCE|DESKTOP_SCHEME)",\s*"`), nil},
+	{"a fixed TOTP issuer; use the product name", regexp.MustCompile(`totp\.URI\([^,]+,\s*"`), nil},
+	{"a fixed Stripe metadata source; use the product id", regexp.MustCompile(`metadata\[source\]":\s*\{"`), nil},
+	{"a MIME boundary that names something; keep it neutral", regexp.MustCompile(`boundary\s*:?=\s*"`), regexp.MustCompile(`boundary\s*:?=\s*"part-"`)},
+	{"an advisory lock named for a product; name the job", regexp.MustCompile(`pg_advisory_(un)?lock\(hashtext\('[^'.]*(ofis|unity|b2b)`), nil},
+	{"the realtime or TURN subdomain; a product declares its own app origins", regexp.MustCompile(`Subdomain(Realtime|TURN)\b|"(rt|turn)\."`), nil},
+}
+
+// B2B-19's audit items stay configuration: this fails when one of them is
+// written as a literal again.
+func TestBrandingComesFromConfig(t *testing.T) {
+	walkShipped(t, func(rel string, n int, line string) {
+		if !strings.HasSuffix(rel, ".go") || strings.HasSuffix(rel, "_test.go") || strings.HasPrefix(rel, "pkg/config/") {
+			return
+		}
+		for _, l := range brandLiterals {
+			if l.caught(line) {
+				t.Errorf("%s:%d: %s", rel, n, l.what)
+			}
+		}
+	})
+}
+
+// The rules above catch what they are meant to: each of these is how the
+// literal looked in the product the template was carved from, or would
+// look hardcoded under the template's own name.
+func TestBrandingRulesCatchTheOldLiterals(t *testing.T) {
+	old := []string{
+		`const Channel = "acme:host-events"`,
+		`func SeenKey(org, to uuid.UUID) string { return fmt.Sprintf("acme:seen:%s:%s", org, to) }`,
+		`TXTPrefix: env.String("DOMAIN_TXT_PREFIX", "_acme-verify."),`,
+		`TXTValuePrefix: "acme-verify=",`,
+		`audience = env.String("AUTH_AUDIENCE", "acme")`,
+		`desktopScheme = env.String("DESKTOP_SCHEME", "acme")`,
+		`OtpauthUri: totp.URI(secret, "acme", account.Email)`,
+		`"metadata[source]": {"acme"},`,
+		`boundary := "acme-" + strings.ReplaceAll(id, "@", "-")`,
+		`admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('b2bapp.dbinit'))")`,
+		`SubdomainRealtime = "rt"`,
+		`source: "b2bapp",`,
+	}
+	for _, line := range old {
+		caught := false
+		for _, l := range brandLiterals {
+			caught = caught || l.caught(line)
+		}
+		if !caught {
+			t.Errorf("not caught: %s", line)
+		}
+	}
+	for _, line := range []string{
+		`boundary := "part-" + strings.ReplaceAll(id, "@", "-")`,
+		`admin.Exec(ctx, "SELECT pg_advisory_lock(hashtext('db.bootstrap'))")`,
+		`TXTPrefix: env.String("DOMAIN_TXT_PREFIX", "_"+brand.ID+"-verify."),`,
+		`audience = env.String("AUTH_AUDIENCE", brand.ID)`,
+	} {
+		for _, l := range brandLiterals {
+			if l.caught(line) {
+				t.Errorf("config-derived line caught as %q: %s", l.what, line)
+			}
+		}
 	}
 }

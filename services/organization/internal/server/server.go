@@ -13,6 +13,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms"
@@ -58,14 +59,14 @@ type Branding struct {
 	// Product is the product's name.
 	Product string
 	// TXTPrefix goes before the domain to name the verification record:
-	// "_b2bapp-verify." proves acme.com with a TXT at _b2bapp-verify.acme.com.
+	// by default "_<product id>-verify.", a TXT at that name under the domain.
 	TXTPrefix string
 	// TXTValuePrefix goes before the token in that record's value.
 	TXTValuePrefix string
 }
 
 // DefaultBranding is the template's own names, for a product that sets none.
-var DefaultBranding = Branding{Product: "B2B App", TXTPrefix: "_b2bapp-verify.", TXTValuePrefix: "b2bapp-verify="}
+var DefaultBranding = Branding{Product: config.DefaultBrand.Name, TXTPrefix: config.DefaultBrand.TXTPrefix(), TXTValuePrefix: config.DefaultBrand.TXTValuePrefix()}
 
 // WithBranding is s naming the product b; an empty field keeps the default.
 func (s *Server) WithBranding(b Branding) *Server {

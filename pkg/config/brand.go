@@ -20,6 +20,14 @@ type Brand struct {
 // DefaultBrand is the template's own name, for a product that sets none.
 var DefaultBrand = Brand{Name: "B2B App", ID: "b2bapp"}
 
+// TXTPrefix is the default name of the DNS record that proves a domain,
+// before the domain: "_<id>-verify.".
+func (b Brand) TXTPrefix() string { return "_" + b.ID + "-verify." }
+
+// TXTValuePrefix is the default start of that record's value, before the
+// token: "<id>-verify=".
+func (b Brand) TXTValuePrefix() string { return b.ID + "-verify=" }
+
 var brandID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
 
 // BrandFrom reads PRODUCT_NAME and PRODUCT_ID, each defaulting to

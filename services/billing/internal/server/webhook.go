@@ -179,8 +179,8 @@ func (s *Server) subscriptionUpdated(ctx context.Context, org uuid.UUID, sub pro
 }
 
 // subscriptionEnded is the provider having cancelled: after the grace with
-// no payment, or a scheduled move to free. The org drops to free; nothing
-// is deleted and nobody removed.
+// no payment, or a scheduled move to the lowest band. The org drops there;
+// nothing is deleted and nobody removed.
 func (s *Server) subscriptionEnded(ctx context.Context, org uuid.UUID) error {
 	var before store.Account
 	_, err := s.update(ctx, org, func(a *store.Account) error {
@@ -188,22 +188,22 @@ func (s *Server) subscriptionEnded(ctx context.Context, org uuid.UUID) error {
 		if a.State == "invoiced" {
 			return nil
 		}
-		a.State, a.Band = "free", string(plan.Free)
+		a.State, a.Band = "free", string(plan.Lowest())
 		a.SubscriptionRef, a.ScheduleRef, a.PendingBand, a.PeriodEnd, a.GraceStartedAt = pgtype.Text{}, pgtype.Text{}, pgtype.Text{}, pgtype.Timestamptz{}, pgtype.Timestamptz{}
 		a.Notices = slices.DeleteFunc(a.Notices, func(n string) bool { return strings.HasPrefix(n, "dunning:") })
 		return nil
 	})
-	if err != nil || before.State == "invoiced" || before.Band == string(plan.Free) {
+	if err != nil || before.State == "invoiced" || before.Band == string(plan.Lowest()) {
 		return err
 	}
-	reason, heading := "downgrade", "Your organization is on the free plan now"
+	reason, heading := "downgrade", fmt.Sprintf("Your organization is on the %s plan now", plan.Lowest())
 	if before.State == "past_due" {
-		reason, heading = "payment_failure", "Payment did not go through, so your organization is on the free plan"
+		reason, heading = "payment_failure", fmt.Sprintf("Payment did not go through, so your organization is on the %s plan", plan.Lowest())
 	}
-	if err := s.setPlan(ctx, org, plan.Free, reason); err != nil {
+	if err := s.setPlan(ctx, org, plan.Lowest(), reason); err != nil {
 		return err
 	}
-	s.notify(ctx, org, "ended:"+org.String()+":"+s.now().Format("2006-01-02"), "downgraded", s.checklist(plan.Band(before.Band), plan.Free,
+	s.notify(ctx, org, "ended:"+org.String()+":"+s.now().Format("2006-01-02"), "downgraded", s.checklist(plan.Band(before.Band), plan.Lowest(),
 		heading, "Nothing was deleted and nobody was removed. Add a payment method on the billing page to start a subscription again."))
 	return nil
 }

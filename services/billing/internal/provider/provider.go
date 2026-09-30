@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-// Band is a plan band the provider sells, such as team-50.
+// Band is a plan band the provider sells, by its name in the plan registry,
+// such as team.
 type Band string
 
 // Price is what a band costs per period, in minor units.

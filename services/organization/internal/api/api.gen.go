@@ -82,33 +82,6 @@ func (e OrganizationStatus) Valid() bool {
 	}
 }
 
-// Defines values for Plan.
-const (
-	Enterprise Plan = "enterprise"
-	Free       Plan = "free"
-	Team200    Plan = "team-200"
-	Team50     Plan = "team-50"
-	Team500    Plan = "team-500"
-)
-
-// Valid indicates whether the value is a known member of the Plan enum.
-func (e Plan) Valid() bool {
-	switch e {
-	case Enterprise:
-		return true
-	case Free:
-		return true
-	case Team200:
-		return true
-	case Team50:
-		return true
-	case Team500:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RetentionClassesClass.
 const (
 	Audit     RetentionClassesClass = "audit"
@@ -303,7 +276,7 @@ type Organization struct {
 	OrgId          openapi_types.UUID  `json:"org_id"`
 	OwnerUserId    *openapi_types.UUID `json:"owner_user_id,omitempty"`
 
-	// Plan The plan band. What each band allows is read at the moment of every action.
+	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
 
 	// PurgeAfter When everything in it is deleted; present while it is closing.
@@ -349,18 +322,18 @@ type OrganizationSettings struct {
 // OrganizationStatus defines model for OrganizationStatus.
 type OrganizationStatus string
 
-// Plan The plan band. What each band allows is read at the moment of every action.
-type Plan string
+// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
+type Plan = string
 
 // PlanChange defines model for PlanChange.
 type PlanChange struct {
 	Consequences []PlanConsequence `json:"consequences"`
 	Downgrade    bool              `json:"downgrade"`
 
-	// From The plan band. What each band allows is read at the moment of every action.
+	// From The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	From Plan `json:"from"`
 
-	// To The plan band. What each band allows is read at the moment of every action.
+	// To The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	To Plan `json:"to"`
 }
 
@@ -373,17 +346,18 @@ type PlanConsequence struct {
 
 // PlanLimits defines model for PlanLimits.
 type PlanLimits struct {
-	AttachmentBytes int64 `json:"attachment_bytes"`
+	// Contractual Sold by contract rather than self-serve; billing never moves an organization into or out of it.
+	Contractual bool `json:"contractual"`
 
 	// Features The gated features this plan includes. Everything not gated is on every plan.
-	Features []string           `json:"features"`
-	OrgId    openapi_types.UUID `json:"org_id"`
+	Features []string `json:"features"`
 
-	// Plan The plan band. What each band allows is read at the moment of every action.
+	// Limits Every registered limit and its cap on this plan, by key (users is the one every deployment has). 0 means no cap in the product.
+	Limits map[string]int     `json:"limits"`
+	OrgId  openapi_types.UUID `json:"org_id"`
+
+	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
-
-	// Users Cap on active memberships. 0 means no cap in the product.
-	Users int `json:"users"`
 }
 
 // Retention defines model for Retention.
@@ -441,7 +415,7 @@ type OrgId = openapi_types.UUID
 
 // SetPlanInternalJSONBody defines parameters for SetPlanInternal.
 type SetPlanInternalJSONBody struct {
-	// Plan The plan band. What each band allows is read at the moment of every action.
+	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan   Plan                          `json:"plan"`
 	Reason SetPlanInternalJSONBodyReason `json:"reason"`
 }
@@ -512,7 +486,7 @@ type CreateOrgExportParams struct {
 
 // ChangePlanJSONBody defines parameters for ChangePlan.
 type ChangePlanJSONBody struct {
-	// Plan The plan band. What each band allows is read at the moment of every action.
+	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
 }
 

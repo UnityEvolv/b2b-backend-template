@@ -139,6 +139,9 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		if err := server.CheckPrices(prices); err != nil {
+			return err
+		}
 		payments = provider.NewStripe(stripeBase, stripeKey, stripeWebhook, prices, nil).WithSource(brand.ID)
 	} else {
 		logger.Warn("no STRIPE_SECRET_KEY: paid plans cannot be bought here", "alert", false)

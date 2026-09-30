@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,15 +31,39 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/billing/internal/store"
 )
 
-// TrialLength is the one team trial an org gets.
+// TrialLength is the one trial an org gets.
 const TrialLength = 14 * 24 * time.Hour
 
 // GracePeriod is how long a failed payment is retried before the org drops
-// to free.
+// to the lowest band.
 const GracePeriod = 14 * 24 * time.Hour
 
-// TrialBand is what a trial is on.
-const TrialBand = plan.Team50
+// trialBand is what a trial is on: the lowest paid self-serve band, or the
+// lowest band of all when a product sells none.
+func trialBand() plan.Band {
+	if paid := plan.SelfServe(); len(paid) > 0 {
+		return paid[0]
+	}
+	return plan.Lowest()
+}
+
+// CheckPrices is nil when every band in a provider's price map is one the
+// plan registry sells self-serve. Read at start, after the product has
+// filled the registry: a price for a band the ladder does not have, or for
+// the lowest or a contractual one, is a deployment mistake, not a request.
+func CheckPrices(prices map[provider.Band]string) error {
+	sold := plan.SelfServe()
+	for b := range prices {
+		if !slices.Contains(sold, plan.Band(b)) {
+			names := make([]string, len(sold))
+			for i, x := range sold {
+				names[i] = string(x)
+			}
+			return fmt.Errorf("billing prices: %q is not a self-serve plan (%s)", b, strings.Join(names, ", "))
+		}
+	}
+	return nil
+}
 
 // Server answers the billing API.
 type Server struct {
@@ -145,21 +170,21 @@ func (s *Server) account(ctx context.Context, org uuid.UUID) (store.Account, err
 	var a store.Account
 	err := s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
 		var err error
-		a, err = store.New(tx).EnsureAccount(ctx, org)
+		a, err = store.New(tx).EnsureAccount(ctx, store.EnsureAccountParams{OrgID: org, Band: string(plan.Lowest())})
 		return err
 	})
 	if err != nil {
 		return a, err
 	}
-	// The org's plan says enterprise: invoiced by contract, every
+	// The org's plan is contractual: invoiced by contract, every
 	// automatic path skipped.
 	band, err := s.orgs.Band(ctx, org)
 	if err != nil {
 		return a, err
 	}
-	if band == plan.Enterprise && a.State != "invoiced" {
+	if plan.Contractual(band) && a.State != "invoiced" {
 		return s.update(ctx, org, func(a *store.Account) error {
-			a.State, a.Band, a.AutoUpgrade = "invoiced", string(plan.Enterprise), false
+			a.State, a.Band, a.AutoUpgrade = "invoiced", string(band), false
 			return nil
 		})
 	}
@@ -174,7 +199,7 @@ func (s *Server) update(ctx context.Context, org uuid.UUID, change func(a *store
 	var out store.Account
 	err := s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
-		if _, err := q.EnsureAccount(ctx, org); err != nil {
+		if _, err := q.EnsureAccount(ctx, store.EnsureAccountParams{OrgID: org, Band: string(plan.Lowest())}); err != nil {
 			return err
 		}
 		a, err := q.GetAccountForUpdate(ctx, org)
@@ -225,24 +250,24 @@ func money(amount int64, currency string) string {
 	return fmt.Sprintf("%d.%02d %s", amount/100, amount%100, currency)
 }
 
-// endTrial drops a trial that ran out without a card to free, and says
-// what stopped.
+// endTrial drops a trial that ran out without a card to the lowest band,
+// and says what stopped.
 func (s *Server) endTrial(ctx context.Context, org uuid.UUID) (store.Account, error) {
 	a, err := s.update(ctx, org, func(a *store.Account) error {
 		if a.State != "trialing" || a.SubscriptionRef.Valid {
 			return nil
 		}
-		a.State, a.Band, a.TrialEndsAt = "free", string(plan.Free), pgtype.Timestamptz{}
+		a.State, a.Band, a.TrialEndsAt = "free", string(plan.Lowest()), pgtype.Timestamptz{}
 		return nil
 	})
 	if err != nil || a.State != "free" {
 		return a, err
 	}
-	if err := s.setPlan(ctx, org, plan.Free, "trial_end"); err != nil {
+	if err := s.setPlan(ctx, org, plan.Lowest(), "trial_end"); err != nil {
 		return a, err
 	}
-	s.notify(ctx, org, "trial-ended:"+org.String(), "trial_ended", s.checklist(TrialBand, plan.Free,
-		"Your team trial has ended", "The organization is on the free plan now. Nothing was deleted and nobody was removed."))
+	s.notify(ctx, org, "trial-ended:"+org.String(), "trial_ended", s.checklist(trialBand(), plan.Lowest(),
+		"Your trial has ended", fmt.Sprintf("The organization is on the %s plan now. Nothing was deleted and nobody was removed.", plan.Lowest())))
 	return a, nil
 }
 
@@ -301,13 +326,13 @@ func (s *Server) view(ctx context.Context, org uuid.UUID, a store.Account, grant
 	out := api.Billing{
 		Band: api.Band(a.Band), State: api.BillingState(a.State), AutoUpgrade: a.AutoUpgrade,
 		CanManageAutoUpgrade: grant.Role == authz.Owner, Invoiced: a.State == "invoiced",
-		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: plan.For(band).Users,
+		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: plan.For(band).Cap(plan.Users),
 		Prices: map[string]api.Price{},
 	}
 	for b, p := range s.pricesNow(ctx) {
 		out.Prices[string(b)] = api.Price{Amount: p.Amount, Currency: p.Currency, Interval: p.Interval}
 	}
-	if next := plan.Next(band); next != band && next != plan.Enterprise {
+	if next := plan.Next(band); next != band && next != "" && !plan.Contractual(next) {
 		n := api.Band(next)
 		out.NextBand = &n
 	}
@@ -445,8 +470,8 @@ func (s *Server) ChangeBand(ctx context.Context, req api.ChangeBandRequestObject
 		return api.ChangeBanddefaultJSONResponse{StatusCode: http.StatusServiceUnavailable, Body: api.Error{Code: codeNoProvider, Message: "Payments are not set up here."}}, nil
 	}
 	to, err := plan.Parse(string(req.Body.Band))
-	if err != nil || to == plan.Enterprise {
-		return api.ChangeBand400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Choose free or a team band."}}, nil
+	if err != nil || plan.Contractual(to) {
+		return api.ChangeBand400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Choose a self-serve plan."}}, nil
 	}
 	a, err := s.account(ctx, req.OrgId)
 	if err != nil {
@@ -487,7 +512,7 @@ func (s *Server) ChangeBand(ctx context.Context, req api.ChangeBandRequestObject
 // the period. A trial with no card simply ends.
 func (s *Server) changeDown(ctx context.Context, org uuid.UUID, a store.Account, to plan.Band) (store.Account, error) {
 	if !a.SubscriptionRef.Valid {
-		if a.State == "trialing" && to == plan.Free {
+		if a.State == "trialing" && to == plan.Lowest() {
 			return s.endTrial(ctx, org)
 		}
 		return a, errNoCard
@@ -574,7 +599,7 @@ func (s *Server) CancelPending(ctx context.Context, req api.CancelPendingRequest
 	return api.CancelPending200JSONResponse(v), nil
 }
 
-// StartTrial starts the org's one team trial.
+// StartTrial starts the org's one trial.
 func (s *Server) StartTrial(ctx context.Context, req api.StartTrialRequestObject) (api.StartTrialResponseObject, error) {
 	grant, err := s.canBill(ctx, req.OrgId)
 	if err != nil {
@@ -585,17 +610,17 @@ func (s *Server) StartTrial(ctx context.Context, req api.StartTrialRequestObject
 		return nil, err
 	}
 	if a.TrialUsed || a.State != "free" {
-		return api.StartTrial409JSONResponse(conflict(codeTrialUsed, "The team trial is for a free organization that has not had one.")), nil
+		return api.StartTrial409JSONResponse(conflict(codeTrialUsed, "The trial is for an organization on the lowest plan that has not had one.")), nil
 	}
 	ends := s.now().Add(TrialLength)
 	a, err = s.update(ctx, req.OrgId, func(x *store.Account) error {
-		x.State, x.Band, x.TrialUsed, x.TrialEndsAt = "trialing", string(TrialBand), true, stamp(ends)
+		x.State, x.Band, x.TrialUsed, x.TrialEndsAt = "trialing", string(trialBand()), true, stamp(ends)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err := s.setPlan(ctx, req.OrgId, TrialBand, "trial_start"); err != nil {
+	if err := s.setPlan(ctx, req.OrgId, trialBand(), "trial_start"); err != nil {
 		return nil, err
 	}
 	v, err := s.view(ctx, req.OrgId, a, grant)
@@ -662,10 +687,10 @@ func (s *Server) ListInvoices(ctx context.Context, req api.ListInvoicesRequestOb
 	return out, nil
 }
 
-// bandFor is the smallest team band with room for members, or none.
+// bandFor is the smallest self-serve band with room for members, or none.
 func bandFor(members int) (plan.Band, bool) {
-	for _, b := range []plan.Band{plan.Team50, plan.Team200, plan.Team500} {
-		if plan.For(b).Users >= members {
+	for _, b := range plan.SelfServe() {
+		if c := plan.For(b).Cap(plan.Users); c == plan.Unlimited || c >= members {
 			return b, true
 		}
 	}
@@ -685,11 +710,11 @@ func (s *Server) MakeRoom(ctx context.Context, req api.MakeRoomRequestObject) (a
 	}
 	from := plan.Band(a.Band)
 	members := req.Body.Members
-	if cap := plan.For(from).Users; cap == plan.Unlimited || members <= cap {
+	if cap := plan.For(from).Cap(plan.Users); cap == plan.Unlimited || members <= cap {
 		return api.MakeRoom200JSONResponse{Band: api.Band(from), Upgraded: false}, nil
 	}
 	refuse := func() (api.MakeRoomResponseObject, error) {
-		r, _ := plan.AsRefusal(plan.CheckUsers(from, plan.For(from).Users))
+		r, _ := plan.AsRefusal(plan.CheckUsers(from, plan.For(from).Cap(plan.Users)))
 		msg := "The plan has no room for more members."
 		if r != nil {
 			msg = r.Message
@@ -697,7 +722,7 @@ func (s *Server) MakeRoom(ctx context.Context, req api.MakeRoomRequestObject) (a
 		return api.MakeRoom409JSONResponse(conflict(plan.Code, msg)), nil
 	}
 	eligible := s.provider != nil && a.AutoUpgrade && a.CardLast4.Valid && a.SubscriptionRef.Valid &&
-		(a.State == "active" || a.State == "trialing") && plan.Rank(from) >= plan.Rank(plan.Team50)
+		(a.State == "active" || a.State == "trialing") && plan.Rank(from) > plan.Rank(plan.Lowest())
 	to, ok := bandFor(members)
 	if !eligible || !ok || plan.Rank(to) <= plan.Rank(from) {
 		return refuse()
@@ -718,7 +743,7 @@ func (s *Server) MakeRoom(ctx context.Context, req api.MakeRoomRequestObject) (a
 		Details: map[string]any{"from": string(from), "to": string(to), "members": members}}); err != nil {
 		return nil, err
 	}
-	line := fmt.Sprintf("You passed the %s plan's %d members, so the organization moved to %s.", from, plan.For(from).Users, to)
+	line := fmt.Sprintf("You passed the %s plan's %d members, so the organization moved to %s.", from, plan.For(from).Cap(plan.Users), to)
 	if currency != "" {
 		line += " Charged today, prorated: " + money(amount, currency) + "."
 	}
@@ -738,7 +763,7 @@ func (s *Server) MembersChanged(ctx context.Context, req api.MembersChangedReque
 		return nil, err
 	}
 	band := plan.Band(a.Band)
-	cap := plan.For(band).Users
+	cap := plan.For(band).Cap(plan.Users)
 	notice := "warn80:" + string(band)
 	if cap == plan.Unlimited || a.State == "invoiced" || req.Body.Members*5 < cap*4 || slices.Contains(a.Notices, notice) {
 		return api.MembersChanged204Response{}, nil
@@ -751,7 +776,7 @@ func (s *Server) MembersChanged(ctx context.Context, req api.MembersChangedReque
 	}
 	next := plan.Next(band)
 	line := fmt.Sprintf("You have %d of the %d members the %s plan allows.", req.Body.Members, cap, band)
-	if p, ok := s.pricesNow(ctx)[provider.Band(next)]; ok && next != plan.Enterprise {
+	if p, ok := s.pricesNow(ctx)[provider.Band(next)]; ok && !plan.Contractual(next) {
 		line += fmt.Sprintf(" The next plan, %s, is %s a %s.", next, money(p.Amount, p.Currency), p.Interval)
 	}
 	if a.AutoUpgrade {

@@ -1,6 +1,6 @@
 -- name: EnsureAccount :one
 -- Every org has an account from the first time billing is asked about it: free.
-INSERT INTO accounts (org_id) VALUES (@org_id)
+INSERT INTO accounts (org_id, band) VALUES (@org_id, @band)
 ON CONFLICT (org_id) DO UPDATE SET org_id = excluded.org_id
 RETURNING *;
 

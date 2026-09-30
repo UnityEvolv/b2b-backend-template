@@ -965,23 +965,24 @@ components:
           type: string
     Plan:
       type: string
-      description: The plan band. What each band allows is read at the moment of every action.
-      enum: [free, team-50, team-200, team-500, enterprise]
+      description: The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
     PlanLimits:
       type: object
-      required: [org_id, plan, users, attachment_bytes, features]
+      required: [org_id, plan, contractual, limits, features]
       properties:
         org_id:
           type: string
           format: uuid
         plan:
           $ref: '#/components/schemas/Plan'
-        users:
-          type: integer
-          description: Cap on active memberships. 0 means no cap in the product.
-        attachment_bytes:
-          type: integer
-          format: int64
+        contractual:
+          type: boolean
+          description: Sold by contract rather than self-serve; billing never moves an organization into or out of it.
+        limits:
+          type: object
+          description: Every registered limit and its cap on this plan, by key (users is the one every deployment has). 0 means no cap in the product.
+          additionalProperties:
+            type: integer
         features:
           type: array
           description: The gated features this plan includes. Everything not gated is on every plan.

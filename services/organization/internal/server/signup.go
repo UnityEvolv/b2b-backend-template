@@ -18,6 +18,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/timezone"
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
@@ -232,7 +233,7 @@ func (s *Server) CompleteSignup(ctx context.Context, req api.CompleteSignupReque
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		params := store.InsertSelfServeOrganizationParams{OrgID: orgID, Name: signup.OrgName, TimeZone: signup.TimeZone, IdempotencyKey: text(key)}
+		params := store.InsertSelfServeOrganizationParams{OrgID: orgID, Name: signup.OrgName, TimeZone: signup.TimeZone, IdempotencyKey: text(key), Plan: string(plan.Lowest())}
 		if claim {
 			if _, err := q.OrganizationIDByDomain(ctx, text(domain)); err == nil {
 				taken = true

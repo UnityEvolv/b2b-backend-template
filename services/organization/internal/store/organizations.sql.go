@@ -137,8 +137,8 @@ func (q *Queries) GetOrganizationByDomain(ctx context.Context, domain pgtype.Tex
 }
 
 const insertOrganization = `-- name: InsertOrganization :one
-INSERT INTO organizations (org_id, name, display_name, domain, time_zone, owner_user_id, idempotency_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO organizations (org_id, name, display_name, domain, time_zone, owner_user_id, idempotency_key, plan)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 RETURNING org_id, name, time_zone, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, created_by, created_at, last_modified_by, last_modified_at
 `
@@ -151,6 +151,7 @@ type InsertOrganizationParams struct {
 	TimeZone       string
 	OwnerUserID    pgtype.UUID
 	IdempotencyKey pgtype.Text
+	Plan           string
 }
 
 // A retried create carries the same idempotency key, and the partial unique
@@ -165,6 +166,7 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		arg.TimeZone,
 		arg.OwnerUserID,
 		arg.IdempotencyKey,
+		arg.Plan,
 	)
 	var i Organization
 	err := row.Scan(
@@ -197,8 +199,8 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 }
 
 const insertSelfServeOrganization = `-- name: InsertSelfServeOrganization :one
-INSERT INTO organizations (org_id, name, domain, domain_verified_at, time_zone, idempotency_key)
-VALUES ($1, $2, $3, CASE WHEN $3::text IS NULL THEN NULL ELSE now() END, $4, $5)
+INSERT INTO organizations (org_id, name, domain, domain_verified_at, time_zone, idempotency_key, plan)
+VALUES ($1, $2, $3, CASE WHEN $3::text IS NULL THEN NULL ELSE now() END, $4, $5, $6)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 RETURNING org_id, name, time_zone, display_name, domain, plan, owner_user_id, idempotency_key, domain_verified_at, pending_domain, domain_verification_token, status, suspended_at, suspension_reason, closing_at, purge_after, close_reason, closed_by_user_id, reopen_token_hash, audit_months, created_by, created_at, last_modified_by, last_modified_at
 `
@@ -209,6 +211,7 @@ type InsertSelfServeOrganizationParams struct {
 	Domain         pgtype.Text
 	TimeZone       string
 	IdempotencyKey pgtype.Text
+	Plan           string
 }
 
 // The org a signup makes: the domain, when one is claimed, is proven by
@@ -221,6 +224,7 @@ func (q *Queries) InsertSelfServeOrganization(ctx context.Context, arg InsertSel
 		arg.Domain,
 		arg.TimeZone,
 		arg.IdempotencyKey,
+		arg.Plan,
 	)
 	var i Organization
 	err := row.Scan(

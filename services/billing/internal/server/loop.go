@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/services/billing/internal/store"
 )
 
@@ -80,14 +82,14 @@ func (s *Server) remind(ctx context.Context, org uuid.UUID) error {
 		left := a.TrialEndsAt.Time.Sub(now)
 		if left <= 24*time.Hour {
 			return s.once(ctx, org, "trial:13", "trial_ending", map[string]any{
-				"heading": "Your team trial ends tomorrow",
-				"line":    "Add a payment method on the billing page to keep the team plan. Without one, the organization moves to free: nothing is deleted, but team features stop.",
+				"heading": "Your trial ends tomorrow",
+				"line":    fmt.Sprintf("Add a payment method on the billing page to keep the %s plan. Without one, the organization moves to %s: nothing is deleted, but what %s adds stops.", a.Band, plan.Lowest(), a.Band),
 			})
 		}
 		if left <= 4*24*time.Hour {
 			return s.once(ctx, org, "trial:10", "trial_ending", map[string]any{
-				"heading": "Your team trial ends in four days",
-				"line":    "Add a payment method on the billing page to keep the team plan without a break.",
+				"heading": "Your trial ends in four days",
+				"line":    fmt.Sprintf("Add a payment method on the billing page to keep the %s plan without a break.", a.Band),
 			})
 		}
 	case a.State == "past_due" && a.GraceStartedAt.Valid:
@@ -95,7 +97,7 @@ func (s *Server) remind(ctx context.Context, org uuid.UUID) error {
 		if since >= 12*24*time.Hour {
 			return s.once(ctx, org, "dunning:12", "payment_failed", map[string]any{
 				"heading": "Two days left to update your payment method",
-				"line":    "On day 14 the organization moves to the free plan: nothing is deleted and nobody is removed, but team features stop. Update the payment method on the billing page to keep the plan.",
+				"line":    fmt.Sprintf("On day 14 the organization moves to the %s plan: nothing is deleted and nobody is removed, but what %s adds stops. Update the payment method on the billing page to keep the plan.", plan.Lowest(), a.Band),
 			})
 		}
 		if since >= 7*24*time.Hour {

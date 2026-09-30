@@ -24,14 +24,19 @@ func (q *Queries) CountAccounts(ctx context.Context, orgID uuid.UUID) (int64, er
 }
 
 const ensureAccount = `-- name: EnsureAccount :one
-INSERT INTO accounts (org_id) VALUES ($1)
+INSERT INTO accounts (org_id, band) VALUES ($1, $2)
 ON CONFLICT (org_id) DO UPDATE SET org_id = excluded.org_id
 RETURNING org_id, provider, customer_ref, subscription_ref, schedule_ref, band, state, period_end, pending_band, card_brand, card_last4, auto_upgrade, trial_used, trial_ends_at, grace_started_at, notices, created_by, created_at, last_modified_by, last_modified_at
 `
 
+type EnsureAccountParams struct {
+	OrgID uuid.UUID
+	Band  string
+}
+
 // Every org has an account from the first time billing is asked about it: free.
-func (q *Queries) EnsureAccount(ctx context.Context, orgID uuid.UUID) (Account, error) {
-	row := q.db.QueryRow(ctx, ensureAccount, orgID)
+func (q *Queries) EnsureAccount(ctx context.Context, arg EnsureAccountParams) (Account, error) {
+	row := q.db.QueryRow(ctx, ensureAccount, arg.OrgID, arg.Band)
 	var i Account
 	err := row.Scan(
 		&i.OrgID,

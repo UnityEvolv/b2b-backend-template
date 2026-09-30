@@ -13,7 +13,8 @@ CREATE TABLE accounts (
     subscription_ref  text,
     -- A pending downgrade waits in a provider schedule until the period ends.
     schedule_ref      text,
-    band              text        NOT NULL DEFAULT 'free',
+    -- The plan band, one of pkg/plan's registry; the service sets it.
+    band              text        NOT NULL,
     state             text        NOT NULL DEFAULT 'free'
                       CHECK (state IN ('free', 'trialing', 'active', 'past_due', 'cancelled', 'invoiced')),
     period_end        timestamptz,
@@ -24,7 +25,7 @@ CREATE TABLE accounts (
     trial_used        boolean     NOT NULL DEFAULT false,
     trial_ends_at     timestamptz,
     grace_started_at  timestamptz,
-    -- Which one-off notices went out, so none is sent twice: "warn80:team-50",
+    -- Which one-off notices went out, so none is sent twice: "warn80:team",
     -- "trial:10", "dunning:7".
     notices           text[]      NOT NULL DEFAULT '{}',
     created_by        text        NOT NULL,

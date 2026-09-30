@@ -145,7 +145,7 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 	}
 	// A real import past the cap asks billing for room once, for the whole
 	// sheet, so an org upgrades once per crossing rather than band by band.
-	if !dryRun && s.capacity != nil && plan.For(band).Users != plan.Unlimited && int(active)+len(table.Rows) > plan.For(band).Users {
+	if !dryRun && s.capacity != nil && plan.For(band).Cap(plan.Users) != plan.Unlimited && int(active)+len(table.Rows) > plan.For(band).Cap(plan.Users) {
 		ok, err := s.capacity.MakeRoom(ctx, req.OrgId, int(active)+len(table.Rows))
 		if err != nil {
 			return nil, err
@@ -156,8 +156,8 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 			}
 		}
 	}
-	room := plan.For(band).Users - int(active)
-	if plan.For(band).Users == plan.Unlimited {
+	room := plan.For(band).Cap(plan.Users) - int(active)
+	if plan.For(band).Cap(plan.Users) == plan.Unlimited {
 		room = len(table.Rows) + 1
 	}
 

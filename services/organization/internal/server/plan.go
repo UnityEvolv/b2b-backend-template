@@ -15,16 +15,8 @@ import (
 )
 
 func toPlanLimits(o store.Organization) api.PlanLimits {
-	band := plan.Band(o.Plan)
-	l := plan.For(band)
-	features := make([]string, 0, len(l.Features))
-	for _, f := range l.Features {
-		features = append(features, string(f))
-	}
-	return api.PlanLimits{
-		OrgId: o.OrgID, Plan: api.Plan(band), Users: l.Users,
-		AttachmentBytes: l.AttachmentBytes, Features: features,
-	}
+	d := plan.Describe(plan.Band(o.Plan))
+	return api.PlanLimits{OrgId: o.OrgID, Plan: api.Plan(d.Band), Contractual: d.Contractual, Limits: d.Limits, Features: d.Features}
 }
 
 // GetPlan is the org's plan and its limits, for a service about to gate an
@@ -127,8 +119,8 @@ func (s *Server) ChangePlan(ctx context.Context, req api.ChangePlanRequestObject
 }
 
 // SetPlanInternal is billing moving the plan: an upgrade, a downgrade, a
-// trial, a payment failure. Audited with the reason. An enterprise org is
-// invoiced by contract and only a platform operator moves it.
+// trial, a payment failure. Audited with the reason. An org on a contractual
+// band is invoiced by contract and only a platform operator moves it.
 func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalRequestObject) (api.SetPlanInternalResponseObject, error) {
 	if err := auth.RequireService(ctx, "billing"); err != nil {
 		return api.SetPlanInternal403JSONResponse{Code: httpx.CodeForbidden, Message: "The billing service only."}, nil
@@ -145,7 +137,7 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 		if before, err = q.GetOrganization(ctx, req.OrgId); err != nil {
 			return err
 		}
-		if (plan.Band(before.Plan) == plan.Enterprise) != (to == plan.Enterprise) {
+		if plan.Contractual(plan.Band(before.Plan)) != plan.Contractual(to) {
 			enterprise = true
 			return nil
 		}
@@ -163,7 +155,7 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 		return nil, err
 	}
 	if enterprise {
-		return api.SetPlanInternal409JSONResponse{Code: "plan.enterprise", Message: "Enterprise plans are moved by a platform operator."}, nil
+		return api.SetPlanInternal409JSONResponse{Code: "plan.contractual", Message: "A contractual plan is moved by a platform operator."}, nil
 	}
 	if before.Plan != org.Plan {
 		err := s.recorder.Record(ctx, audit.Event{

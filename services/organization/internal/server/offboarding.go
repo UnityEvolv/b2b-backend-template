@@ -279,7 +279,7 @@ func retention(o store.Organization) api.Retention {
 	audit := fmt.Sprintf("%d months, then deleted.", months)
 	return api.Retention{
 		AuditMonths:       months,
-		AuditConfigurable: plan.Band(o.Plan) == plan.Enterprise,
+		AuditConfigurable: plan.Contractual(plan.Band(o.Plan)),
 		Classes: []struct {
 			Class api.RetentionClassesClass `json:"class"`
 			Kept  string                    `json:"kept"`
@@ -309,7 +309,7 @@ func (s *Server) GetRetention(ctx context.Context, req api.GetRetentionRequestOb
 }
 
 // SetRetention lengthens (or restores) the audit log's retention: platform
-// operators, and beyond 13 months only on enterprise.
+// operators, and beyond 13 months only on a contractual plan.
 func (s *Server) SetRetention(ctx context.Context, req api.SetRetentionRequestObject) (api.SetRetentionResponseObject, error) {
 	if err := auth.RequirePlatform(ctx); err != nil {
 		return api.SetRetention403JSONResponse(api.ErrorJSONResponse{Code: httpx.CodeForbidden, Message: "Only a platform operator may change retention."}), nil
@@ -325,8 +325,8 @@ func (s *Server) SetRetention(ctx context.Context, req api.SetRetentionRequestOb
 		if err != nil {
 			return err
 		}
-		if months != 13 && plan.Band(cur.Plan) != plan.Enterprise {
-			return errNotEnterprise
+		if months != 13 && !plan.Contractual(plan.Band(cur.Plan)) {
+			return errNotContractual
 		}
 		o, err = q.SetAuditMonths(ctx, store.SetAuditMonthsParams{OrgID: req.OrgId, AuditMonths: int32(months)})
 		return err
@@ -334,8 +334,8 @@ func (s *Server) SetRetention(ctx context.Context, req api.SetRetentionRequestOb
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return api.SetRetention404JSONResponse(api.ErrorJSONResponse{Code: "organization.not_found", Message: "No such organization."}), nil
-	case errors.Is(err, errNotEnterprise):
-		return api.SetRetention400JSONResponse{ErrorJSONResponse: invalid("A longer audit retention is for enterprise organizations.", map[string]string{"audit_months": "13 unless enterprise"})}, nil
+	case errors.Is(err, errNotContractual):
+		return api.SetRetention400JSONResponse{ErrorJSONResponse: invalid("A longer audit retention is for organizations on a contractual plan.", map[string]string{"audit_months": "13 unless the plan is contractual"})}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (s *Server) SetRetention(ctx context.Context, req api.SetRetentionRequestOb
 	return api.SetRetention200JSONResponse(retention(o)), nil
 }
 
-var errNotEnterprise = errors.New("not enterprise")
+var errNotContractual = errors.New("not contractual")
 
 func (s *Server) get(ctx context.Context, org uuid.UUID) (store.Organization, error) {
 	var o store.Organization

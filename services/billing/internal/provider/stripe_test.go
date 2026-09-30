@@ -18,14 +18,14 @@ func sign(secret string, at time.Time, payload []byte) string {
 }
 
 func TestStripeVerify(t *testing.T) {
-	s := NewStripe("https://stripe.test", "sk", "whsec_test", map[Band]string{"team-50": "price_50"}, nil)
+	s := NewStripe("https://stripe.test", "sk", "whsec_test", map[Band]string{"team": "price_team"}, nil)
 	now := time.Now()
-	sub := []byte(`{"id":"evt_1","type":"customer.subscription.updated","data":{"object":{"id":"sub_1","status":"past_due","current_period_end":1790000000,"customer":"cus_1","cancel_at_period_end":true,"items":{"data":[{"id":"si_1","price":{"id":"price_50"}}]}}}}`)
+	sub := []byte(`{"id":"evt_1","type":"customer.subscription.updated","data":{"object":{"id":"sub_1","status":"past_due","current_period_end":1790000000,"customer":"cus_1","cancel_at_period_end":true,"items":{"data":[{"id":"si_1","price":{"id":"price_team"}}]}}}}`)
 	ev, err := s.Verify(sub, sign("whsec_test", now, sub))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ev.Type != EventSubscriptionUpdated || ev.Customer != "cus_1" || ev.Subscription.Band != "team-50" || ev.Subscription.State != "past_due" || ev.Subscription.PendingBand != "free" {
+	if ev.Type != EventSubscriptionUpdated || ev.Customer != "cus_1" || ev.Subscription.Band != "team" || ev.Subscription.State != "past_due" || ev.Subscription.PendingBand != "free" {
 		t.Errorf("event: %+v %+v", ev, ev.Subscription)
 	}
 	if _, err := s.Verify(sub, sign("other", now, sub)); !errors.Is(err, ErrBadSignature) {
@@ -45,11 +45,11 @@ func TestStripeVerify(t *testing.T) {
 }
 
 func TestParsePrices(t *testing.T) {
-	p, err := ParsePrices(" team-50=price_a, team-200=price_b ")
-	if err != nil || p["team-50"] != "price_a" || p["team-200"] != "price_b" {
+	p, err := ParsePrices(" team=price_a, business=price_b ")
+	if err != nil || p["team"] != "price_a" || p["business"] != "price_b" {
 		t.Errorf("%v %v", p, err)
 	}
-	if _, err := ParsePrices("team-50"); err == nil {
+	if _, err := ParsePrices("team"); err == nil {
 		t.Error("no price")
 	}
 }

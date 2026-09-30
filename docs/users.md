@@ -17,7 +17,7 @@ the engine from; the open-source app has none of it.
 Both endpoints find the user by email first, so a second org inviting a
 known address gets a second membership, never a second account. Both read
 the org's plan at that moment: the free plan's eleventh member is refused
-with `plan.limit_reached` naming `free` and `team-50`; nobody already in is
+with `plan.limit_reached` naming `free` and `team`; nobody already in is
 affected; guests do not count.
 
 Every sign-in refreshes the directory attributes the provider sent (job

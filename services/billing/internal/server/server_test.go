@@ -49,7 +49,7 @@ func (o *orgs) Band(_ context.Context, org uuid.UUID) (plan.Band, error) {
 	if b, ok := o.bands[org]; ok {
 		return b, nil
 	}
-	return plan.Free, nil
+	return plan.Band("free"), nil
 }
 
 func (o *orgs) SetPlan(_ context.Context, org uuid.UUID, band plan.Band, reason string) error {
@@ -162,7 +162,7 @@ func (f *fake) Preview(context.Context, string, provider.Band) (int64, string, e
 	return 2500, "usd", nil
 }
 func (f *fake) Prices(context.Context) (map[provider.Band]provider.Price, error) {
-	return map[provider.Band]provider.Price{"team-50": {Amount: 4900, Currency: "usd", Interval: "month"}, "team-200": {Amount: 14900, Currency: "usd", Interval: "month"}}, nil
+	return map[provider.Band]provider.Price{"team": {Amount: 4900, Currency: "usd", Interval: "month"}, "business": {Amount: 14900, Currency: "usd", Interval: "month"}}, nil
 }
 func (f *fake) Verify([]byte, string) (provider.Event, error) { return provider.Event{}, nil }
 
@@ -281,12 +281,12 @@ func (f *fixture) customer(t *testing.T, owner string) string {
 	return strings.Split(strings.Split(out["url"].(string), "c=")[1], "&")[0]
 }
 
-// The payment story's "done when": a card, a subscription to team-50, the
+// The payment story's "done when": a card, a subscription to team, the
 // account matching the provider, and a replayed webhook changing nothing.
 func TestSubscribe(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
-	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"}); code != http.StatusConflict || out["code"] != "billing.no_payment_method" {
+	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"}); code != http.StatusConflict || out["code"] != "billing.no_payment_method" {
 		t.Errorf("without a card: %d %v", code, out)
 	}
 	f.card(t, owner)
@@ -294,8 +294,8 @@ func TestSubscribe(t *testing.T) {
 	if b["card"].(map[string]any)["last4"] != "4242" || b["auto_upgrade"] != true {
 		t.Fatalf("after the card: %v", b)
 	}
-	code, b := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"})
-	if code != http.StatusOK || b["band"] != "team-50" || b["state"] != "active" || f.orgs.bands[f.org] != plan.Team50 {
+	code, b := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
+	if code != http.StatusOK || b["band"] != "team" || b["state"] != "active" || f.orgs.bands[f.org] != plan.Band("team") {
 		t.Fatalf("subscribe: %d %v", code, b)
 	}
 	// The provider says it is past due; the same event again changes nothing.
@@ -328,7 +328,7 @@ func TestAutomaticUpgrade(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
 	f.card(t, owner)
-	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"})
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
 	f.notices.kinds()
 
 	// 80% of the cap: one warning, not repeated as the count creeps.
@@ -338,23 +338,23 @@ func TestAutomaticUpgrade(t *testing.T) {
 	if got := f.notices.kinds(); len(got) != 1 || got[0] != "cap_warning" {
 		t.Errorf("warning at 80%%: %v", got)
 	}
-	// The fifty-first member moves the org to team-200, and admins are told.
+	// The fifty-first member moves the org to business, and admins are told.
 	code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 51})
-	if code != http.StatusOK || out["band"] != "team-200" || out["upgraded"] != true || f.orgs.bands[f.org] != plan.Team200 {
+	if code != http.StatusOK || out["band"] != "business" || out["upgraded"] != true || f.orgs.bands[f.org] != plan.Band("business") {
 		t.Fatalf("upgrade: %d %v", code, out)
 	}
 	if got := f.notices.kinds(); len(got) != 1 || got[0] != "auto_upgraded" {
 		t.Errorf("upgrade email: %v", got)
 	}
-	// An import of 300 goes to team-500 in one step.
-	if code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 300}); code != http.StatusOK || out["band"] != "team-500" {
-		t.Errorf("one upgrade per crossing: %d %v", code, out)
+	// An import of 300 fits no self-serve band: refused, and the plan stays.
+	if code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 300}); code != http.StatusConflict || out["code"] != plan.Code || f.orgs.bands[f.org] != plan.Band("business") {
+		t.Errorf("beyond every band: %d %v", code, out)
 	}
 	// With automatic upgrade off, the cap refuses.
 	if code, _ := f.do(t, http.MethodPut, f.path("/billing/auto-upgrade"), owner, map[string]any{"on": false}); code != http.StatusOK {
 		t.Fatalf("turn off: %d", code)
 	}
-	if code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 501}); code != http.StatusConflict || out["code"] != plan.Code {
+	if code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 201}); code != http.StatusConflict || out["code"] != plan.Code {
 		t.Errorf("off: %d %v", code, out)
 	}
 
@@ -362,9 +362,9 @@ func TestAutomaticUpgrade(t *testing.T) {
 	g := newAPI(t)
 	gowner := g.member(t, authz.Owner)
 	g.card(t, gowner)
-	g.do(t, http.MethodPut, g.path("/billing/band"), gowner, map[string]any{"band": "team-50"})
+	g.do(t, http.MethodPut, g.path("/billing/band"), gowner, map[string]any{"band": "team"})
 	g.pay.decline = true
-	if code, _ := g.do(t, http.MethodPost, "/v1/internal/organizations/"+g.org.String()+"/capacity", g.user, map[string]any{"members": 51}); code != http.StatusConflict || g.orgs.bands[g.org] != plan.Team50 {
+	if code, _ := g.do(t, http.MethodPost, "/v1/internal/organizations/"+g.org.String()+"/capacity", g.user, map[string]any{"members": 51}); code != http.StatusConflict || g.orgs.bands[g.org] != plan.Band("team") {
 		t.Errorf("declined: %d %v", code, g.orgs.bands[g.org])
 	}
 }
@@ -375,7 +375,7 @@ func TestDunningAndTrial(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
 	f.card(t, owner)
-	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"})
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
 	cus := f.customer(t, owner)
 	f.notices.kinds()
 	start := time.Now()
@@ -394,7 +394,7 @@ func TestDunningAndTrial(t *testing.T) {
 	}
 	// The provider gives up: free, with the checklist.
 	f.srv.HandleEvent(context.Background(), provider.Event{ID: "evt_del", Type: provider.EventSubscriptionDeleted, Customer: cus, Subscription: &provider.Subscription{}})
-	if f.orgs.bands[f.org] != plan.Free || f.orgs.reasons[len(f.orgs.reasons)-1] != "payment_failure" {
+	if f.orgs.bands[f.org] != plan.Band("free") || f.orgs.reasons[len(f.orgs.reasons)-1] != "payment_failure" {
 		t.Errorf("dropped: %v %v", f.orgs.bands[f.org], f.orgs.reasons)
 	}
 	if got := f.notices.kinds(); len(got) != 1 || got[0] != "downgraded" {
@@ -405,7 +405,7 @@ func TestDunningAndTrial(t *testing.T) {
 	g := newAPI(t)
 	gowner := g.member(t, authz.Owner)
 	g.card(t, gowner)
-	g.do(t, http.MethodPut, g.path("/billing/band"), gowner, map[string]any{"band": "team-50"})
+	g.do(t, http.MethodPut, g.path("/billing/band"), gowner, map[string]any{"band": "team"})
 	gcus := g.customer(t, gowner)
 	g.srv.HandleEvent(context.Background(), provider.Event{ID: "evt_g1", Type: provider.EventPaymentFailed, Customer: gcus})
 	g.srv.HandleEvent(context.Background(), provider.Event{ID: "evt_g2", Type: provider.EventPaymentSucceeded, Customer: gcus})
@@ -420,7 +420,7 @@ func TestDunningAndTrial(t *testing.T) {
 	h := newAPI(t)
 	howner := h.member(t, authz.Owner)
 	began := time.Now()
-	if code, b := h.do(t, http.MethodPost, h.path("/billing/trial"), howner, nil); code != http.StatusOK || b["state"] != "trialing" || h.orgs.bands[h.org] != plan.Team50 {
+	if code, b := h.do(t, http.MethodPost, h.path("/billing/trial"), howner, nil); code != http.StatusOK || b["state"] != "trialing" || h.orgs.bands[h.org] != plan.Band("team") {
 		t.Fatalf("trial: %d %v", code, b)
 	}
 	if code, _ := h.do(t, http.MethodPost, h.path("/billing/trial"), howner, nil); code != http.StatusConflict {
@@ -432,7 +432,7 @@ func TestDunningAndTrial(t *testing.T) {
 	h.srv.Tick(context.Background())
 	h.clock.set(began.Add(14*24*time.Hour + time.Hour))
 	_, b = h.do(t, http.MethodGet, h.path("/billing"), howner, nil)
-	if b["state"] != "free" || h.orgs.bands[h.org] != plan.Free || b["trial_available"] != false {
+	if b["state"] != "free" || h.orgs.bands[h.org] != plan.Band("free") || b["trial_available"] != false {
 		t.Errorf("trial ended: %v", b)
 	}
 	if got := h.notices.kinds(); len(got) != 3 || got[2] != "trial_ended" {
@@ -445,12 +445,12 @@ func TestDowngrade(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
 	f.card(t, owner)
-	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-200"})
-	code, b := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"})
-	if code != http.StatusOK || b["band"] != "team-200" || b["pending_band"] != "team-50" || f.orgs.bands[f.org] != plan.Team200 {
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "business"})
+	code, b := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
+	if code != http.StatusOK || b["band"] != "business" || b["pending_band"] != "team" || f.orgs.bands[f.org] != plan.Band("business") {
 		t.Fatalf("scheduled: %d %v", code, b)
 	}
-	if code, out := f.do(t, http.MethodGet, f.path("/billing/band-preview?band=team-50"), owner, nil); code != http.StatusOK || out["applies"] != "period_end" {
+	if code, out := f.do(t, http.MethodGet, f.path("/billing/band-preview?band=team"), owner, nil); code != http.StatusOK || out["applies"] != "period_end" {
 		t.Errorf("preview down: %d %v", code, out)
 	}
 	code, b = f.do(t, http.MethodDelete, f.path("/billing/pending"), owner, nil)
@@ -458,8 +458,21 @@ func TestDowngrade(t *testing.T) {
 		t.Errorf("cancelled: %d %v", code, b)
 	}
 	// Enterprise is invoiced: no controls.
-	f.orgs.bands[f.org] = plan.Enterprise
-	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-500"}); code != http.StatusConflict || out["code"] != "billing.invoiced" {
+	f.orgs.bands[f.org] = plan.Band("enterprise")
+	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "business"}); code != http.StatusConflict || out["code"] != "billing.invoiced" {
 		t.Errorf("enterprise: %d %v", code, out)
+	}
+}
+
+// The price map is keyed by the registry's band names: a price for a band
+// the ladder does not sell self-serve stops the service at start.
+func TestPricesAreForSelfServeBands(t *testing.T) {
+	if err := server.CheckPrices(map[provider.Band]string{"team": "price_a", "business": "price_b"}); err != nil {
+		t.Error(err)
+	}
+	for _, band := range []provider.Band{"team-50", "free", "enterprise"} {
+		if err := server.CheckPrices(map[provider.Band]string{band: "price_x"}); err == nil {
+			t.Errorf("%s accepted", band)
+		}
 	}
 }

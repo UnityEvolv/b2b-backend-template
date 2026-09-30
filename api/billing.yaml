@@ -417,7 +417,7 @@ components:
             type: string
     Band:
       type: string
-      enum: [free, team-50, team-200, team-500, enterprise]
+      description: A plan band, one of the bands the deployment registers.
     Price:
       type: object
       required: [amount, currency, interval]

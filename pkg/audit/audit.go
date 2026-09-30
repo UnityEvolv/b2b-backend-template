@@ -5,7 +5,7 @@
 //	if err := recorder.Record(ctx, audit.Event{
 //	    OrgID: orgID, Action: "organization.plan.changed",
 //	    TargetType: "organization", TargetID: orgID,
-//	    Details: map[string]any{"from": "free", "to": "team-50"},
+//	    Details: map[string]any{"from": "free", "to": "team"},
 //	}); err != nil {
 //	    return err // a security-sensitive action that cannot be recorded does not happen
 //	}

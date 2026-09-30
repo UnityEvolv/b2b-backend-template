@@ -109,7 +109,7 @@ func TestSignInRefusals(t *testing.T) {
 // refuses the eleventh, naming the plan; a guest does not count.
 func TestUserCapIsASoftWall(t *testing.T) {
 	f := newAPI(t)
-	cap := plan.For(plan.Free).Users
+	cap := plan.For("free").Cap(plan.Users)
 	for i := 0; i < cap; i++ {
 		f.signIn(t, acme, "p"+string(rune('a'+i))+"@example.com", "Person", nil)
 	}
@@ -117,7 +117,7 @@ func TestUserCapIsASoftWall(t *testing.T) {
 	if status != http.StatusForbidden || out["code"] != plan.Code {
 		t.Fatalf("eleventh member: %d %v", status, out)
 	}
-	if fields, _ := out["fields"].(map[string]any); fields["plan"] != "free" || fields["required_plan"] != "team-50" {
+	if fields, _ := out["fields"].(map[string]any); fields["plan"] != "free" || fields["required_plan"] != "team" {
 		t.Errorf("refusal fields: %v", out)
 	}
 	// Everyone already in is unaffected: a sign-in of an existing member works.

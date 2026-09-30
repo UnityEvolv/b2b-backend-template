@@ -18,33 +18,6 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for Band.
-const (
-	BandEnterprise Band = "enterprise"
-	BandFree       Band = "free"
-	BandTeam200    Band = "team-200"
-	BandTeam50     Band = "team-50"
-	BandTeam500    Band = "team-500"
-)
-
-// Valid indicates whether the value is a known member of the Band enum.
-func (e Band) Valid() bool {
-	switch e {
-	case BandEnterprise:
-		return true
-	case BandFree:
-		return true
-	case BandTeam200:
-		return true
-	case BandTeam50:
-		return true
-	case BandTeam500:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for BandPreviewApplies.
 const (
 	Now       BandPreviewApplies = "now"
@@ -65,44 +38,46 @@ func (e BandPreviewApplies) Valid() bool {
 
 // Defines values for BillingState.
 const (
-	BillingStateActive    BillingState = "active"
-	BillingStateCancelled BillingState = "cancelled"
-	BillingStateFree      BillingState = "free"
-	BillingStateInvoiced  BillingState = "invoiced"
-	BillingStatePastDue   BillingState = "past_due"
-	BillingStateTrialing  BillingState = "trialing"
+	Active    BillingState = "active"
+	Cancelled BillingState = "cancelled"
+	Free      BillingState = "free"
+	Invoiced  BillingState = "invoiced"
+	PastDue   BillingState = "past_due"
+	Trialing  BillingState = "trialing"
 )
 
 // Valid indicates whether the value is a known member of the BillingState enum.
 func (e BillingState) Valid() bool {
 	switch e {
-	case BillingStateActive:
+	case Active:
 		return true
-	case BillingStateCancelled:
+	case Cancelled:
 		return true
-	case BillingStateFree:
+	case Free:
 		return true
-	case BillingStateInvoiced:
+	case Invoiced:
 		return true
-	case BillingStatePastDue:
+	case PastDue:
 		return true
-	case BillingStateTrialing:
+	case Trialing:
 		return true
 	default:
 		return false
 	}
 }
 
-// Band defines model for Band.
-type Band string
+// Band A plan band, one of the bands the deployment registers.
+type Band = string
 
 // BandPreview defines model for BandPreview.
 type BandPreview struct {
 	// AmountToday Charged now, with proration; 0 for a change at the period's end.
 	AmountToday int64              `json:"amount_today"`
 	Applies     BandPreviewApplies `json:"applies"`
-	Band        Band               `json:"band"`
-	Currency    string             `json:"currency"`
+
+	// Band A plan band, one of the bands the deployment registers.
+	Band     Band   `json:"band"`
+	Currency string `json:"currency"`
 }
 
 // BandPreviewApplies defines model for BandPreview.Applies.
@@ -112,7 +87,9 @@ type BandPreviewApplies string
 type Billing struct {
 	ActiveMembers int  `json:"active_members"`
 	AutoUpgrade   bool `json:"auto_upgrade"`
-	Band          Band `json:"band"`
+
+	// Band A plan band, one of the bands the deployment registers.
+	Band Band `json:"band"`
 
 	// CanManageAutoUpgrade Whether the caller is an Owner, who alone may change it.
 	CanManageAutoUpgrade bool `json:"can_manage_auto_upgrade"`
@@ -125,8 +102,12 @@ type Billing struct {
 	GraceDaysLeft *int `json:"grace_days_left,omitempty"`
 
 	// Invoiced Enterprise, invoiced by contract; no controls.
-	Invoiced       bool             `json:"invoiced"`
-	NextBand       *Band            `json:"next_band,omitempty"`
+	Invoiced bool `json:"invoiced"`
+
+	// NextBand A plan band, one of the bands the deployment registers.
+	NextBand *Band `json:"next_band,omitempty"`
+
+	// PendingBand A plan band, one of the bands the deployment registers.
 	PendingBand    *Band            `json:"pending_band,omitempty"`
 	PeriodEnd      *time.Time       `json:"period_end,omitempty"`
 	Prices         map[string]Price `json:"prices"`
@@ -210,6 +191,7 @@ type SetAutoUpgradeJSONBody struct {
 
 // ChangeBandJSONBody defines parameters for ChangeBand.
 type ChangeBandJSONBody struct {
+	// Band A plan band, one of the bands the deployment registers.
 	Band Band `json:"band"`
 }
 
@@ -831,6 +813,7 @@ type MakeRoomResponseObject interface {
 }
 
 type MakeRoom200JSONResponse struct {
+	// Band A plan band, one of the bands the deployment registers.
 	Band     Band `json:"band"`
 	Upgraded bool `json:"upgraded"`
 }

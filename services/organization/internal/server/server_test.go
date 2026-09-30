@@ -135,7 +135,7 @@ func TestGetOrganization(t *testing.T) {
 	h, cluster, issuer := newAPI(t)
 	ctx := db.WithActor(context.Background(), db.SystemActor("organization"))
 	err := cluster.Tx(ctx, testOrg, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO organizations (org_id, name, time_zone) VALUES ($1, 'Acme', 'Asia/Kolkata')
+		_, err := tx.Exec(ctx, `INSERT INTO organizations (org_id, name, time_zone, plan) VALUES ($1, 'Acme', 'Asia/Kolkata', 'free')
 			ON CONFLICT (org_id) DO UPDATE SET name = excluded.name`, testOrg)
 		return err
 	})

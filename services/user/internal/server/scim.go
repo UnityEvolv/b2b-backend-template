@@ -116,7 +116,7 @@ func hashToken(raw string) []byte {
 	return sum[:]
 }
 
-// scimAuth is the org's token, the Enterprise plan, and the record of the
+// scimAuth is the org's token, a plan with SCIM, and the record of the
 // call, in front of every operation.
 func (s *Server) scimAuth(operation string, h scimHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +155,11 @@ func (s *Server) scimAuth(operation string, h scimHandler) http.Handler {
 			return
 		}
 		if err := plan.CheckFeature(band, plan.SCIM); err != nil {
-			writeProblem(w, &scimProblem{status: http.StatusForbidden, detail: "SCIM provisioning is on the Enterprise plan; this organization is not on it."})
+			detail := "This organization's plan does not include SCIM provisioning."
+			if ref, ok := plan.AsRefusal(err); ok {
+				detail = ref.Message
+			}
+			writeProblem(w, &scimProblem{status: http.StatusForbidden, detail: detail})
 			return
 		}
 		if err := s.cluster.Tx(ctx, org.String(), func(tx pgx.Tx) error {

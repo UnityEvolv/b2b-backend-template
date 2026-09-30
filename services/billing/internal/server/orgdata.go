@@ -200,7 +200,7 @@ func (s *Server) CloseAccount(ctx context.Context, req api.CloseAccountRequestOb
 		if x.SubscriptionRef.String != ref {
 			return nil
 		}
-		x.State, x.Band = "cancelled", string(plan.Free)
+		x.State, x.Band = "cancelled", string(plan.Lowest())
 		x.SubscriptionRef, x.ScheduleRef, x.PendingBand, x.PeriodEnd, x.GraceStartedAt = pgtype.Text{}, pgtype.Text{}, pgtype.Text{}, pgtype.Timestamptz{}, pgtype.Timestamptz{}
 		x.Notices = slices.DeleteFunc(x.Notices, func(n string) bool { return strings.HasPrefix(n, "dunning:") })
 		return nil

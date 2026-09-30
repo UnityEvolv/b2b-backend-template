@@ -30,10 +30,11 @@ const (
 	codeKeyReused   = "request.idempotency_key_reused"
 )
 
-// bandList is the plan bands for a message: "free, team-50, ...".
+// bandList is the plan bands for a message: "free, team, ...".
 func bandList() string {
-	names := make([]string, 0, len(plan.Bands))
-	for _, b := range plan.Bands {
+	bands := plan.Bands()
+	names := make([]string, 0, len(bands))
+	for _, b := range bands {
 		names = append(names, string(b))
 	}
 	return strings.Join(names, ", ")
@@ -58,7 +59,7 @@ func toAPI(o store.Organization) api.Organization {
 		Status: api.OrganizationStatus(o.Status), CreatedAt: o.CreatedAt, LastModifiedAt: o.LastModifiedAt,
 	}
 	// The cap as the plan table says it now; read at the moment of asking.
-	if c := plan.For(plan.Band(o.Plan)).Users; c != plan.Unlimited {
+	if c := plan.For(plan.Band(o.Plan)).Cap(plan.Users); c != plan.Unlimited {
 		out.UserCap = &c
 	}
 	if o.SuspendedAt.Valid {
@@ -154,7 +155,7 @@ func (s *Server) CreateOrganization(ctx context.Context, req api.CreateOrganizat
 		q := store.New(tx)
 		params := store.InsertOrganizationParams{
 			OrgID: orgID, Name: name, DisplayName: text(displayName), Domain: text(domain),
-			TimeZone: body.TimeZone, IdempotencyKey: text(key),
+			TimeZone: body.TimeZone, IdempotencyKey: text(key), Plan: string(plan.Lowest()),
 		}
 		if body.OwnerUserId != nil {
 			params.OwnerUserID = pgtype.UUID{Bytes: *body.OwnerUserId, Valid: true}

@@ -24,12 +24,12 @@ var ErrNoOrganization = fmt.Errorf("plan: no such organization")
 // Static is a Source over a map: for tests, and for the platform org.
 type Static map[string]Band
 
-// Band is the mapped band, or free when the org is not in the map.
+// Band is the mapped band, or the lowest when the org is not in the map.
 func (s Static) Band(_ context.Context, orgID string) (Band, error) {
 	if b, ok := s[orgID]; ok {
 		return b, nil
 	}
-	return Free, nil
+	return Lowest(), nil
 }
 
 // client asks the organization service's internal API, as this service,

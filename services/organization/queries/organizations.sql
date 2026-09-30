@@ -7,8 +7,8 @@ WHERE org_id = $1;
 -- A retried create carries the same idempotency key, and the partial unique
 -- index on (created_by, idempotency_key) makes the second insert do nothing;
 -- the caller then finds the first with OrganizationByIdempotencyKey.
-INSERT INTO organizations (org_id, name, display_name, domain, time_zone, owner_user_id, idempotency_key)
-VALUES (@org_id, @name, sqlc.narg('display_name'), sqlc.narg('domain'), @time_zone, sqlc.narg('owner_user_id'), @idempotency_key)
+INSERT INTO organizations (org_id, name, display_name, domain, time_zone, owner_user_id, idempotency_key, plan)
+VALUES (@org_id, @name, sqlc.narg('display_name'), sqlc.narg('domain'), @time_zone, sqlc.narg('owner_user_id'), @idempotency_key, @plan)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 RETURNING *;
 
@@ -85,8 +85,8 @@ SELECT * FROM organizations WHERE domain = @domain;
 -- The org a signup makes: the domain, when one is claimed, is proven by
 -- the verified mailbox. Idempotent by the signup, as InsertOrganization is
 -- by the operator's key.
-INSERT INTO organizations (org_id, name, domain, domain_verified_at, time_zone, idempotency_key)
-VALUES (@org_id, @name, sqlc.narg('domain'), CASE WHEN sqlc.narg('domain')::text IS NULL THEN NULL ELSE now() END, @time_zone, @idempotency_key)
+INSERT INTO organizations (org_id, name, domain, domain_verified_at, time_zone, idempotency_key, plan)
+VALUES (@org_id, @name, sqlc.narg('domain'), CASE WHEN sqlc.narg('domain')::text IS NULL THEN NULL ELSE now() END, @time_zone, @idempotency_key, @plan)
 ON CONFLICT (created_by, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 RETURNING *;
 

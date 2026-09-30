@@ -68,11 +68,11 @@ type plans struct{}
 func (plans) Band(_ context.Context, orgID string) (plan.Band, error) {
 	switch orgID {
 	case acme.String():
-		return plan.Free, nil
+		return "free", nil
 	case globex.String():
-		return plan.Team50, nil
+		return "team", nil
 	case initech.String():
-		return plan.Enterprise, nil
+		return "enterprise", nil
 	}
 	return "", plan.ErrNoOrganization
 }

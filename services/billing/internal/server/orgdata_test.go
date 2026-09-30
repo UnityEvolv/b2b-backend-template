@@ -33,7 +33,7 @@ func TestClosingCancelsTheSubscription(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
 	f.card(t, owner)
-	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"}); code != http.StatusOK {
+	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"}); code != http.StatusOK {
 		t.Fatalf("subscribe: %d %v", code, out)
 	}
 	org := f.token(t, auth.Caller{Service: "organization"})
@@ -118,7 +118,7 @@ func TestDataEndpointsAreTheOrganizationServicesOnly(t *testing.T) {
 	f := newAPI(t)
 	owner := f.member(t, authz.Owner)
 	f.card(t, owner)
-	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team-50"})
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
 	for _, token := range []string{f.user, owner} {
 		for _, c := range [][2]string{
 			{http.MethodGet, internal(f.org, "/data")},

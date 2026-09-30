@@ -146,7 +146,7 @@ func TestAServiceRecordsInOneCallAndTheOrgReadsItBack(t *testing.T) {
 
 	err := rec.Record(asRequest(admin), audit.Event{
 		OrgID: orgA, Action: "organization.plan.changed", TargetType: "organization", TargetID: orgA,
-		Details: map[string]any{"from": "free", "to": "team-50"},
+		Details: map[string]any{"from": "free", "to": "team"},
 	})
 	if err != nil {
 		t.Fatalf("record: %v", err)
@@ -162,7 +162,7 @@ func TestAServiceRecordsInOneCallAndTheOrgReadsItBack(t *testing.T) {
 	}
 	ev := events[0].(map[string]any)
 	if ev["actor"] != "membership:"+admin.MembershipID || ev["action"] != "organization.plan.changed" ||
-		ev["source_ip"] != "203.0.113.7" || ev["request_id"] == "" || ev["details"].(map[string]any)["to"] != "team-50" {
+		ev["source_ip"] != "203.0.113.7" || ev["request_id"] == "" || ev["details"].(map[string]any)["to"] != "team" {
 		t.Fatalf("entry: %v", ev)
 	}
 }

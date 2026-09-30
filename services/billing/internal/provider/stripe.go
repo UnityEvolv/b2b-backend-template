@@ -55,7 +55,8 @@ func (s *Stripe) WithSource(source string) *Stripe {
 	return s
 }
 
-// ParsePrices reads "team-50=price_a,team-200=price_b".
+// ParsePrices reads "team=price_a,business=price_b": each band by its name
+// in the plan registry.
 func ParsePrices(s string) (map[Band]string, error) {
 	out := map[Band]string{}
 	for _, pair := range strings.Split(s, ",") {

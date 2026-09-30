@@ -9,9 +9,9 @@ CREATE TABLE organizations (
     display_name              text        CHECK (display_name IS NULL OR length(display_name) BETWEEN 1 AND 200),
     -- The email domain the org claims; lower-case, one org per domain.
     domain                    text        CHECK (domain IS NULL OR (domain = lower(domain) AND length(domain) BETWEEN 3 AND 253)),
-    -- The plan band. What each band allows is pkg/plan's table.
-    plan                      text        NOT NULL DEFAULT 'free'
-        CHECK (plan IN ('free', 'team-50', 'team-200', 'team-500', 'enterprise')),
+    -- The plan band, one of pkg/plan's registry; the service validates it,
+    -- because the ladder is the product's to set.
+    plan                      text        NOT NULL,
     -- The first owner, recorded on creation. Roles and later owners are the
     -- membership's concern.
     owner_user_id             uuid,

@@ -14,6 +14,10 @@ type Apps struct {
 	Names []string
 	// Origins is each app's origin, by name.
 	Origins map[string]string
+	// Platform is the app platform operators use: where the first
+	// operator's invite opens. PLATFORM_APP names it; "platform" when that
+	// is one of the apps, and the main app otherwise.
+	Platform string
 }
 
 // Main is the main app's name.
@@ -38,6 +42,14 @@ func AppsFrom(e *Env, base string) Apps {
 			e.Required(key)
 		}
 		apps.Origins[name] = strings.TrimSuffix(origin, "/")
+	}
+	platform := DefaultApps[len(DefaultApps)-1]
+	if _, ok := apps.Origins[platform]; !ok {
+		platform = apps.Main()
+	}
+	apps.Platform = strings.ToLower(e.String("PLATFORM_APP", platform))
+	if _, ok := apps.Origins[apps.Platform]; !ok {
+		e.problems = append(e.problems, "PLATFORM_APP: "+apps.Platform+" is not one of APP_NAMES")
 	}
 	return apps
 }

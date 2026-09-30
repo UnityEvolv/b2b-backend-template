@@ -26,7 +26,9 @@ not duplicated: a fresh link, the old one dead. The email goes on the
 organization's behalf through the notification outbox (`invite` template)
 with a link into the app that asked: `app/accept-invite?token=…`. The apps
 are configuration: `APP_NAMES` (`account,admin,platform` by default, the
-first being the main app) and `APP_ORIGIN_<NAME>` for each.
+first being the main app), `APP_ORIGIN_<NAME>` for each, and `PLATFORM_APP`,
+the app the first platform operator's invite opens (`platform` when it is
+one of the apps, the main app otherwise).
 Audited as `invite.sent` or `invite.resent`.
 
 ## Managing

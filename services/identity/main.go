@@ -178,7 +178,7 @@ func run() error {
 	recorder := audit.NewClient(auditURL, tokens, nil)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
 		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), server.RedisPublisher{Client: rdb, Channel: redisNames.HostEvents()}, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
-		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
+		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

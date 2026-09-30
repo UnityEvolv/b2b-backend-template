@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestBootstrapInvitesTheFirstOperatorOnce(t *testing.T) {
 		t.Fatalf("invites after the first start: %v", invites)
 	}
 	msg, token := f.lastLink(t)
-	if msg.Template != "invite" || msg.To != "operator@example.com" || msg.OrgName == "" || msg.OrgID != auth.PlatformOrg {
+	if link, _ := msg.Data["link"].(string); msg.Template != "invite" || !strings.HasPrefix(link, "http://platform.test/") || msg.To != "operator@example.com" || msg.OrgName == "" || msg.OrgID != auth.PlatformOrg {
 		t.Errorf("email: %+v", msg)
 	}
 	if f.audited("invite.sent") != 1 {

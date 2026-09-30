@@ -43,6 +43,9 @@ type Config struct {
 	// MainApp is the app a sign-in or a link opens when nothing names
 	// another; "account" when empty.
 	MainApp string
+	// PlatformApp is the app platform operators use: where the first
+	// operator's invite opens. The main app when empty.
+	PlatformApp string
 	// Product is the product's name: what the authenticator app shows above
 	// the code, and the platform org's name in its emails. The template's
 	// default when empty.
@@ -95,6 +98,9 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	}
 	if cfg.MainApp == "" {
 		cfg.MainApp = config.DefaultApps[0]
+	}
+	if cfg.PlatformApp == "" {
+		cfg.PlatformApp = cfg.MainApp
 	}
 	if cfg.Product == "" {
 		cfg.Product = config.DefaultBrand.Name

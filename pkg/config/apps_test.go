@@ -9,6 +9,7 @@ import (
 
 func TestAppsDeriveFromTheBase(t *testing.T) {
 	t.Setenv("APP_NAMES", "")
+	t.Setenv("PLATFORM_APP", "")
 	env := &config.Env{}
 	apps := config.AppsFrom(env, "Example.com")
 	if err := env.Err(); err != nil {
@@ -19,8 +20,26 @@ func TestAppsDeriveFromTheBase(t *testing.T) {
 		"admin":    "https://admin.example.com",
 		"platform": "https://platform.example.com",
 	}
-	if apps.Main() != "account" || !reflect.DeepEqual(apps.Origins, want) {
-		t.Fatalf("got %v %v", apps.Names, apps.Origins)
+	if apps.Main() != "account" || apps.Platform != "platform" || !reflect.DeepEqual(apps.Origins, want) {
+		t.Fatalf("got %v %v %s", apps.Names, apps.Origins, apps.Platform)
+	}
+}
+
+func TestThePlatformAppIsConfigured(t *testing.T) {
+	// A product with no platform app of its own: operators use the main one.
+	t.Setenv("APP_NAMES", "portal, console")
+	if apps := config.AppsFrom(&config.Env{}, "example.com"); apps.Platform != "portal" {
+		t.Errorf("no platform app: %q", apps.Platform)
+	}
+	t.Setenv("PLATFORM_APP", "Console")
+	if apps := config.AppsFrom(&config.Env{}, "example.com"); apps.Platform != "console" {
+		t.Errorf("named: %q", apps.Platform)
+	}
+	t.Setenv("PLATFORM_APP", "ops")
+	env := &config.Env{}
+	config.AppsFrom(env, "example.com")
+	if env.Err() == nil {
+		t.Error("PLATFORM_APP outside APP_NAMES accepted")
 	}
 }
 

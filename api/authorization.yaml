@@ -15,6 +15,27 @@ servers:
 security:
   - bearer: []
 paths:
+  /v1/permission-groups:
+    get:
+      operationId: listPermissionGroups
+      summary: The configurable permission groups, for the roles page to render
+      description: |
+        Every group registered in this deployment, the template's and the
+        product's, in order, with a label and description to show and the
+        roles that hold it by default; and the actions only an Owner may
+        ever take. The same for every org; any signed-in caller may read it.
+      tags: [permissions]
+      responses:
+        '200':
+          description: The groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionGroups'
+        '401':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/organizations/{org_id}/permissions:
     get:
       operationId: getPermissions
@@ -39,8 +60,8 @@ paths:
       operationId: setPermissions
       summary: Change which groups the Admin and Billing Admin roles hold (Owner only)
       description: |
-        Only the configurable groups may be named; Owner-only actions never
-        can. The answer carries warnings for anything the change leaves
+        Only the registered groups (`GET /v1/permission-groups`) may be
+        named; Owner-only actions never can. The answer carries warnings for anything the change leaves
         nobody but the Owner able to do. Audited. Takes effect on the next
         action: nothing is cached.
       tags: [permissions]
@@ -389,8 +410,40 @@ components:
       enum: [owner, admin, billing_admin, user, guest]
     Permission:
       type: string
-      description: A configurable group, or an Owner-only action.
-      enum: [settings, billing, users, offices, providers, audit, assign_roles, configure_permissions, transfer_ownership, delete_organization, claim_domain]
+      description: |
+        A configurable group, `settings`, or an Owner-only action. The groups
+        are registered by the template (billing, users, audit, sso) and the
+        product, so they are validated by the service, not listed here.
+      example: users
+    PermissionGroup:
+      type: object
+      required: [key, label, description, default_roles]
+      properties:
+        key:
+          $ref: '#/components/schemas/Permission'
+        label:
+          type: string
+          example: Single sign-on
+        description:
+          type: string
+        default_roles:
+          type: array
+          description: The configurable roles that hold it until the Owner decides otherwise.
+          items:
+            $ref: '#/components/schemas/Role'
+    PermissionGroups:
+      type: object
+      required: [groups, owner_only]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionGroup'
+        owner_only:
+          type: array
+          description: What no configuration can grant.
+          items:
+            $ref: '#/components/schemas/Permission'
     NewPermissionConfig:
       type: object
       required: [admin, billing_admin]

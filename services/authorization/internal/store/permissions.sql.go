@@ -12,7 +12,7 @@ import (
 )
 
 const getPermissionConfig = `-- name: GetPermissionConfig :one
-SELECT org_id, admin_permissions, billing_admin_permissions, created_by, created_at, last_modified_by, last_modified_at FROM permission_configs WHERE org_id = $1
+SELECT org_id, admin_permissions, billing_admin_permissions, known_groups, created_by, created_at, last_modified_by, last_modified_at FROM permission_configs WHERE org_id = $1
 `
 
 func (q *Queries) GetPermissionConfig(ctx context.Context, orgID uuid.UUID) (PermissionConfig, error) {
@@ -22,6 +22,7 @@ func (q *Queries) GetPermissionConfig(ctx context.Context, orgID uuid.UUID) (Per
 		&i.OrgID,
 		&i.AdminPermissions,
 		&i.BillingAdminPermissions,
+		&i.KnownGroups,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,
@@ -31,26 +32,34 @@ func (q *Queries) GetPermissionConfig(ctx context.Context, orgID uuid.UUID) (Per
 }
 
 const upsertPermissionConfig = `-- name: UpsertPermissionConfig :one
-INSERT INTO permission_configs (org_id, admin_permissions, billing_admin_permissions)
-VALUES ($1, $2, $3)
+INSERT INTO permission_configs (org_id, admin_permissions, billing_admin_permissions, known_groups)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (org_id) DO UPDATE
-SET admin_permissions = excluded.admin_permissions, billing_admin_permissions = excluded.billing_admin_permissions
-RETURNING org_id, admin_permissions, billing_admin_permissions, created_by, created_at, last_modified_by, last_modified_at
+SET admin_permissions = excluded.admin_permissions, billing_admin_permissions = excluded.billing_admin_permissions,
+    known_groups = excluded.known_groups
+RETURNING org_id, admin_permissions, billing_admin_permissions, known_groups, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpsertPermissionConfigParams struct {
 	OrgID                   uuid.UUID
 	AdminPermissions        []string
 	BillingAdminPermissions []string
+	KnownGroups             []string
 }
 
 func (q *Queries) UpsertPermissionConfig(ctx context.Context, arg UpsertPermissionConfigParams) (PermissionConfig, error) {
-	row := q.db.QueryRow(ctx, upsertPermissionConfig, arg.OrgID, arg.AdminPermissions, arg.BillingAdminPermissions)
+	row := q.db.QueryRow(ctx, upsertPermissionConfig,
+		arg.OrgID,
+		arg.AdminPermissions,
+		arg.BillingAdminPermissions,
+		arg.KnownGroups,
+	)
 	var i PermissionConfig
 	err := row.Scan(
 		&i.OrgID,
 		&i.AdminPermissions,
 		&i.BillingAdminPermissions,
+		&i.KnownGroups,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.LastModifiedBy,

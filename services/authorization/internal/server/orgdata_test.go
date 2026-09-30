@@ -17,7 +17,7 @@ func (f *fixture) seed(org uuid.UUID) (owner, admin uuid.UUID) {
 	owner = f.people.add(org, authz.Owner, "active")
 	admin = f.people.add(org, authz.Admin, "active")
 	if status, out := f.do(http.MethodPut, "/v1/organizations/"+org.String()+"/permissions", f.as(org, owner),
-		map[string]any{"admin": []string{"users", "offices"}, "billing_admin": []string{"billing"}}); status != http.StatusOK {
+		map[string]any{"admin": []string{"users", "sso"}, "billing_admin": []string{"billing"}}); status != http.StatusOK {
 		f.t.Fatalf("configure: %d %v", status, out)
 	}
 	if status, out := f.do(http.MethodPost, "/v1/organizations/"+org.String()+"/ownership-transfers", f.as(org, owner),
@@ -50,7 +50,7 @@ func TestExportAndPurgeAnOrg(t *testing.T) {
 	}
 	data := part["data"].(map[string]any)
 	config := data["permission_config"].(map[string]any)
-	if !has(config["admin_permissions"], "offices") || has(config["admin_permissions"], "audit") {
+	if !has(config["admin_permissions"], "sso") || has(config["admin_permissions"], "audit") {
 		t.Errorf("config: %v", config)
 	}
 	transfers := data["ownership_transfers"].([]any)

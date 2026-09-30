@@ -19,7 +19,7 @@ func TestDefaultsAndEffectivePermissions(t *testing.T) {
 		t.Error("Billing Admin default: billing only")
 	}
 	// An Owner has everything, including what no configuration can grant.
-	for _, p := range append(slices.Clone(authz.Configurable), authz.OwnerOnly...) {
+	for _, p := range append(authz.Configurable(), authz.OwnerOnly...) {
 		if !authz.Has(authz.Owner, authz.Config{}, p) {
 			t.Errorf("Owner lacks %s", p)
 		}
@@ -31,7 +31,7 @@ func TestDefaultsAndEffectivePermissions(t *testing.T) {
 		}
 	}
 	// Owner-only actions never reach a configurable role, whatever the config.
-	everything := authz.Config{Admin: authz.Configurable, BillingAdmin: authz.Configurable}
+	everything := authz.Config{Admin: authz.Configurable(), BillingAdmin: authz.Configurable()}
 	for _, p := range authz.OwnerOnly {
 		if authz.Has(authz.Admin, everything, p) || authz.Has(authz.BillingAdmin, everything, p) {
 			t.Errorf("%s reached a configurable role", p)
@@ -54,8 +54,8 @@ func TestGrantingBillingToAdminTakesEffect(t *testing.T) {
 		t.Errorf("warnings on a full configuration: %v", w)
 	}
 	none := authz.Config{}
-	if w := none.Warnings(); len(w) != len(authz.Configurable) {
-		t.Errorf("empty configuration warns %d times, want %d", len(w), len(authz.Configurable))
+	if w := none.Warnings(); len(w) != len(authz.Configurable()) {
+		t.Errorf("empty configuration warns %d times, want %d", len(w), len(authz.Configurable()))
 	}
 }
 
@@ -109,5 +109,94 @@ func TestRequireIsPerMembership(t *testing.T) {
 	}
 	if _, err := authz.Require(context.Background(), checker, org1, authz.Users); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("no caller: %v", err)
+	}
+}
+
+// The template's groups: billing for Billing Admin; users, audit and sso
+// for Admin. Nothing of the product's.
+func TestTemplateGroups(t *testing.T) {
+	if got := authz.New().Configurable(); !slices.Equal(got, []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO}) {
+		t.Errorf("groups: %v", got)
+	}
+	d := authz.New().Defaults()
+	if !slices.Equal(d.Admin, []authz.Permission{authz.Users, authz.Audit, authz.SSO}) || !slices.Equal(d.BillingAdmin, []authz.Permission{authz.Billing}) {
+		t.Errorf("defaults: %+v", d)
+	}
+	// Settings is always the Admin's, and is not a toggle.
+	if !authz.Has(authz.Admin, authz.Config{}, authz.Settings) || authz.Has(authz.BillingAdmin, authz.Config{}, authz.Settings) {
+		t.Error("settings: Admin always, Billing Admin never")
+	}
+	if err := (authz.Config{Admin: []authz.Permission{authz.Settings}}).Validate(); err == nil {
+		t.Error("settings accepted as a toggle")
+	}
+}
+
+// A product's group is configurable, defaults where it says, and is on the
+// Owner; a saved configuration keeps what the Owner decided and gives a
+// group registered since its default.
+func TestProductRegistersAGroup(t *testing.T) {
+	r := authz.New()
+	r.Register(authz.Group{Key: "projects", Label: "Projects", Default: []authz.Role{authz.Admin, authz.BillingAdmin}})
+	if err := r.Validate(authz.Config{Admin: []authz.Permission{"projects"}}); err != nil {
+		t.Errorf("product group refused: %v", err)
+	}
+	if err := r.Validate(authz.Config{Admin: []authz.Permission{"offices"}}); err == nil {
+		t.Error("an unregistered group was accepted")
+	}
+	d := r.Defaults()
+	if !slices.Contains(d.Admin, "projects") || !slices.Contains(d.BillingAdmin, "projects") {
+		t.Errorf("defaults: %+v", d)
+	}
+	if !slices.Contains(r.Effective(authz.Owner, authz.Config{}), "projects") {
+		t.Error("the Owner lacks the product group")
+	}
+
+	// Saved before "reports" existed, with projects off for Admin and a
+	// group since removed ("offices").
+	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, "projects", "offices"}
+	r.Register(authz.Group{Key: "reports", Label: "Reports", Default: []authz.Role{authz.Admin}})
+	c := r.Stored([]authz.Permission{authz.Users, "offices"}, []authz.Permission{authz.Billing, "projects"}, known)
+	if !slices.Equal(c.Admin, []authz.Permission{authz.Users, "reports"}) || !slices.Equal(c.BillingAdmin, []authz.Permission{authz.Billing, "projects"}) {
+		t.Errorf("stored: %+v", c)
+	}
+	if w := r.Warnings(c); len(w) != 2 {
+		t.Errorf("warnings (audit, sso): %v", w)
+	}
+}
+
+// A bad group is a programming error at start.
+func TestBadGroupsPanic(t *testing.T) {
+	for name, g := range map[string]authz.Group{
+		"empty":      {},
+		"settings":   {Key: authz.Settings},
+		"owner only": {Key: authz.AssignRoles},
+		"user role":  {Key: "projects", Default: []authz.Role{authz.User}},
+		"owner role": {Key: "projects", Default: []authz.Role{authz.Owner}},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: no panic", name)
+				}
+			}()
+			authz.New().Register(g)
+		}()
+	}
+}
+
+// A product running the authorization service unchanged names its groups
+// in configuration.
+func TestGroupsFromConfiguration(t *testing.T) {
+	groups, err := authz.ParseGroups(`[{"key":"projects","label":"Projects","description":"Create and delete projects.","default":["admin"]}]`)
+	if err != nil || len(groups) != 1 || groups[0].Key != "projects" || groups[0].Label != "Projects" || !slices.Equal(groups[0].Default, []authz.Role{authz.Admin}) {
+		t.Fatalf("parse: %+v %v", groups, err)
+	}
+	if groups, err := authz.ParseGroups(" "); err != nil || groups != nil {
+		t.Errorf("empty: %v %v", groups, err)
+	}
+	for _, bad := range []string{`not json`, `[{"key":"settings"}]`, `[{"key":"projects","default":["user"]}]`} {
+		if _, err := authz.ParseGroups(bad); err == nil {
+			t.Errorf("%s accepted", bad)
+		}
 	}
 }

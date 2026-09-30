@@ -281,6 +281,7 @@ paths:
     get:
       operationId: getIdentityProvider
       summary: The organization's identity provider, without its secret
+      description: Needs the sso permission, as changing it does.
       security:
         - bearer: []
       tags: [identity-providers]
@@ -308,7 +309,8 @@ paths:
         The credentials are checked with a real round trip to the provider's
         discovery document before anything is saved; the client secret is
         encrypted under the organization's data key and never returned.
-        Audited. Until the roles story, a platform operator's action.
+        Audited. Needs the sso permission (an Owner, an Admin with it, or a
+        platform operator).
       security:
         - bearer: []
       tags: [identity-providers]

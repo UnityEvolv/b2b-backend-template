@@ -20,6 +20,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/migrations"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
@@ -71,6 +72,10 @@ func run() error {
 		organizationURL = env.Required("ORGANIZATION_URL")
 		hosts           = config.HostsFor(baseHost)
 		adminOrigin     = env.String("APP_ORIGIN_ADMIN", derived(baseHost, "https://"+hosts.Admin))
+		// A product's own permission groups, when it runs this service
+		// unchanged; see authz.ParseGroups. A product that builds its own adds
+		// them with authz.Default.Register here instead.
+		productGroups = env.String("PERMISSION_GROUPS", "")
 	)
 	password, err := db.PasswordFromEnv(service, db.LocalPasswords())
 	if err != nil {
@@ -81,6 +86,13 @@ func run() error {
 	}
 	if err := env.Err(); err != nil {
 		return err
+	}
+	groups, err := authz.ParseGroups(productGroups)
+	if err != nil {
+		return fmt.Errorf("PERMISSION_GROUPS: %w", err)
+	}
+	for _, g := range groups {
+		authz.Default.Register(g)
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {

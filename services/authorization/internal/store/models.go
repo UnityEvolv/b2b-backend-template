@@ -29,6 +29,7 @@ type PermissionConfig struct {
 	OrgID                   uuid.UUID
 	AdminPermissions        []string
 	BillingAdminPermissions []string
+	KnownGroups             []string
 	CreatedBy               string
 	CreatedAt               time.Time
 	LastModifiedBy          string

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,9 @@ type Server struct {
 	email email.Sender
 	orgs  Organizations
 	apps  map[string]string
+	// groups is the configurable permission groups: the template's and the
+	// product's, registered at start.
+	groups *authz.Registry
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
@@ -81,13 +85,21 @@ type Transfer struct {
 	Apps  map[string]string
 }
 
-// New is the API on cluster.
+// New is the API on cluster, with the groups in authz.Default.
 func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, memberships Memberships, transfer Transfer) *Server {
-	return &Server{cluster: cluster, logger: logger, recorder: recorder, memberships: memberships, email: transfer.Email, orgs: transfer.Orgs, apps: transfer.Apps}
+	return &Server{cluster: cluster, logger: logger, recorder: recorder, memberships: memberships, email: transfer.Email, orgs: transfer.Orgs, apps: transfer.Apps, groups: authz.Default}
+}
+
+// WithGroups resolves and validates against groups instead of
+// authz.Default: for a test that registers groups of its own.
+func (s *Server) WithGroups(groups *authz.Registry) *Server {
+	s.groups = groups
+	return s
 }
 
 // Limits is this API's rate limits: one line per endpoint (UO-119).
 var Limits = map[string]ratelimit.Bound{
+	"GET /v1/permission-groups":                                                ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"GET /v1/organizations/{org_id}/permissions":                               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/permissions":                               ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/memberships/{membership_id}/role":          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
@@ -124,7 +136,8 @@ func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error
 	httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternal, "Something went wrong.")
 }
 
-// config is the org's configuration, or the defaults when it has none.
+// config is the org's configuration against the groups registered now, or
+// the defaults when it has none.
 func (s *Server) config(ctx context.Context, orgID uuid.UUID) (authz.Config, error) {
 	var row store.PermissionConfig
 	err := s.cluster.Read(ctx, orgID.String(), func(tx pgx.Tx) error {
@@ -133,12 +146,12 @@ func (s *Server) config(ctx context.Context, orgID uuid.UUID) (authz.Config, err
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return authz.Defaults(), nil
+		return s.groups.Defaults(), nil
 	}
 	if err != nil {
 		return authz.Config{}, err
 	}
-	return authz.Config{Admin: permissions(row.AdminPermissions), BillingAdmin: permissions(row.BillingAdminPermissions)}, nil
+	return s.groups.Stored(permissions(row.AdminPermissions), permissions(row.BillingAdminPermissions), permissions(row.KnownGroups)), nil
 }
 
 func permissions(names []string) []authz.Permission {
@@ -165,12 +178,12 @@ func apiPermissions(ps []authz.Permission) []api.Permission {
 	return out
 }
 
-func toAPI(orgID uuid.UUID, c authz.Config) api.PermissionConfig {
+func (s *Server) toAPI(orgID uuid.UUID, c authz.Config) api.PermissionConfig {
 	effective := map[string][]api.Permission{}
 	for _, r := range authz.Roles {
-		effective[string(r)] = apiPermissions(authz.Effective(r, c))
+		effective[string(r)] = apiPermissions(s.groups.Effective(r, c))
 	}
-	warnings := c.Warnings()
+	warnings := s.groups.Warnings(c)
 	if warnings == nil {
 		warnings = []string{}
 	}
@@ -188,7 +201,7 @@ func (s *Server) grant(ctx context.Context, orgID uuid.UUID) (authz.Grant, error
 		return authz.Grant{}, auth.ErrUnauthenticated
 	}
 	if !c.IsService() && c.OrgID == auth.PlatformOrg {
-		return authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Config{})}, nil
+		return authz.Grant{Role: authz.Owner, Permissions: s.groups.Effective(authz.Owner, authz.Config{})}, nil
 	}
 	if err := auth.RequireOrg(ctx, orgID.String()); err != nil {
 		return authz.Grant{}, err
@@ -213,7 +226,7 @@ func (s *Server) resolve(ctx context.Context, orgID, membershipID uuid.UUID) (au
 	if err != nil {
 		return authz.Grant{}, err
 	}
-	return authz.Grant{Role: m.Role, Permissions: authz.Effective(m.Role, cfg)}, nil
+	return authz.Grant{Role: m.Role, Permissions: s.groups.Effective(m.Role, cfg)}, nil
 }
 
 // GetGrant is what one membership may do right now, for a service.
@@ -245,7 +258,27 @@ func (s *Server) GetPermissions(ctx context.Context, req api.GetPermissionsReque
 	if err != nil {
 		return nil, err
 	}
-	return api.GetPermissions200JSONResponse(toAPI(req.OrgId, cfg)), nil
+	return api.GetPermissions200JSONResponse(s.toAPI(req.OrgId, cfg)), nil
+}
+
+// ListPermissionGroups is every registered group with what the roles page
+// shows for it, to anyone signed in: it is the same in every org.
+func (s *Server) ListPermissionGroups(ctx context.Context, _ api.ListPermissionGroupsRequestObject) (api.ListPermissionGroupsResponseObject, error) {
+	groups := s.groups.Groups()
+	out := api.PermissionGroups{Groups: make([]api.PermissionGroup, 0, len(groups)), OwnerOnly: apiPermissions(authz.OwnerOnly)}
+	for _, g := range groups {
+		roles := make([]api.Role, 0, len(g.Default))
+		for _, r := range g.Default {
+			roles = append(roles, api.Role(r))
+		}
+		out.Groups = append(out.Groups, api.PermissionGroup{Key: api.Permission(g.Key), Label: g.Label, Description: g.Description, DefaultRoles: roles})
+	}
+	return api.ListPermissionGroups200JSONResponse(out), nil
+}
+
+// groupList names the registered groups, for a refusal.
+func (s *Server) groupList() string {
+	return strings.Join(names(s.groups.Configurable()), ", ")
 }
 
 // SetPermissions is the Owner changing which groups the Admin and Billing
@@ -257,11 +290,11 @@ func (s *Server) SetPermissions(ctx context.Context, req api.SetPermissionsReque
 		return api.SetPermissions403JSONResponse{Code: authz.Code, Message: "Only an Owner may configure permissions."}, nil
 	}
 	cfg := authz.Config{Admin: permissions(namesOf(req.Body.Admin)), BillingAdmin: permissions(namesOf(req.Body.BillingAdmin))}
-	if err := cfg.Validate(); err != nil {
-		fields := map[string]string{"permissions": "billing, users, offices, providers, audit; nothing an Owner alone may do"}
+	if err := s.groups.Validate(cfg); err != nil {
+		fields := map[string]string{"permissions": s.groupList() + "; nothing an Owner alone may do"}
 		return api.SetPermissions400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: err.Error(), Fields: &fields}}, nil
 	}
-	cfg.Admin, cfg.BillingAdmin = dedupe(cfg.Admin), dedupe(cfg.BillingAdmin)
+	cfg.Admin, cfg.BillingAdmin = s.dedupe(cfg.Admin), s.dedupe(cfg.BillingAdmin)
 	before, err := s.config(ctx, req.OrgId)
 	if err != nil {
 		return nil, err
@@ -269,6 +302,7 @@ func (s *Server) SetPermissions(ctx context.Context, req api.SetPermissionsReque
 	err = s.cluster.Tx(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
 		_, err := store.New(tx).UpsertPermissionConfig(ctx, store.UpsertPermissionConfigParams{
 			OrgID: req.OrgId, AdminPermissions: names(cfg.Admin), BillingAdminPermissions: names(cfg.BillingAdmin),
+			KnownGroups: names(s.groups.Configurable()),
 		})
 		return err
 	})
@@ -280,12 +314,12 @@ func (s *Server) SetPermissions(ctx context.Context, req api.SetPermissionsReque
 		Details: map[string]any{
 			"admin":         map[string]any{"from": names(before.Admin), "to": names(cfg.Admin)},
 			"billing_admin": map[string]any{"from": names(before.BillingAdmin), "to": names(cfg.BillingAdmin)},
-			"warnings":      cfg.Warnings(),
+			"warnings":      s.groups.Warnings(cfg),
 		},
 	}); err != nil {
 		return nil, err
 	}
-	return api.SetPermissions200JSONResponse(toAPI(req.OrgId, cfg)), nil
+	return api.SetPermissions200JSONResponse(s.toAPI(req.OrgId, cfg)), nil
 }
 
 func namesOf(ps []api.Permission) []string {
@@ -296,9 +330,9 @@ func namesOf(ps []api.Permission) []string {
 	return out
 }
 
-func dedupe(ps []authz.Permission) []authz.Permission {
+func (s *Server) dedupe(ps []authz.Permission) []authz.Permission {
 	out := make([]authz.Permission, 0, len(ps))
-	for _, p := range authz.Configurable {
+	for _, p := range s.groups.Configurable() {
 		if slices.Contains(ps, p) {
 			out = append(out, p)
 		}

@@ -42,51 +42,6 @@ func (e OwnershipTransferStatus) Valid() bool {
 	}
 }
 
-// Defines values for Permission.
-const (
-	AssignRoles          Permission = "assign_roles"
-	Audit                Permission = "audit"
-	Billing              Permission = "billing"
-	ClaimDomain          Permission = "claim_domain"
-	ConfigurePermissions Permission = "configure_permissions"
-	DeleteOrganization   Permission = "delete_organization"
-	Offices              Permission = "offices"
-	Providers            Permission = "providers"
-	Settings             Permission = "settings"
-	TransferOwnership    Permission = "transfer_ownership"
-	Users                Permission = "users"
-)
-
-// Valid indicates whether the value is a known member of the Permission enum.
-func (e Permission) Valid() bool {
-	switch e {
-	case AssignRoles:
-		return true
-	case Audit:
-		return true
-	case Billing:
-		return true
-	case ClaimDomain:
-		return true
-	case ConfigurePermissions:
-		return true
-	case DeleteOrganization:
-		return true
-	case Offices:
-		return true
-	case Providers:
-		return true
-	case Settings:
-		return true
-	case TransferOwnership:
-		return true
-	case Users:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for Role.
 const (
 	Admin        Role = "admin"
@@ -172,8 +127,12 @@ type OwnershipTransfer struct {
 // OwnershipTransferStatus defines model for OwnershipTransfer.Status.
 type OwnershipTransferStatus string
 
-// Permission A configurable group, or an Owner-only action.
-type Permission string
+// Permission A configurable group, `settings`, or an Owner-only action. The groups
+// are registered by the template (billing, users, audit, sso) and the
+// product, so they are validated by the service, not listed here.
+//
+// Example: users
+type Permission = string
 
 // PermissionConfig defines model for PermissionConfig.
 type PermissionConfig struct {
@@ -186,6 +145,32 @@ type PermissionConfig struct {
 
 	// Warnings What this configuration leaves nobody but the Owner able to do.
 	Warnings []string `json:"warnings"`
+}
+
+// PermissionGroup defines model for PermissionGroup.
+type PermissionGroup struct {
+	// DefaultRoles The configurable roles that hold it until the Owner decides otherwise.
+	DefaultRoles []Role `json:"default_roles"`
+	Description  string `json:"description"`
+
+	// Key A configurable group, `settings`, or an Owner-only action. The groups
+	// are registered by the template (billing, users, audit, sso) and the
+	// product, so they are validated by the service, not listed here.
+	//
+	//
+	// Example: users
+	Key Permission `json:"key"`
+
+	// Label Example: Single sign-on
+	Label string `json:"label"`
+}
+
+// PermissionGroups defines model for PermissionGroups.
+type PermissionGroups struct {
+	Groups []PermissionGroup `json:"groups"`
+
+	// OwnerOnly What no configuration can grant.
+	OwnerOnly []Permission `json:"owner_only"`
 }
 
 // Role An org role. Fixed in code; one per membership.
@@ -270,6 +255,9 @@ type ServerInterface interface {
 	// SetPermissions Change which groups the Admin and Billing Admin roles hold (Owner only)
 	// (PUT /v1/organizations/{org_id}/permissions)
 	SetPermissions(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// ListPermissionGroups The configurable permission groups, for the roles page to render
+	// (GET /v1/permission-groups)
+	ListPermissionGroups(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -619,6 +607,20 @@ func (siw *ServerInterfaceWrapper) SetPermissions(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListPermissionGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListPermissionGroups(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPermissionGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -739,6 +741,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/permission-groups", wrapper.ListPermissionGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/permissions", wrapper.GetPermissions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/permissions", wrapper.SetPermissions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/memberships/{membership_id}/role", wrapper.SetRole)
@@ -1609,6 +1612,58 @@ func (response SetPermissionsdefaultJSONResponse) VisitSetPermissionsResponse(w 
 	return err
 }
 
+type ListPermissionGroupsRequestObject struct {
+}
+
+type ListPermissionGroupsResponseObject interface {
+	VisitListPermissionGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListPermissionGroups200JSONResponse PermissionGroups
+
+func (response ListPermissionGroups200JSONResponse) VisitListPermissionGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPermissionGroups401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListPermissionGroups401JSONResponse) VisitListPermissionGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPermissionGroupsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListPermissionGroupsdefaultJSONResponse) VisitListPermissionGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// PurgeOrgData Delete everything this service keeps for an org, and count what is left (the organization service only)
@@ -1644,6 +1699,9 @@ type StrictServerInterface interface {
 	// SetPermissions Change which groups the Admin and Billing Admin roles hold (Owner only)
 	// (PUT /v1/organizations/{org_id}/permissions)
 	SetPermissions(ctx context.Context, request SetPermissionsRequestObject) (SetPermissionsResponseObject, error)
+	// ListPermissionGroups The configurable permission groups, for the roles page to render
+	// (GET /v1/permission-groups)
+	ListPermissionGroups(ctx context.Context, request ListPermissionGroupsRequestObject) (ListPermissionGroupsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1990,6 +2048,30 @@ func (sh *strictHandler) SetPermissions(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetPermissionsResponseObject); ok {
 		if err := validResponse.VisitSetPermissionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPermissionGroups operation middleware
+func (sh *strictHandler) ListPermissionGroups(w http.ResponseWriter, r *http.Request) {
+	var request ListPermissionGroupsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPermissionGroups(ctx, request.(ListPermissionGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPermissionGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPermissionGroupsResponseObject); ok {
+		if err := validResponse.VisitListPermissionGroupsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

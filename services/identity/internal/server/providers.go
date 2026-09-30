@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
-	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/api"
@@ -28,10 +27,11 @@ func (s *Server) toAPI(p store.IdentityProvider) api.IdentityProvider {
 	return out
 }
 
-// GetIdentityProvider is the org's provider, never its secret.
+// GetIdentityProvider is the org's provider, never its secret. The sso
+// permission, like changing it.
 func (s *Server) GetIdentityProvider(ctx context.Context, req api.GetIdentityProviderRequestObject) (api.GetIdentityProviderResponseObject, error) {
-	if err := auth.RequireOrgOrPlatform(ctx, req.OrgId.String()); err != nil {
-		return api.GetIdentityProvider403JSONResponse{Code: httpx.CodeForbidden, Message: "Not permitted for this organization."}, nil
+	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.SSO); err != nil {
+		return api.GetIdentityProvider403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to see the identity provider."}, nil
 	}
 	var p store.IdentityProvider
 	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
@@ -50,9 +50,9 @@ func (s *Server) GetIdentityProvider(ctx context.Context, req api.GetIdentityPro
 
 // SetIdentityProvider configures the org's provider: a real round trip to
 // its discovery document first, then the secret sealed under the org's key.
-// The providers permission: an Owner, an Admin with it, or a platform operator.
+// The sso permission: an Owner, an Admin with it, or a platform operator.
 func (s *Server) SetIdentityProvider(ctx context.Context, req api.SetIdentityProviderRequestObject) (api.SetIdentityProviderResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Providers); err != nil {
+	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.SSO); err != nil {
 		return api.SetIdentityProvider403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to configure the identity provider."}, nil
 	}
 	body := req.Body

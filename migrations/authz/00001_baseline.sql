@@ -1,11 +1,15 @@
 -- +goose Up
 -- Each org's permission configuration: which of the configurable groups the
 -- Admin and Billing Admin roles hold. Roles themselves are fixed in code and
--- live on the membership; an org without a row is on the defaults.
+-- live on the membership; an org without a row is on the defaults. The
+-- groups are registered in code, not checked here: known_groups is the ones
+-- registered when the Owner saved, so a group registered since takes its
+-- default rather than being off.
 CREATE TABLE permission_configs (
     org_id                     uuid        NOT NULL,
     admin_permissions          text[]      NOT NULL,
     billing_admin_permissions  text[]      NOT NULL,
+    known_groups               text[]      NOT NULL,
     created_by                 text        NOT NULL,
     created_at                 timestamptz NOT NULL,
     last_modified_by           text        NOT NULL,

@@ -129,7 +129,7 @@ func (m *memoryRecorder) actions() []string {
 	return out
 }
 
-func newAPI(t *testing.T) *fixture {
+func newAPI(t *testing.T, groups ...*authz.Registry) *fixture {
 	t.Helper()
 	url := dbtest.New(t)
 	ctx := context.Background()
@@ -164,6 +164,9 @@ func newAPI(t *testing.T) *fixture {
 	httpx.Health(root)
 	mail := &memoryMail{}
 	srv := server.New(db.SingleShard(pool), logger, recorder, people, server.Transfer{Email: mail, Orgs: orgNames{}, Apps: map[string]string{"admin": "http://admin.test"}})
+	if len(groups) > 0 {
+		srv.WithGroups(groups[0])
+	}
 	root.Handle("/", auth.Require(verifier, srv.Handler(httpx.NewMux())))
 	return &fixture{t: t, h: httpx.Logged(logger, root), issuer: issuer, people: people, recorder: recorder, mail: mail, pool: pool}
 }
@@ -239,7 +242,7 @@ func TestRolesAndPermissions(t *testing.T) {
 		return out
 	}
 
-	// Defaults: Admin has users, offices, providers, audit; no billing; no Owner-only action.
+	// Defaults: Admin has users, audit and sso; no billing; no Owner-only action.
 	g := grant(acme, admin)
 	if !has(g["permissions"], "users") || has(g["permissions"], "billing") || has(g["permissions"], "assign_roles") {
 		t.Errorf("admin default grant: %v", g)
@@ -257,7 +260,7 @@ func TestRolesAndPermissions(t *testing.T) {
 		t.Errorf("admin re-roling an admin: %d", status)
 	}
 	// An Owner grants billing to the Admin role and it takes effect on the next check.
-	status, out := f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users", "offices", "providers", "audit", "billing"}, "billing_admin": []string{"billing"}})
+	status, out := f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users", "audit", "sso", "billing"}, "billing_admin": []string{"billing"}})
 	if status != http.StatusOK || !has(out["admin"], "billing") || len(out["warnings"].([]any)) != 0 {
 		t.Fatalf("grant billing: %d %v", status, out)
 	}
@@ -270,7 +273,7 @@ func TestRolesAndPermissions(t *testing.T) {
 	}
 	// Leaving nobody but the Owner able to do something warns.
 	_, out = f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users"}, "billing_admin": []string{}})
-	if len(out["warnings"].([]any)) != 4 {
+	if len(out["warnings"].([]any)) != 3 {
 		t.Errorf("warnings: %v", out["warnings"])
 	}
 	// Every member may read the configuration; another org's member may not.

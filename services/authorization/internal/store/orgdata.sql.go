@@ -62,7 +62,7 @@ func (q *Queries) ExportOwnershipTransfers(ctx context.Context, orgID uuid.UUID)
 
 const exportPermissionConfigs = `-- name: ExportPermissionConfigs :many
 
-SELECT org_id, admin_permissions, billing_admin_permissions, created_by, created_at, last_modified_by, last_modified_at FROM permission_configs WHERE org_id = $1
+SELECT org_id, admin_permissions, billing_admin_permissions, known_groups, created_by, created_at, last_modified_by, last_modified_at FROM permission_configs WHERE org_id = $1
 `
 
 // An org's data, for its export and its purge (UO-183), and a person's
@@ -80,6 +80,7 @@ func (q *Queries) ExportPermissionConfigs(ctx context.Context, orgID uuid.UUID) 
 			&i.OrgID,
 			&i.AdminPermissions,
 			&i.BillingAdminPermissions,
+			&i.KnownGroups,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.LastModifiedBy,

@@ -51,7 +51,8 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 	if err != nil || caller.OrgID != acme.String() || caller.UserID != f.users.users["ada@acme.com"].String() || caller.SessionID == "" {
 		t.Fatalf("access token: %+v %v", caller, err)
 	}
-	// It opens an authenticated endpoint of this service.
+	// It opens an authenticated endpoint of this service, for an Admin.
+	f.grants[acme.String()+"/"+caller.MembershipID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
 	rec = b.do(http.MethodGet, "/v1/organizations/"+acme.String()+"/identity-provider", access, nil)
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), f.idp.secret) {
 		t.Errorf("authenticated read: %d %s", rec.Code, rec.Body.String())
@@ -257,7 +258,7 @@ func TestProviderConfiguration(t *testing.T) {
 	if rec := b.do(http.MethodPut, path, operator, map[string]any{"type": "entra", "tenant_id": "", "client_id": "", "client_secret": ""}); rec.Code != http.StatusBadRequest {
 		t.Errorf("blank: %d", rec.Code)
 	}
-	// A member without the providers permission cannot configure it; an
+	// A member without the sso permission cannot see or configure it; an
 	// Admin with it (the default) can; so can an operator.
 	member, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: uuid.NewString()}, time.Hour)
 	if rec := b.do(http.MethodPut, path, member, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": "c", "client_secret": "s"}); rec.Code != http.StatusForbidden {
@@ -269,8 +270,21 @@ func TestProviderConfiguration(t *testing.T) {
 	if rec := b.do(http.MethodPut, path, admin, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusOK {
 		t.Errorf("admin configuring: %d %s", rec.Code, rec.Body.String())
 	}
+	// An Admin whose Owner took sso away is refused both ways.
+	narrowID := uuid.NewString()
+	f.grants[acme.String()+"/"+narrowID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Config{Admin: []authz.Permission{authz.Users}})}
+	narrow, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: narrowID}, time.Hour)
+	if rec := b.do(http.MethodPut, path, narrow, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusForbidden {
+		t.Errorf("admin without sso configuring: %d", rec.Code)
+	}
+	if rec := b.do(http.MethodGet, path, narrow, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("admin without sso reading: %d", rec.Code)
+	}
 	f.configure(acme)
-	rec = b.do(http.MethodGet, path, member, nil)
+	if rec := b.do(http.MethodGet, path, member, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("member reading: %d", rec.Code)
+	}
+	rec = b.do(http.MethodGet, path, admin, nil)
 	got := body(t, rec)
 	if rec.Code != http.StatusOK || got["client_id"] != f.idp.clientID || got["redirect_uri"] != identityURL+"/v1/sign-in/callback" || got["issuer"] != f.idp.tenantIssuer() {
 		t.Errorf("read: %d %v", rec.Code, got)

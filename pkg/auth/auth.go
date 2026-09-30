@@ -25,6 +25,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
@@ -297,16 +298,15 @@ func RequireOrgOrPlatform(ctx context.Context, orgID string) error {
 	return RequirePlatform(ctx)
 }
 
-// serviceOnly are the services that call others but own no database schema,
-// so they are not registered in pkg/db: a product's own service written in
-// another language, say. The template has none.
-var serviceOnly = []string{}
-
 // KnownService reports whether name is a service of the platform, and so may
-// hold a service token.
+// hold a service token: one registered in pkg/db in this process, or one in
+// the data-owner registry (pkg/dataowner). The second is how a product's own
+// service is known to the template's services, which run unchanged and learn
+// it from DATA_OWNERS; an entry there with no capability is a service that
+// holds no data but calls them.
 func KnownService(name string) bool {
 	if _, ok := db.ServiceByName(name); ok {
 		return true
 	}
-	return slices.Contains(serviceOnly, name)
+	return dataowner.Default.Known(name)
 }

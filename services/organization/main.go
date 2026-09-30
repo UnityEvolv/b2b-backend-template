@@ -24,6 +24,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/captcha"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
@@ -99,9 +100,12 @@ func run() error {
 		kmsProvider = env.String("KMS_PROVIDER", "file")
 		kmsFile     = env.String("KMS_FILE", "")
 		kmsKeyName  = env.String("KMS_KEY_NAME", "")
-		// Offboarding and exports: every service with data endpoints, and the
-		// bucket the archives go to.
+		// Offboarding and exports: every data owner is located from
+		// <NAME>_URL (or its own url in DATA_OWNERS) below, and the archives
+		// go to the bucket.
 		billingURL = env.Required("BILLING_URL")
+		// A product's own services that hold data or call this one.
+		dataOwners = env.String("DATA_OWNERS", "")
 		s3         = storage.Config{
 			Endpoint: env.String("S3_ENDPOINT", ""), Region: env.String("S3_REGION", ""),
 			Bucket: env.Required("S3_BUCKET"), AccessKey: env.Required("S3_ACCESS_KEY"), SecretKey: env.Required("S3_SECRET_KEY"),
@@ -113,6 +117,12 @@ func run() error {
 		return err
 	}
 	if err := env.Err(); err != nil {
+		return err
+	}
+	if err := dataowner.Default.Load(dataOwners); err != nil {
+		return fmt.Errorf("DATA_OWNERS: %w", err)
+	}
+	if err := dataowner.Default.Locate(env.Lookup, dataowner.Owner.HoldsOrgData); err != nil {
 		return err
 	}
 	// Error tracking first, so the logger can forward to it. Off without a DSN.
@@ -187,7 +197,7 @@ func run() error {
 			Platform: server.HTTPPlatform{Identity: identityURL, Billing: billingURL, Audit: auditURL, User: userURL, Tokens: tokens},
 			Data:     orgdata.NewClient(tokens, nil),
 			Files:    files,
-			Services: dataOwners(notificationURL, billingURL, authorizationURL, identityURL, userURL, auditURL),
+			Owners:   dataowner.Default,
 		}).
 		WithBranding(branding)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
@@ -292,15 +302,4 @@ func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) err
 	}
 	_, err = migrator.Up(ctx)
 	return err
-}
-
-// dataOwners is every service that holds an org's data, in purge order: the
-// services others still write to go last. It is the one place a product's own
-// services are added, until a data-owner registry replaces this list.
-func dataOwners(notificationURL, billingURL, authorizationURL, identityURL, userURL, auditURL string) []orgdata.Service {
-	return []orgdata.Service{
-		{Name: "notification", Base: notificationURL}, {Name: "billing", Base: billingURL},
-		{Name: "authorization", Base: authorizationURL}, {Name: "identity", Base: identityURL}, {Name: "user", Base: userURL},
-		{Name: "audit", Base: auditURL},
-	}
 }

@@ -44,11 +44,11 @@ type Server struct {
 	notices      Notifier
 	haltFraction float64
 	// Account deletion and org offboarding.
-	accounts   Accounts
-	orgNames   OrgNames
-	mail       email.Sender
-	forgetters []Forgetter
-	now        func() time.Time
+	accounts Accounts
+	orgNames OrgNames
+	mail     email.Sender
+	erase    Erasure
+	now      func() time.Time
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)

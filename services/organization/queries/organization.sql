@@ -75,11 +75,12 @@ SELECT * FROM data_exports WHERE status = 'pending' ORDER BY created_at LIMIT 10
 SELECT * FROM data_exports WHERE status = 'ready' AND expires_at < @now ORDER BY expires_at LIMIT 100;
 
 -- name: MarkExportReady :exec
-UPDATE data_exports SET status = 'ready', object_key = @object_key, ready_at = @ready_at, expires_at = @expires_at
+UPDATE data_exports SET status = 'ready', blocked_by = NULL, object_key = @object_key, ready_at = @ready_at, expires_at = @expires_at
 WHERE org_id = @org_id AND id = @id;
 
 -- name: MarkExportAttempt :exec
-UPDATE data_exports SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE status END
+UPDATE data_exports SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE status END,
+    blocked_by = sqlc.narg(blocked_by)
 WHERE org_id = @org_id AND id = @id;
 
 -- name: MarkExportExpired :exec

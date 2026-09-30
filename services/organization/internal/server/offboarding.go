@@ -17,6 +17,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
@@ -52,11 +53,11 @@ type Person struct {
 	Memberships []orgdata.Membership
 }
 
-// Data is every service's data endpoints.
+// Data is every data owner's endpoints (orgdata.Client).
 type Data interface {
-	Export(ctx context.Context, s orgdata.Service, org uuid.UUID) (orgdata.Part, error)
-	Purge(ctx context.Context, s orgdata.Service, org uuid.UUID) (int, error)
-	ExportUser(ctx context.Context, s orgdata.Service, user uuid.UUID, memberships []orgdata.Membership) (orgdata.Part, error)
+	Export(ctx context.Context, o dataowner.Owner, org uuid.UUID) (orgdata.Part, error)
+	Purge(ctx context.Context, o dataowner.Owner, org uuid.UUID) (int, error)
+	ExportUser(ctx context.Context, o dataowner.Owner, user uuid.UUID, memberships []orgdata.Membership) (orgdata.Part, error)
 }
 
 // Files is object storage, as exports and purges use it.
@@ -74,10 +75,18 @@ type Offboarding struct {
 	Platform Platform
 	Data     Data
 	Files    Files
-	// Services is every service with data endpoints, in purge order: the
-	// ones that others' purges may still write to (audit) last.
-	Services []orgdata.Service
-	Now      func() time.Time
+	// Owners is the services that hold org data, located (Registry.Locate):
+	// an export gathers a part from every exporter and a purge empties
+	// every purger, in the registry's order. Nil is dataowner.Default.
+	Owners *dataowner.Registry
+	Now    func() time.Time
+}
+
+func (s *Server) owners() *dataowner.Registry {
+	if s.off.Owners != nil {
+		return s.off.Owners
+	}
+	return dataowner.Default
 }
 
 func (s *Server) now() time.Time {

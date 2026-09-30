@@ -19,6 +19,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -34,12 +35,15 @@ type offFakes struct {
 	emails    map[uuid.UUID]string
 	purged    map[string]int
 	holdOut   string // a service whose purge leaves rows
+	failing   string // a service whose every call fails
+	exported  map[string]int
+	purgeLog  []string // every purge call, in order
 	objects   map[string][]byte
 	deletedAt []string
 }
 
 func newOffFakes() *offFakes {
-	return &offFakes{expired: map[uuid.UUID]time.Time{}, emails: map[uuid.UUID]string{}, purged: map[string]int{}, objects: map[string][]byte{}}
+	return &offFakes{expired: map[uuid.UUID]time.Time{}, emails: map[uuid.UUID]string{}, purged: map[string]int{}, exported: map[string]int{}, objects: map[string][]byte{}}
 }
 
 func (f *offFakes) RevokeOrgSessions(_ context.Context, org uuid.UUID) error {
@@ -65,7 +69,10 @@ func (f *offFakes) Person(_ context.Context, user uuid.UUID) (server.Person, err
 	defer f.mu.Unlock()
 	return server.Person{Email: f.emails[user], Memberships: []orgdata.Membership{{OrgID: uuid.New(), MembershipID: uuid.New()}}}, nil
 }
-func (f *offFakes) Export(_ context.Context, s orgdata.Service, org uuid.UUID) (orgdata.Part, error) {
+func (f *offFakes) Export(_ context.Context, s dataowner.Owner, org uuid.UUID) (orgdata.Part, error) {
+	if err := f.call(s); err != nil {
+		return orgdata.Part{}, err
+	}
 	files := []orgdata.File{}
 	if s.Name == "documents" {
 		files = append(files, orgdata.File{Key: "orgs/" + org.String() + "/document-file/" + uuid.NewString(), Name: "attachments/a.txt"})
@@ -75,16 +82,35 @@ func (f *offFakes) Export(_ context.Context, s orgdata.Service, org uuid.UUID) (
 	}
 	return orgdata.Marshal(s.Name, map[string]any{"org": org, "rows": 1}, files)
 }
-func (f *offFakes) Purge(_ context.Context, s orgdata.Service, org uuid.UUID) (int, error) {
+
+// call counts an export call to s, and fails it if s is failing.
+func (f *offFakes) call(s dataowner.Owner) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if s.Name == f.failing {
+		return errors.New("unreachable")
+	}
+	f.exported[s.Name]++
+	return nil
+}
+
+func (f *offFakes) Purge(_ context.Context, s dataowner.Owner, org uuid.UUID) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if s.Name == f.failing {
+		return 0, errors.New("unreachable")
+	}
 	f.purged[s.Name]++
+	f.purgeLog = append(f.purgeLog, s.Name)
 	if s.Name == f.holdOut {
 		return 3, nil
 	}
 	return 0, nil
 }
-func (f *offFakes) ExportUser(_ context.Context, s orgdata.Service, user uuid.UUID, ms []orgdata.Membership) (orgdata.Part, error) {
+func (f *offFakes) ExportUser(_ context.Context, s dataowner.Owner, user uuid.UUID, ms []orgdata.Membership) (orgdata.Part, error) {
+	if err := f.call(s); err != nil {
+		return orgdata.Part{}, err
+	}
 	return orgdata.Marshal(s.Name, map[string]any{"user": user, "memberships": len(ms)}, nil)
 }
 func (f *offFakes) Put(_ context.Context, _ string, key storage.Key, _ string, _ int64, body io.Reader) error {
@@ -138,7 +164,14 @@ func (c *clockT) add(d time.Duration) {
 	c.t = c.t.Add(d)
 }
 
-var offServices = []orgdata.Service{{Name: "projects"}, {Name: "documents"}, {Name: "user"}, {Name: "audit"}}
+// offOwners is the template's data owners and two of a product's,
+// registered: nothing in the organization service names them.
+func offOwners() *dataowner.Registry {
+	r := dataowner.New()
+	r.Register(dataowner.Owner{Name: "projects", Export: true, Purge: true, Erase: true})
+	r.Register(dataowner.Owner{Name: "documents", Export: true, Purge: true})
+	return r
+}
 
 // Closing an org (UO-183): the Owner types its name; sessions end and the
 // subscription is cancelled at once; the Owner is emailed a link that
@@ -148,7 +181,7 @@ func TestCloseReopenAndPurge(t *testing.T) {
 	h, _, issuer, srv, recorder := newAPIAudited(t)
 	fakes := newOffFakes()
 	clock := &clockT{t: time.Now()}
-	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Services: offServices, Now: clock.now})
+	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Owners: offOwners(), Now: clock.now})
 	public := srv.Handler(httpx.NewMux())
 
 	operator := platformToken(t, issuer)
@@ -261,7 +294,7 @@ func TestCloseReopenAndPurge(t *testing.T) {
 	if err := srv.RunPurges(t.Context()); err != nil {
 		t.Fatalf("purge: %v", err)
 	}
-	if fakes.purged["projects"] != 2 || fakes.purged["audit"] != 1 || len(fakes.deletedAt) != 1 || fakes.deletedAt[0] != orgID {
+	if fakes.purged["user"] != 2 || fakes.purged["projects"] != 1 || fakes.purged["audit"] != 1 || len(fakes.deletedAt) != 1 || fakes.deletedAt[0] != orgID {
 		t.Errorf("purged %v, files %v", fakes.purged, fakes.deletedAt)
 	}
 	if status, _ := get(t, h, "/v1/organizations/"+orgID, operator); status != http.StatusNotFound {
@@ -277,7 +310,7 @@ func TestCloseReopenAndPurge(t *testing.T) {
 func TestRetention(t *testing.T) {
 	h, _, issuer, srv, _ := newAPIAudited(t)
 	fakes := newOffFakes()
-	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Services: offServices})
+	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Owners: offOwners()})
 	operator := platformToken(t, issuer)
 	orgID := create(t, h, operator, map[string]any{"name": "Globex", "time_zone": "UTC"})["org_id"].(string)
 	admin := uuid.NewString()
@@ -319,7 +352,7 @@ func TestExports(t *testing.T) {
 	h, _, issuer, srv, _ := newAPIAudited(t)
 	fakes := newOffFakes()
 	clock := &clockT{t: time.Now()}
-	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Services: offServices, Now: clock.now})
+	srv.WithOffboarding(server.Offboarding{Platform: fakes, Data: fakes, Files: fakes, Owners: offOwners(), Now: clock.now})
 	operator := platformToken(t, issuer)
 	orgID := create(t, h, operator, map[string]any{"name": "Initech", "time_zone": "UTC"})["org_id"].(string)
 	owner, admin := uuid.NewString(), uuid.NewString()

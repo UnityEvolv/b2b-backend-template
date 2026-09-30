@@ -134,6 +134,9 @@ CREATE TABLE data_exports (
     user_id          uuid        NOT NULL,
     status           text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'failed', 'expired')),
     attempts         integer     NOT NULL DEFAULT 0,
+    -- The data owner whose part the last attempt could not gather, if one
+    -- could not: shown with the export, and cleared when it is made.
+    blocked_by       text,
     object_key       text,
     ready_at         timestamptz,
     expires_at       timestamptz,

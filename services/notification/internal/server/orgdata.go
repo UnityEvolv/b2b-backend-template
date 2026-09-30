@@ -160,7 +160,7 @@ func (s *Server) ExportUserData(ctx context.Context, req api.ExportUserDataReque
 // preferences, its feed, its devices and anything held for it. The org's
 // counts stay; they name no one.
 func (s *Server) ForgetMembershipData(ctx context.Context, req api.ForgetMembershipDataRequestObject) (api.ForgetMembershipDataResponseObject, error) {
-	if err := auth.RequireService(ctx, orgdata.Caller, "user"); err != nil {
+	if err := auth.RequireService(ctx, orgdata.Caller, orgdata.Eraser); err != nil {
 		return api.ForgetMembershipData403JSONResponse{ErrorJSONResponse: forbidden("For the organization and user services only.")}, nil
 	}
 	ctx = db.WithActor(ctx, db.SystemActor(serviceName))

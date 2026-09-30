@@ -20,11 +20,13 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -76,11 +78,12 @@ func run() error {
 		billingURL = env.String("BILLING_URL", "")
 		// How often SCIM reconciles; daily, in this service's own tick.
 		reconcileEvery = env.Duration("SCIM_RECONCILE_EVERY", 24*time.Hour)
-		// Account deletion: the deletion notice goes out through the notification
-		// service, and every service that keeps something under a deleted
-		// person's memberships forgets it. Each unset is skipped (no email,
-		// nothing to forget there).
-		notificationURL = env.String("NOTIFICATION_URL", "")
+		// Account deletion: the deletion notice goes out through the
+		// notification service, and every data owner that erases (the
+		// notification service, and a product's own located from <NAME>_URL
+		// or DATA_OWNERS) forgets what it keeps under the person's memberships.
+		notificationURL = env.Required("NOTIFICATION_URL")
+		dataOwners      = env.String("DATA_OWNERS", "")
 		tokenURL        = env.Required("SERVICE_TOKEN_URL")
 		// Profile photos (UO-57), in the upload bucket.
 		s3 = storage.Config{
@@ -94,6 +97,12 @@ func run() error {
 		return err
 	}
 	if err := env.Err(); err != nil {
+		return err
+	}
+	if err := dataowner.Default.Load(dataOwners); err != nil {
+		return fmt.Errorf("DATA_OWNERS: %w", err)
+	}
+	if err := dataowner.Default.Locate(env.Lookup, dataowner.Owner.Erases); err != nil {
 		return err
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
@@ -159,19 +168,10 @@ func run() error {
 	// SCIM groups are stored and grant nothing until a product carries them to
 	// what they grant, with srv.WithGroupSync.
 	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase)
-	var mail email.Sender
-	var forgetters []server.Forgetter
-	// The services that keep something personal under a membership. A product
-	// adds its own here, until a data-owner registry replaces this list.
-	for _, f := range []struct{ name, url string }{{"notification", notificationURL}} {
-		if f.url != "" {
-			forgetters = append(forgetters, server.NewForgetter(f.name, f.url, tokens, nil))
-		}
-	}
-	if notificationURL != "" {
-		mail = email.NewClient(notificationURL, tokens, nil)
-	}
-	srv = srv.WithLifecycle(server.NewAccounts(identityURL, tokens, nil), server.NewOrgNames(organizationURL, tokens, nil), mail, forgetters...)
+	// The data owners that keep something personal under a membership forget
+	// it when the person's account is deleted: every eraser in the registry.
+	erase := server.Erasure{Owners: dataowner.Default, Data: orgdata.NewClient(tokens, nil)}
+	srv = srv.WithLifecycle(server.NewAccounts(identityURL, tokens, nil), server.NewOrgNames(organizationURL, tokens, nil), email.NewClient(notificationURL, tokens, nil), erase)
 	go srv.RunReconciliation(ctx, reconcileEvery)
 	// The daily pass: due deletions, memberships ended thirty days ago.
 	go srv.RunHousekeeping(ctx, 24*time.Hour)

@@ -16,13 +16,17 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-// decryptingServices are the only services that may fetch a wrapped key.
-// KMS IAM on each service's identity is the second, independent gate: a
-// service that fetched a wrapped key it may not unwrap has nothing.
-var decryptingServices = []string{"identity"}
-
+// requireDecryptingService admits only the data owners registered to
+// decrypt (dataowner.Owner.Decrypt): identity in the template. KMS IAM on
+// each service's identity is the second, independent gate, granted from
+// the same list: a service that fetched a wrapped key it may not unwrap
+// has nothing.
 func (s *Server) requireDecryptingService(ctx context.Context) error {
-	return auth.RequireService(ctx, decryptingServices...)
+	decrypting := s.owners().Decrypting()
+	if len(decrypting) == 0 {
+		return auth.ErrForbidden
+	}
+	return auth.RequireService(ctx, decrypting...)
 }
 
 // EnsureDataKey gives an org its first data key, if it has none. Called when

@@ -51,6 +51,9 @@ func toExport(ctx context.Context, e store.DataExport, files Files) api.DataExpo
 	if e.ExpiresAt.Valid {
 		out.ExpiresAt = &e.ExpiresAt.Time
 	}
+	if e.BlockedBy.Valid {
+		out.BlockedBy = &e.BlockedBy.String
+	}
 	if e.Status == "ready" && e.ObjectKey.Valid && files != nil {
 		if key, err := storage.ParseKey(e.ObjectKey.String); err == nil {
 			if u, err := files.ReadURL(ctx, key.OrgID, key, downloadWindow); err == nil {
@@ -241,15 +244,24 @@ func (s *Server) RunExports(ctx context.Context) error {
 			return err
 		}
 	}
+	var errs []error
 	for _, e := range due {
 		if err := s.makeExport(ctx, e); err != nil {
-			s.logger.Error("export not made", "org_id", e.OrgID, "export_id", e.ID, "error", err)
+			// Reported with the export, by owner, and retried; the third
+			// failed attempt fails it.
+			attempt := store.MarkExportAttemptParams{OrgID: e.OrgID, ID: e.ID}
+			var blocked *orgdata.Blocked
+			if errors.As(err, &blocked) {
+				attempt.BlockedBy = pgtype.Text{String: blocked.Owner, Valid: true}
+			}
+			s.logger.Error("export not made", "org_id", e.OrgID, "export_id", e.ID, "blocked_by", attempt.BlockedBy.String, "error", err)
+			errs = append(errs, err)
 			_ = s.cluster.Tx(ctx, e.OrgID.String(), func(tx pgx.Tx) error {
-				return store.New(tx).MarkExportAttempt(ctx, store.MarkExportAttemptParams{OrgID: e.OrgID, ID: e.ID})
+				return store.New(tx).MarkExportAttempt(ctx, attempt)
 			})
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // makeExport gathers every service's part, writes the archive, stores it
@@ -272,23 +284,21 @@ func (s *Server) makeExport(ctx context.Context, e store.DataExport) error {
 			return err
 		}
 		parts = append(parts, own)
-		for _, svc := range s.off.Services {
-			p, err := s.off.Data.Export(ctx, svc, e.OrgID)
-			if err != nil {
-				return fmt.Errorf("%s: %w", svc.Name, err)
-			}
-			p.Service = svc.Name
-			parts = append(parts, p)
+	}
+	// Every exporter's part, or no export: an owner that fails blocks it.
+	for _, o := range s.owners().Exporters() {
+		var p orgdata.Part
+		var err error
+		if e.Kind == kindOrg {
+			p, err = s.off.Data.Export(ctx, o, e.OrgID)
+		} else {
+			p, err = s.off.Data.ExportUser(ctx, o, e.UserID, person.Memberships)
 		}
-	} else {
-		for _, svc := range s.off.Services {
-			p, err := s.off.Data.ExportUser(ctx, svc, e.UserID, person.Memberships)
-			if err != nil {
-				return fmt.Errorf("%s: %w", svc.Name, err)
-			}
-			p.Service = svc.Name
-			parts = append(parts, p)
+		if err != nil {
+			return &orgdata.Blocked{Owner: o.Name, Step: "export", Err: err}
 		}
+		p.Service = o.Name
+		parts = append(parts, p)
 	}
 
 	tmp, err := os.CreateTemp("", "export-*.zip")
@@ -416,26 +426,37 @@ func (s *Server) RunPurges(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var first error
+	var errs []error
 	for _, org := range orgs {
 		if err := s.purge(ctx, org); err != nil {
-			s.logger.Error("purge incomplete; retried tomorrow", "org_id", org, "error", err)
-			if first == nil {
-				first = err
+			errs = append(errs, fmt.Errorf("org %s: %w", org, err))
+			var blocked *orgdata.Blocked
+			if !errors.As(err, &blocked) {
+				s.logger.Error("purge incomplete; retried tomorrow", "org_id", org, "error", err)
+				continue
+			}
+			s.logger.Error("purge blocked; retried tomorrow", "org_id", org, "blocked_by", blocked.Owner, "error", err)
+			// On the org's own record too, while it still has one: audit is
+			// purged last, so it is there unless audit is what failed.
+			if rerr := s.recorder.Record(ctx, audit.Event{OrgID: org.String(), Action: "organization.purge_blocked", TargetType: "organization", TargetID: org.String(),
+				Details: map[string]any{"blocked_by": blocked.Owner}}); rerr != nil {
+				s.logger.Error("purge blocked, not audited", "org_id", org, "error", rerr)
 			}
 		}
 	}
-	return first
+	return errors.Join(errs...)
 }
 
+// purge empties every purger, in order, each checked; the first that fails
+// or still holds rows stops it, and the org stays for the next day.
 func (s *Server) purge(ctx context.Context, org uuid.UUID) error {
-	for _, svc := range s.off.Services {
-		left, err := s.off.Data.Purge(ctx, svc, org)
-		if err != nil {
-			return fmt.Errorf("%s: %w", svc.Name, err)
+	for _, o := range s.owners().Purgers() {
+		left, err := s.off.Data.Purge(ctx, o, org)
+		if err == nil && left != 0 {
+			err = fmt.Errorf("%d rows remain", left)
 		}
-		if left != 0 {
-			return fmt.Errorf("%s still holds %d rows", svc.Name, left)
+		if err != nil {
+			return &orgdata.Blocked{Owner: o.Name, Step: "purge", Err: err}
 		}
 	}
 	if _, err := s.off.Files.DeleteAll(ctx, org.String(), ""); err != nil {

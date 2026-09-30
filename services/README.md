@@ -43,6 +43,12 @@ template's seven; a product adds its own without editing any of them.
    `DB_PASSWORD_<SCHEMA>` like every other.
 5. Run `scripts/generate.sh`.
 6. Copy the `organization` block in `deploy/docker-compose.yml`.
+7. If it holds org or member data, or calls the template's services, make
+   it a data owner ([docs/data-owners.md](../docs/data-owners.md)): answer
+   `pkg/orgdata`'s endpoints and add it to `DATA_OWNERS` on every template
+   service, with its URL or a `<NAME>_URL`. That puts it in the org export,
+   the purge, account deletion and, with `decrypt`, the per-org keys, and is
+   what lets the template's services accept its service tokens.
 
 A schema is a plain lower-case name that is not `public` or `pg_*`; a name
 or schema registered twice panics at start.
@@ -64,7 +70,7 @@ or schema registered twice panics at start.
 | Every endpoint is rate limited, one line each | `server.Limits` + `ratelimit.Routes`; `PerAddress` in front of auth |
 | Admin actions are audited: one call, ids only, fails rather than drops | `audit.Recorder` passed to `server.New`; the audit service owns the append-only store |
 | A service calls another service with its own token | `auth.IssuerTokenSource` + `auth.Authorize`; `auth.RequireService` on internal endpoints |
-| A customer secret is encrypted under that org's key; only identity, rtc, messaging, calendar and integrations decrypt | `envelope.Keyring` over `envelope.OrgKeys` + KMS; see [docs/encryption.md](../docs/encryption.md) |
+| A customer secret is encrypted under that org's key; only the data owners registered with `decrypt` (identity in the template) decrypt | `envelope.Keyring` over `envelope.OrgKeys` + KMS; see [docs/encryption.md](../docs/encryption.md) |
 | Email goes through the notification service's outbox: one call, retried, never silently dropped | `email.Sender` (`email.NewClient`); templates in `pkg/email`; bounces mark the address |
 | Every response carries the security headers; only the app origins may call from a browser | `httpx.SecurityHeaders` and `httpx.CORS` outermost in `main.go`, origins from `config.AppOrigins` |
 
@@ -99,6 +105,21 @@ script.
 Over the limit, the client gets 429 with `Retry-After` and the `rate_limited`
 envelope. For sign-in style endpoints, where only failures should count, use
 `limiter.Check` before the attempt and `limiter.Penalize` when it fails.
+
+## Settings a product sets
+
+A product that runs the template's services unchanged extends them through
+configuration:
+
+| setting | read by | what |
+|---|---|---|
+| `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
+| `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
+| `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `AUDIT_URL`) are these |
+
+The organization service needs the URL of every owner that exports or
+purges, and the user service of every owner that erases (so
+`NOTIFICATION_URL` is required there now); a missing one fails start.
 
 ## Generated code
 

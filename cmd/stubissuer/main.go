@@ -21,6 +21,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth/stubissuer"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
 )
@@ -45,6 +46,11 @@ func run() error {
 	)
 	if err := env.Err(); err != nil {
 		return err
+	}
+	// A product's own services (pkg/dataowner), so their service tokens are
+	// accepted here.
+	if err := dataowner.Default.Load(env.String("DATA_OWNERS", "")); err != nil {
+		return fmt.Errorf("DATA_OWNERS: %w", err)
 	}
 	if !localOnly {
 		return fmt.Errorf("stubissuer signs a token for anyone who asks; set STUB_ISSUER_LOCAL_ONLY=true to run it locally")

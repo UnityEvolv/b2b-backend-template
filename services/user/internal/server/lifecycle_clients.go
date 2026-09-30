@@ -11,7 +11,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 )
 
 // What account deletion and org offboarding need of other
@@ -29,11 +31,39 @@ type OrgNames interface {
 	Name(ctx context.Context, orgID uuid.UUID) (string, error)
 }
 
-// Forgetter is a service that keeps something personal under a membership
-// (notification, say) and deletes it for account deletion.
-type Forgetter interface {
-	Name() string
-	Forget(ctx context.Context, orgID, membershipID uuid.UUID) error
+// Eraser asks a data owner to forget one membership (orgdata.Client).
+type Eraser interface {
+	Erase(ctx context.Context, o dataowner.Owner, orgID, membershipID uuid.UUID) error
+}
+
+// Erasure is the data owners that keep something personal under a
+// membership (notification, and a product's own) and the calls that have
+// them forget it for account deletion.
+type Erasure struct {
+	// Owners is the registry, its erasers located (Registry.Locate). Nil
+	// is dataowner.Default.
+	Owners *dataowner.Registry
+	Data   Eraser
+}
+
+// eraseMember has every eraser forget the membership. One that fails stops
+// the deletion, which the next pass retries: nobody is tombstoned while a
+// service still holds something of theirs.
+func (s *Server) eraseMember(ctx context.Context, orgID, membershipID uuid.UUID) error {
+	if s.erase.Data == nil {
+		return nil
+	}
+	owners := s.erase.Owners
+	if owners == nil {
+		owners = dataowner.Default
+	}
+	for _, o := range owners.Erasers() {
+		if err := s.erase.Data.Erase(ctx, o, orgID, membershipID); err != nil {
+			s.logger.Error("a data owner could not forget a membership", "service", o.Name, "error", err, "org_id", orgID, "membership_id", membershipID)
+			return &orgdata.Blocked{Owner: o.Name, Step: "erase", Err: err}
+		}
+	}
+	return nil
 }
 
 // send is one call to another service; 404 is done when notFoundOK.
@@ -96,28 +126,4 @@ func (o *httpOrgNames) Name(ctx context.Context, orgID uuid.UUID) (string, error
 	}
 	err := send(ctx, o.http, o.tokens, http.MethodGet, o.base+"/v1/internal/organizations/"+orgID.String(), false, &out)
 	return out.Name, err
-}
-
-type httpForgetter struct {
-	name   string
-	base   string
-	tokens auth.TokenSource
-	http   *http.Client
-}
-
-// NewForgetter is the named service at baseURL, forgetting memberships.
-func NewForgetter(name, baseURL string, tokens auth.TokenSource, client *http.Client) Forgetter {
-	if client == nil {
-		client = &http.Client{Timeout: time.Minute}
-	}
-	return &httpForgetter{name: name, base: strings.TrimRight(baseURL, "/"), tokens: tokens, http: client}
-}
-
-func (f *httpForgetter) Name() string { return f.name }
-
-// Forget deletes what the service keeps under the membership; a service
-// that never heard of it answers 404, which is as good as done.
-func (f *httpForgetter) Forget(ctx context.Context, orgID, membershipID uuid.UUID) error {
-	u := fmt.Sprintf("%s/v1/internal/organizations/%s/memberships/%s/data", f.base, orgID, membershipID)
-	return send(ctx, f.http, f.tokens, http.MethodDelete, u, true, nil)
 }

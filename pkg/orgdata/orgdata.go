@@ -1,7 +1,9 @@
 // Package orgdata is the one contract every service keeps for data it
 // holds about an org or a person (UO-183, UO-184): hand it over for an
-// export, and delete it for a purge. The organization service drives both
-// from its daily loop; no service reaches into another's tables.
+// export, delete it for a purge, and forget a member. The organization
+// service drives the first two from its daily loop, the user service the
+// third; no service reaches into another's tables. Which services answer
+// which is the data-owner registry, pkg/dataowner.
 //
 // Each service answers, in its own OpenAPI contract, with the shapes here:
 //
@@ -9,10 +11,15 @@
 //	DELETE /v1/internal/organizations/{org_id}/data   purge; how many rows remain
 //	GET    /v1/internal/users/{user_id}/data?membership=org:membership
 //	                                                  a person's export part
+//	DELETE /v1/internal/organizations/{org_id}/memberships/{membership_id}/data
+//	                                                  erase a member; 204
 //
-// All three are for the organization service only. A purge is idempotent and
-// checked: it deletes, then counts what is left of the org, and the caller
-// treats anything above zero as a failure to retry the next day.
+// The first three are for the organization service only, the last for the
+// user service (Eraser) as well. A purge is idempotent and checked: it
+// deletes, then counts what is left of the org, and the caller treats
+// anything above zero as a failure to retry the next day. A call that fails
+// is a *Blocked naming the owner: an export or a purge does not complete
+// without every owner, and nothing is skipped quietly.
 package orgdata
 
 import (
@@ -22,16 +29,22 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 )
 
-// Caller is the only service that may ask for, or delete, anyone's data.
+// Caller is the only service that may ask for, or delete, an org's data.
 const Caller = "organization"
+
+// Eraser is the service that asks owners to forget a member, when the
+// person's account is deleted.
+const Eraser = "user"
 
 // File is an object in storage that belongs in an export.
 type File struct {
@@ -96,13 +109,23 @@ func Marshal(service string, v any, files []File) (Part, error) {
 	return Part{Service: service, Data: raw, Files: files}, nil
 }
 
-// Service is one service's data endpoints, at its base URL.
-type Service struct {
-	Name string
-	Base string
+// Blocked is an owner whose call failed, so the export, purge or erasure it
+// was part of did not complete: it is retried, and reported by name.
+type Blocked struct {
+	// Owner is the data owner's name.
+	Owner string
+	// Step is what was asked of it: export, purge or erase.
+	Step string
+	Err  error
 }
 
-// Client asks services for data and deletes it, with this service's token.
+func (b *Blocked) Error() string {
+	return fmt.Sprintf("orgdata: %s blocked by %s: %v", b.Step, b.Owner, b.Err)
+}
+
+func (b *Blocked) Unwrap() error { return b.Err }
+
+// Client asks data owners for data and deletes it, with this service's token.
 type Client struct {
 	tokens auth.TokenSource
 	http   *http.Client
@@ -116,7 +139,8 @@ func NewClient(tokens auth.TokenSource, client *http.Client) *Client {
 	return &Client{tokens: tokens, http: client}
 }
 
-func (c *Client) do(ctx context.Context, method, u string, out any) error {
+// do sends one call; an answer other than ok is an error.
+func (c *Client) do(ctx context.Context, method, u string, out any, ok ...int) error {
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(nil))
 	if err != nil {
 		return err
@@ -129,37 +153,50 @@ func (c *Client) do(ctx context.Context, method, u string, out any) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if !slices.Contains(ok, resp.StatusCode) {
 		return fmt.Errorf("orgdata: %s %s answered %d", method, req.URL.Path, resp.StatusCode)
+	}
+	if out == nil {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-// Export is s's part of an org's export.
-func (c *Client) Export(ctx context.Context, s Service, org uuid.UUID) (Part, error) {
+func base(o dataowner.Owner) string { return strings.TrimRight(o.URL, "/") }
+
+// Export is o's part of an org's export.
+func (c *Client) Export(ctx context.Context, o dataowner.Owner, org uuid.UUID) (Part, error) {
 	var p Part
-	err := c.do(ctx, http.MethodGet, fmt.Sprintf("%s/v1/internal/organizations/%s/data", strings.TrimRight(s.Base, "/"), org), &p)
+	err := c.do(ctx, http.MethodGet, fmt.Sprintf("%s/v1/internal/organizations/%s/data", base(o), org), &p, http.StatusOK)
 	return p, err
 }
 
-// Purge deletes an org from s; the rows it has left.
-func (c *Client) Purge(ctx context.Context, s Service, org uuid.UUID) (int, error) {
+// Purge deletes an org from o; the rows it has left.
+func (c *Client) Purge(ctx context.Context, o dataowner.Owner, org uuid.UUID) (int, error) {
 	var p Purged
-	err := c.do(ctx, http.MethodDelete, fmt.Sprintf("%s/v1/internal/organizations/%s/data", strings.TrimRight(s.Base, "/"), org), &p)
+	err := c.do(ctx, http.MethodDelete, fmt.Sprintf("%s/v1/internal/organizations/%s/data", base(o), org), &p, http.StatusOK)
 	return p.Remaining, err
 }
 
-// ExportUser is s's part of a person's export, across their memberships.
-func (c *Client) ExportUser(ctx context.Context, s Service, user uuid.UUID, memberships []Membership) (Part, error) {
+// ExportUser is o's part of a person's export, across their memberships.
+func (c *Client) ExportUser(ctx context.Context, o dataowner.Owner, user uuid.UUID, memberships []Membership) (Part, error) {
 	q := url.Values{}
 	for _, m := range memberships {
 		q.Add("membership", m.String())
 	}
-	u := fmt.Sprintf("%s/v1/internal/users/%s/data", strings.TrimRight(s.Base, "/"), user)
+	u := fmt.Sprintf("%s/v1/internal/users/%s/data", base(o), user)
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
 	var p Part
-	err := c.do(ctx, http.MethodGet, u, &p)
+	err := c.do(ctx, http.MethodGet, u, &p, http.StatusOK)
 	return p, err
+}
+
+// Erase has o forget what it keeps under one membership. Idempotent there:
+// it answers 204 for a membership it never heard of too, so anything else,
+// a 404 included, is a failure and not a service with nothing to forget.
+func (c *Client) Erase(ctx context.Context, o dataowner.Owner, org, membership uuid.UUID) error {
+	u := fmt.Sprintf("%s/v1/internal/organizations/%s/memberships/%s/data", base(o), org, membership)
+	return c.do(ctx, http.MethodDelete, u, nil, http.StatusNoContent)
 }

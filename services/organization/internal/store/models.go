@@ -18,6 +18,7 @@ type DataExport struct {
 	UserID         uuid.UUID
 	Status         string
 	Attempts       int32
+	BlockedBy      pgtype.Text
 	ObjectKey      pgtype.Text
 	ReadyAt        pgtype.Timestamptz
 	ExpiresAt      pgtype.Timestamptz

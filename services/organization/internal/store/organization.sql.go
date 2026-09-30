@@ -138,7 +138,7 @@ func (q *Queries) DeleteOrganization(ctx context.Context, orgID uuid.UUID) error
 }
 
 const dueExports = `-- name: DueExports :many
-SELECT org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE status = 'pending' ORDER BY created_at LIMIT 10
+SELECT org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE status = 'pending' ORDER BY created_at LIMIT 10
 `
 
 // global: exports waiting to be made, oldest first, for the export pass.
@@ -158,6 +158,7 @@ func (q *Queries) DueExports(ctx context.Context) ([]DataExport, error) {
 			&i.UserID,
 			&i.Status,
 			&i.Attempts,
+			&i.BlockedBy,
 			&i.ObjectKey,
 			&i.ReadyAt,
 			&i.ExpiresAt,
@@ -178,7 +179,7 @@ func (q *Queries) DueExports(ctx context.Context) ([]DataExport, error) {
 }
 
 const expiredExports = `-- name: ExpiredExports :many
-SELECT org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE status = 'ready' AND expires_at < $1 ORDER BY expires_at LIMIT 100
+SELECT org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE status = 'ready' AND expires_at < $1 ORDER BY expires_at LIMIT 100
 `
 
 // global: ready exports past their link, for the export pass to remove.
@@ -198,6 +199,7 @@ func (q *Queries) ExpiredExports(ctx context.Context, now pgtype.Timestamptz) ([
 			&i.UserID,
 			&i.Status,
 			&i.Attempts,
+			&i.BlockedBy,
 			&i.ObjectKey,
 			&i.ReadyAt,
 			&i.ExpiresAt,
@@ -218,7 +220,7 @@ func (q *Queries) ExpiredExports(ctx context.Context, now pgtype.Timestamptz) ([
 }
 
 const exportByIdempotencyKey = `-- name: ExportByIdempotencyKey :one
-SELECT org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND created_by = $2 AND idempotency_key = $3
+SELECT org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND created_by = $2 AND idempotency_key = $3
 `
 
 type ExportByIdempotencyKeyParams struct {
@@ -237,6 +239,7 @@ func (q *Queries) ExportByIdempotencyKey(ctx context.Context, arg ExportByIdempo
 		&i.UserID,
 		&i.Status,
 		&i.Attempts,
+		&i.BlockedBy,
 		&i.ObjectKey,
 		&i.ReadyAt,
 		&i.ExpiresAt,
@@ -253,7 +256,7 @@ const insertExport = `-- name: InsertExport :one
 INSERT INTO data_exports (org_id, id, kind, user_id, idempotency_key)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT DO NOTHING
-RETURNING org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at
+RETURNING org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type InsertExportParams struct {
@@ -280,6 +283,7 @@ func (q *Queries) InsertExport(ctx context.Context, arg InsertExportParams) (Dat
 		&i.UserID,
 		&i.Status,
 		&i.Attempts,
+		&i.BlockedBy,
 		&i.ObjectKey,
 		&i.ReadyAt,
 		&i.ExpiresAt,
@@ -293,7 +297,7 @@ func (q *Queries) InsertExport(ctx context.Context, arg InsertExportParams) (Dat
 }
 
 const listExports = `-- name: ListExports :many
-SELECT org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND user_id = $2 AND kind = $3 ORDER BY created_at DESC LIMIT 10
+SELECT org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND user_id = $2 AND kind = $3 ORDER BY created_at DESC LIMIT 10
 `
 
 type ListExportsParams struct {
@@ -318,6 +322,7 @@ func (q *Queries) ListExports(ctx context.Context, arg ListExportsParams) ([]Dat
 			&i.UserID,
 			&i.Status,
 			&i.Attempts,
+			&i.BlockedBy,
 			&i.ObjectKey,
 			&i.ReadyAt,
 			&i.ExpiresAt,
@@ -338,7 +343,7 @@ func (q *Queries) ListExports(ctx context.Context, arg ListExportsParams) ([]Dat
 }
 
 const listOrgExports = `-- name: ListOrgExports :many
-SELECT org_id, id, kind, user_id, status, attempts, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND kind = 'organization' ORDER BY created_at DESC LIMIT 10
+SELECT org_id, id, kind, user_id, status, attempts, blocked_by, object_key, ready_at, expires_at, idempotency_key, created_by, created_at, last_modified_by, last_modified_at FROM data_exports WHERE org_id = $1 AND kind = 'organization' ORDER BY created_at DESC LIMIT 10
 `
 
 func (q *Queries) ListOrgExports(ctx context.Context, orgID uuid.UUID) ([]DataExport, error) {
@@ -357,6 +362,7 @@ func (q *Queries) ListOrgExports(ctx context.Context, orgID uuid.UUID) ([]DataEx
 			&i.UserID,
 			&i.Status,
 			&i.Attempts,
+			&i.BlockedBy,
 			&i.ObjectKey,
 			&i.ReadyAt,
 			&i.ExpiresAt,
@@ -377,17 +383,19 @@ func (q *Queries) ListOrgExports(ctx context.Context, orgID uuid.UUID) ([]DataEx
 }
 
 const markExportAttempt = `-- name: MarkExportAttempt :exec
-UPDATE data_exports SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE status END
-WHERE org_id = $1 AND id = $2
+UPDATE data_exports SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE status END,
+    blocked_by = $1
+WHERE org_id = $2 AND id = $3
 `
 
 type MarkExportAttemptParams struct {
-	OrgID uuid.UUID
-	ID    uuid.UUID
+	BlockedBy pgtype.Text
+	OrgID     uuid.UUID
+	ID        uuid.UUID
 }
 
 func (q *Queries) MarkExportAttempt(ctx context.Context, arg MarkExportAttemptParams) error {
-	_, err := q.db.Exec(ctx, markExportAttempt, arg.OrgID, arg.ID)
+	_, err := q.db.Exec(ctx, markExportAttempt, arg.BlockedBy, arg.OrgID, arg.ID)
 	return err
 }
 
@@ -406,7 +414,7 @@ func (q *Queries) MarkExportExpired(ctx context.Context, arg MarkExportExpiredPa
 }
 
 const markExportReady = `-- name: MarkExportReady :exec
-UPDATE data_exports SET status = 'ready', object_key = $1, ready_at = $2, expires_at = $3
+UPDATE data_exports SET status = 'ready', blocked_by = NULL, object_key = $1, ready_at = $2, expires_at = $3
 WHERE org_id = $4 AND id = $5
 `
 

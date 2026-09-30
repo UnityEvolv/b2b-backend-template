@@ -1167,6 +1167,12 @@ components:
         download_url:
           type: string
           description: While ready, a link that works for an hour. The same link is emailed for 7 days.
+        blocked_by:
+          type: string
+          description: >-
+            The service whose part the last attempt could not gather. Pending,
+            it is retried within the hour; after three attempts the export is
+            failed. Absent once the export is made.
     DataExportList:
       type: object
       required: [exports]

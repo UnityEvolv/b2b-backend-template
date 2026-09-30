@@ -23,6 +23,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
@@ -88,6 +89,11 @@ func run() error {
 	}
 	if err := env.Err(); err != nil {
 		return err
+	}
+	// A product's own services (pkg/dataowner), so their service tokens are
+	// accepted here.
+	if err := dataowner.Default.Load(env.String("DATA_OWNERS", "")); err != nil {
+		return fmt.Errorf("DATA_OWNERS: %w", err)
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth/stubissuer"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 )
@@ -279,5 +280,27 @@ func TestStubIssuerMintsServiceTokens(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("unknown service: %d", resp.StatusCode)
+	}
+}
+
+// B2B-22's gap, closed by B2B-24: a product's service owns no schema in
+// this process, so the template's services know it only from the
+// data-owner registry, which they read from DATA_OWNERS. Once it is there,
+// its tokens are accepted.
+func TestAProductServiceIsKnownFromTheDataOwnerRegistry(t *testing.T) {
+	i := issuer(t, issuerName)
+	verifier := auth.NewStaticVerifier(issuerName, audience, i.PublicKeys())
+	product := token(t, i, auth.Caller{Service: "projects"})
+	if _, err := verifier.Verify(product); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("an unregistered product service accepted: %v", err)
+	}
+	if err := dataowner.Default.Load(`[{"name":"projects","export":true,"purge":true,"erase":true}]`); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := verifier.Verify(product); err != nil || c.Service != "projects" {
+		t.Fatalf("a registered product service: %+v %v", c, err)
+	}
+	if !auth.KnownService("projects") || auth.KnownService("documents") {
+		t.Error("KnownService does not follow the registry")
 	}
 }

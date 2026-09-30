@@ -44,13 +44,13 @@ var systemActor = db.SystemActor("user")
 
 // WithLifecycle is s deleting people: accounts is the identity service
 // (nil keeps the one from New), orgs names the org an email is sent on
-// behalf of, mail sends it, and forgetters are the services that keep
-// something personal under a membership.
-func (s *Server) WithLifecycle(accounts Accounts, orgs OrgNames, mail email.Sender, forgetters ...Forgetter) *Server {
+// behalf of, mail sends it, and erase is the data owners that forget a
+// member.
+func (s *Server) WithLifecycle(accounts Accounts, orgs OrgNames, mail email.Sender, erase Erasure) *Server {
 	if accounts != nil {
 		s.accounts = accounts
 	}
-	s.orgNames, s.mail, s.forgetters = orgs, mail, forgetters
+	s.orgNames, s.mail, s.erase = orgs, mail, erase
 	return s
 }
 
@@ -490,6 +490,12 @@ func (s *Server) deleteAccount(ctx context.Context, u store.User) error {
 		return err
 	}
 	for _, m := range all {
+		// Every data owner forgets the membership first: one that fails
+		// leaves it as it was, so nothing tombstones the person before the
+		// next pass has every owner forget them.
+		if err := s.eraseMember(ctx, m.OrgID, m.ID); err != nil {
+			return err
+		}
 		var ended, anonymised bool
 		err := s.cluster.Tx(ctx, m.OrgID.String(), func(tx pgx.Tx) error {
 			q := store.New(tx)
@@ -514,12 +520,6 @@ func (s *Server) deleteAccount(ctx context.Context, u store.User) error {
 				OrgID: m.OrgID.String(), Action: "account.deleted", TargetType: "membership", TargetID: m.ID.String(),
 				Details: map[string]any{"user_id": u.ID.String()}, Actor: systemActor,
 			}); err != nil {
-				return err
-			}
-		}
-		for _, f := range s.forgetters {
-			if err := f.Forget(ctx, m.OrgID, m.ID); err != nil {
-				s.logger.Error("a service could not forget a membership", "service", f.Name(), "error", err, "org_id", m.OrgID, "membership_id", m.ID)
 				return err
 			}
 		}

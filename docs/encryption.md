@@ -1,9 +1,9 @@
 # Per-org encryption
 
 Anything a customer gave us that grants access to something is encrypted under
-that customer's own key: provider credentials, webhook secrets, SCIM tokens,
-calendar OAuth tokens, Slack and Teams tokens, join-link secrets. One org's secrets cannot be decrypted
-with another's key, and no human has a path to the plaintext.
+that customer's own key: identity-provider client secrets, webhook secrets,
+SCIM tokens, and whatever a product keeps of the kind. One org's secrets
+cannot be decrypted with another's key, and no human has a path to the plaintext.
 
 ## How it fits together
 
@@ -13,12 +13,12 @@ with another's key, and no human has a path to the plaintext.
                  │ org_data_keys: wrapped_key, ...  │ ← wraps a new org's key (KMS encrypt)
                  └────────────┬─────────────────────┘   never unwraps
                               │ GET /v1/internal/.../data-keys/{current|n}
-                              │ (service token; identity, rtc, messaging, calendar, integrations only)
+                              │ (service token; the decrypting data owners only)
                               ▼
-   rtc / messaging / identity / calendar / integrations
+   identity, and any data owner registered with decrypt
    ┌──────────────────────────────────────────┐
    │ envelope.Keyring                          │
-   │   wrapped key ──KMS decrypt──► data key   │ ← KMS IAM: only these five may decrypt
+   │   wrapped key ──KMS decrypt──► data key   │ ← KMS IAM: only the decrypting owners
    │   data key ──AES-256-GCM──► secret        │   every decrypt is in the cloud audit log
    └──────────────────────────────────────────┘
                               ▲
@@ -55,11 +55,14 @@ that a value is set, not the value.
 | Service identity | KMS permission | Why |
 |---|---|---|
 | organization | encrypt | the custodian: wraps new keys, never unwraps one |
-| identity, rtc, messaging, calendar, integrations | decrypt | the services that read secrets |
-| everything else | none | the usage service cannot decrypt a credential even if its code tried |
+| the decrypting data owners: identity, and a product's own registered with `decrypt` | decrypt | the services that read secrets |
+| everything else | none | a service that holds no secret cannot decrypt a credential even if its code tried |
 
 The organization service also refuses to hand a wrapped key to any service
-but those five. Two independent gates.
+but those. Two independent gates, from one list: the data-owner registry
+([data-owners.md](data-owners.md)), whose `decrypt` owners are what
+`requireDecryptingService` admits and what `go run ./cmd/dataowners` prints
+for the IAM bindings.
 
 ## Rotation
 

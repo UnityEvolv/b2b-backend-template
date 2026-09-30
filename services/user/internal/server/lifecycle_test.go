@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/dataowner"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
+	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/server"
 )
 
 // memoryMail is the notification service's outbox.
@@ -34,19 +37,34 @@ type orgNames struct{}
 
 func (orgNames) Name(context.Context, uuid.UUID) (string, error) { return "Acme", nil }
 
-// forgetter is a service that keeps something under a membership.
+// forgetter is the data owners that keep something under a membership:
+// the template's notification and a product's "projects", registered.
 type forgetter struct {
 	mu        sync.Mutex
-	forgotten []string // "org:membership"
+	forgotten []string // "owner/org:membership"
+	failing   string   // an owner whose call fails
 }
 
-func (f *forgetter) Name() string { return "projects" }
-
-func (f *forgetter) Forget(_ context.Context, orgID, membershipID uuid.UUID) error {
+func (f *forgetter) Erase(_ context.Context, o dataowner.Owner, orgID, membershipID uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.forgotten = append(f.forgotten, orgID.String()+":"+membershipID.String())
+	if o.Name == f.failing {
+		return errors.New("unreachable")
+	}
+	f.forgotten = append(f.forgotten, o.Name+"/"+orgID.String()+":"+membershipID.String())
 	return nil
+}
+
+func (f *forgetter) by(owner string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, x := range f.forgotten {
+		if strings.HasPrefix(x, owner+"/") {
+			n++
+		}
+	}
+	return n
 }
 
 // clock is a time a test moves on.
@@ -77,7 +95,9 @@ type lifecycle struct {
 func newLifecycle(t *testing.T) *lifecycle {
 	f := newAPI(t)
 	l := &lifecycle{fixture: f, mail: &memoryMail{}, forget: &forgetter{}, clock: &clock{now: time.Now()}}
-	f.srv.WithLifecycle(nil, orgNames{}, l.mail, l.forget).WithClock(l.clock.Now)
+	owners := dataowner.New()
+	owners.Register(dataowner.Owner{Name: "projects", Export: true, Purge: true, Erase: true})
+	f.srv.WithLifecycle(nil, orgNames{}, l.mail, server.Erasure{Owners: owners, Data: l.forget}).WithClock(l.clock.Now)
 	return l
 }
 
@@ -259,7 +279,8 @@ func TestDeletionIsCarriedOutAfterFourteenDays(t *testing.T) {
 	if len(l.sessions.deleted) != 1 || l.sessions.deleted[0].String() != ada {
 		t.Errorf("the identity service was told %v", l.sessions.deleted)
 	}
-	if len(l.forget.forgotten) != 2 {
+	// Every registered eraser, the template's and the product's, in both orgs.
+	if l.forget.by("notification") != 2 || l.forget.by("projects") != 2 {
 		t.Errorf("forgotten: %v", l.forget.forgotten)
 	}
 	ended := strings.Join(l.sessions.ended, ",")
@@ -419,5 +440,29 @@ func TestEmailEndpointsForIdentity(t *testing.T) {
 	}
 	if status, _ := l.do(t, http.MethodGet, "/v1/internal/user-by-email?email=ada@new.example", l.service(t, "billing"), nil); status != http.StatusForbidden {
 		t.Errorf("lookup by another service: %d", status)
+	}
+}
+
+// A data owner that cannot forget a member stops the deletion: the person
+// is not tombstoned and their account stays until the next pass, when every
+// owner has forgotten them.
+func TestAFailingEraserBlocksDeletion(t *testing.T) {
+	l := newLifecycle(t)
+	ada, _, me := l.member(t, acme, "ada@example.com", nil)
+	if status, out := l.do(t, http.MethodPost, "/v1/me/deletion", me, map[string]any{"confirm": "DELETE"}); status != http.StatusOK {
+		t.Fatalf("request: %d %v", status, out)
+	}
+	l.forget.failing = "projects"
+	l.clock.add(15 * 24 * time.Hour)
+	if err := l.srv.Housekeeping(t.Context()); err == nil || !strings.Contains(err.Error(), "projects") {
+		t.Errorf("a failing eraser is not reported: %v", err)
+	}
+	if len(l.sessions.deleted) != 0 {
+		t.Fatalf("deleted although projects still holds the member: %v", l.sessions.deleted)
+	}
+	l.forget.failing = ""
+	l.housekeeping(t)
+	if len(l.sessions.deleted) != 1 || l.sessions.deleted[0].String() != ada || l.forget.by("projects") != 1 {
+		t.Errorf("the next pass: deleted %v, forgotten %v", l.sessions.deleted, l.forget.forgotten)
 	}
 }

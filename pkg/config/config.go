@@ -90,3 +90,7 @@ func (e *Env) Err() error {
 	}
 	return errors.New("config: " + strings.Join(e.problems, "; "))
 }
+
+// Lookup is the setting, or empty when it is unset: for a setting whose name
+// is only known at run time, such as a data owner's <NAME>_URL.
+func (e *Env) Lookup(name string) string { return e.String(name, "") }

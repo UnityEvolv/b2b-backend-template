@@ -174,6 +174,9 @@ func (e ListOrganizationsParamsOrder) Valid() bool {
 
 // DataExport defines model for DataExport.
 type DataExport struct {
+	// BlockedBy The service whose part the last attempt could not gather. Pending, it is retried within the hour; after three attempts the export is failed. Absent once the export is made.
+	BlockedBy *string `json:"blocked_by,omitempty"`
+
 	// DownloadUrl While ready, a link that works for an hour. The same link is emailed for 7 days.
 	DownloadUrl *string            `json:"download_url,omitempty"`
 	ExpiresAt   *time.Time         `json:"expires_at,omitempty"`

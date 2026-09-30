@@ -105,6 +105,11 @@ func run() error {
 	if err := dataowner.Default.Load(dataOwners); err != nil {
 		return fmt.Errorf("DATA_OWNERS: %w", err)
 	}
+	// A product's plan ladder, limits and features, when it runs this service
+	// unchanged (pkg/plan, docs/plans.md); the template's own ladder without.
+	if err := plan.Default.Load(env.String("PLANS", "")); err != nil {
+		return fmt.Errorf("PLANS: %w", err)
+	}
 	if err := dataowner.Default.Locate(env.Lookup, dataowner.Owner.Erases); err != nil {
 		return err
 	}

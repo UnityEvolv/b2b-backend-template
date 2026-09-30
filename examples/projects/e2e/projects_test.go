@@ -185,6 +185,18 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 			t.Errorf("after the upgrade: %s", r)
 		}
 		shared = second.str("id")
+
+		// The organization service runs unchanged and knows the projects
+		// limit from PLANS: its plan endpoint names the cap, and its
+		// downgrade checklist the tightening.
+		internal := s.call(http.MethodGet, s.url("organization")+"/v1/internal/organizations/"+acme.String()+"/plan", s.serviceToken(product.Name), nil)
+		if limits, _ := internal.body["limits"].(map[string]any); internal.status != http.StatusOK || limits["projects"] != float64(product.Caps["team"]) {
+			t.Errorf("the organization service's plan: %s", internal)
+		}
+		preview := s.call(http.MethodGet, s.url("organization")+"/v1/organizations/"+acme.String()+"/plan-change?plan=free", owner.token, nil)
+		if preview.status != http.StatusOK || !strings.Contains(string(preview.raw), `"code":"projects_over_cap_kept"`) {
+			t.Errorf("the downgrade checklist: %s", preview)
+		}
 	})
 
 	t.Run("pagination: newest first, by cursor", func(t *testing.T) {

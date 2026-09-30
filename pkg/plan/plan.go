@@ -8,14 +8,17 @@
 // business and enterprise with one limit, users, so it runs out of the box.
 // A product replaces the bands, adds limits ("projects", "storage_gb") with
 // a value per band, gates its own features, and registers the consequences
-// its downgrade checklist shows. Every check reads the registry at the moment
-// of the call.
+// its downgrade checklist shows: in code (Default.SetBands and the Register
+// methods), or, when it runs the template's services unchanged, through
+// PLANS (ParseConfig), which every service that reads plans loads at start.
+// Every check reads the registry at the moment of the call.
 //
 // Plans are banded and priced flat per band. A downgrade closes doors going
 // forward; it never deletes anything or removes anyone.
 package plan
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -50,16 +53,19 @@ const (
 
 // BandSpec is one band: its name, what it caps and what it allows.
 type BandSpec struct {
-	Name Band
+	Name Band `json:"name"`
+	// Label is what a page calls it: "Team". A band with none is called by
+	// its name, humanized ("team-50" is "Team 50").
+	Label string `json:"label,omitempty"`
 	// Limits is the cap for each registered limit; a limit absent here is
 	// Unlimited on this band.
-	Limits map[Limit]int
+	Limits map[Limit]int `json:"limits,omitempty"`
 	// Features allowed, beyond the ones every plan has.
-	Features []Feature
+	Features []Feature `json:"features,omitempty"`
 	// Contractual marks a band sold by contract rather than self-serve: it is
 	// invoiced, billing never moves an org into or out of it, and a platform
 	// operator may set what is otherwise fixed (audit retention, say).
-	Contractual bool
+	Contractual bool `json:"contractual,omitempty"`
 }
 
 // Allows reports whether f is on this band.
@@ -82,20 +88,22 @@ func (b BandSpec) Cap(l Limit) int {
 
 // LimitSpec describes a registered limit.
 type LimitSpec struct {
-	Key Limit
-	// Label is the plural noun a message uses: "users", "projects".
-	Label string
+	Key Limit `json:"key"`
+	// Label is the plural noun a message uses: "users", "projects". A limit
+	// with none is called by its key, humanized.
+	Label string `json:"label,omitempty"`
 }
 
 // FeatureSpec describes a registered feature.
 type FeatureSpec struct {
-	Key Feature
-	// Label is what a refusal calls it: "SCIM provisioning".
-	Label string
+	Key Feature `json:"key"`
+	// Label is what a refusal calls it: "SCIM provisioning". A feature with
+	// none is called by its key, humanized ("audit_export" is "audit export").
+	Label string `json:"label,omitempty"`
 	// LostCode and LostMessage are the downgrade checklist's line when a band
 	// change takes the feature away; none when empty.
-	LostCode    string
-	LostMessage string
+	LostCode    string `json:"lost_code,omitempty"`
+	LostMessage string `json:"lost_message,omitempty"`
 }
 
 // Consequence is one line of the checklist an admin confirms before a
@@ -154,34 +162,85 @@ var Default = func() *Registry {
 // SetBands replaces the ladder, lowest first. Names must be unique and
 // every limit or feature a band names must be registered; a bad ladder
 // panics, because it is a programming error at start, not a request.
+//
+// There must be at least one band, and no cap may be below zero. A band with
+// no label is called by its name, humanized. The registry keeps its own copy.
 func (r *Registry) SetBands(bands []BandSpec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := r.checkBands(bands, nil, nil); err != nil {
+		panic(err.Error())
+	}
+	r.bands = make([]BandSpec, len(bands))
+	for i, b := range bands {
+		if b.Label == "" {
+			b.Label = Humanize(string(b.Name))
+		}
+		r.bands[i] = b.clone()
+	}
+}
+
+// checkBands is why bands cannot be the ladder, if they cannot. A limit or
+// feature a band names must be registered, or be in limits or features: a
+// configuration that registers them in the same breath. r.mu is held.
+func (r *Registry) checkBands(bands []BandSpec, limits map[Limit]bool, features map[Feature]bool) error {
+	if len(bands) == 0 {
+		return errors.New("plan: a ladder needs at least one band")
+	}
 	seen := map[Band]bool{}
 	for _, b := range bands {
 		if b.Name == "" || seen[b.Name] {
-			panic(fmt.Sprintf("plan: band %q is empty or repeated", b.Name))
+			return fmt.Errorf("plan: band %q is empty or repeated", b.Name)
 		}
 		seen[b.Name] = true
-		for l := range b.Limits {
-			if r.limit(l) == nil {
-				panic(fmt.Sprintf("plan: band %q caps unregistered limit %q", b.Name, l))
+		for l, c := range b.Limits {
+			if r.limit(l) == nil && !limits[l] {
+				return fmt.Errorf("plan: band %q caps unregistered limit %q", b.Name, l)
+			}
+			if c < 0 {
+				return fmt.Errorf("plan: band %q caps %q below zero", b.Name, l)
 			}
 		}
 		for _, f := range b.Features {
-			if r.feature(f) == nil {
-				panic(fmt.Sprintf("plan: band %q allows unregistered feature %q", b.Name, f))
+			if r.feature(f) == nil && !features[f] {
+				return fmt.Errorf("plan: band %q allows unregistered feature %q", b.Name, f)
 			}
 		}
 	}
-	r.bands = append([]BandSpec(nil), bands...)
+	return nil
+}
+
+// clone is b with its own limits and features, so a change to the caller's
+// map or slice never reaches the registry, or the other way.
+func (b BandSpec) clone() BandSpec {
+	limits := make(map[Limit]int, len(b.Limits))
+	for l, c := range b.Limits {
+		limits[l] = c
+	}
+	b.Limits = limits
+	b.Features = append([]Feature(nil), b.Features...)
+	return b
+}
+
+// Humanize is a key or a band's name as a label: separators become spaces
+// and the first letter is upper case ("team-50" is "Team 50").
+func Humanize(s string) string {
+	s = strings.NewReplacer("-", " ", "_", " ").Replace(s)
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // RegisterLimit adds a limit a product caps per band, replacing one with
-// the same key. A limit with no label is called by its key.
+// the same key. A limit with no label is called by its key, humanized; one
+// with no key panics.
 func (r *Registry) RegisterLimit(l LimitSpec) {
+	if l.Key == "" {
+		panic("plan: a limit needs a key")
+	}
 	if l.Label == "" {
-		l.Label = string(l.Key)
+		l.Label = strings.ToLower(Humanize(string(l.Key)))
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -195,8 +254,15 @@ func (r *Registry) RegisterLimit(l LimitSpec) {
 }
 
 // RegisterFeature adds a feature a product gates, replacing one with the
-// same key.
+// same key. A feature with no label is called by its key, humanized; one
+// with no key panics.
 func (r *Registry) RegisterFeature(f FeatureSpec) {
+	if f.Key == "" {
+		panic("plan: a feature needs a key")
+	}
+	if f.Label == "" {
+		f.Label = strings.ToLower(Humanize(string(f.Key)))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i, x := range r.features {
@@ -240,6 +306,18 @@ func (r *Registry) Bands() []Band {
 	out := make([]Band, len(r.bands))
 	for i, b := range r.bands {
 		out[i] = b.Name
+	}
+	return out
+}
+
+// Ladder is every band's spec, lowest first, labelled: the catalogue a page
+// shows. The copies are the caller's.
+func (r *Registry) Ladder() []BandSpec {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]BandSpec, len(r.bands))
+	for i, b := range r.bands {
+		out[i] = b.clone()
 	}
 	return out
 }
@@ -478,6 +556,7 @@ func (r *Registry) Downgrade(from, to Band) []Consequence {
 // limit's cap (Unlimited for none) and the features on it.
 type Description struct {
 	Band        Band
+	Label       string
 	Contractual bool
 	Limits      map[string]int
 	Features    []string
@@ -486,7 +565,7 @@ type Description struct {
 // Describe is band b, described.
 func (r *Registry) Describe(b Band) Description {
 	spec := r.For(b)
-	out := Description{Band: spec.Name, Contractual: spec.Contractual, Limits: map[string]int{}, Features: []string{}}
+	out := Description{Band: spec.Name, Label: spec.Label, Contractual: spec.Contractual, Limits: map[string]int{}, Features: []string{}}
 	for _, l := range r.Limits() {
 		out.Limits[string(l.Key)] = spec.Cap(l.Key)
 	}
@@ -498,6 +577,9 @@ func (r *Registry) Describe(b Band) Description {
 }
 
 // The package functions read Default.
+
+// Ladder is every band's spec in Default, lowest first.
+func Ladder() []BandSpec { return Default.Ladder() }
 
 // Bands is every band in Default, lowest first.
 func Bands() []Band { return Default.Bands() }
@@ -537,3 +619,90 @@ func Downgrade(from, to Band) []Consequence { return Default.Downgrade(from, to)
 
 // Describe is Default's.
 func Describe(b Band) Description { return Default.Describe(b) }
+
+// Config is what a product declares in PLANS when it runs the template's
+// services unchanged: its limits and features, registered beside the
+// template's own, and its ladder, which replaces the template's when given.
+//
+//	{"limits":[{"key":"projects","label":"projects"}],
+//	 "features":[{"key":"exports","label":"scheduled exports","lost_code":"exports_stop","lost_message":"Scheduled exports stop."}],
+//	 "bands":[{"name":"free","label":"Free","limits":{"users":10,"projects":3}},
+//	          {"name":"team","limits":{"users":50,"projects":25},"features":["exports"]},
+//	          {"name":"enterprise","contractual":true,"features":["exports","scim","audit_export"]}]}
+//
+// Downgrade consequences beyond a tightened limit or a lost feature are code
+// (RegisterConsequence); they have no configuration.
+type Config struct {
+	Limits   []LimitSpec   `json:"limits,omitempty"`
+	Features []FeatureSpec `json:"features,omitempty"`
+	Bands    []BandSpec    `json:"bands,omitempty"`
+}
+
+// ParseConfig reads PLANS' value; empty is nothing. A field it does not
+// know, or a limit or feature with no key or a repeated one, is refused.
+// The ladder is checked by Load, against what the registry holds.
+func ParseConfig(s string) (Config, error) {
+	var c Config
+	if strings.TrimSpace(s) == "" {
+		return c, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&c); err != nil {
+		return Config{}, fmt.Errorf("plan: plans: %w", err)
+	}
+	limits := map[Limit]bool{}
+	for _, l := range c.Limits {
+		if l.Key == "" || limits[l.Key] {
+			return Config{}, fmt.Errorf("plan: limit %q is empty or repeated", l.Key)
+		}
+		limits[l.Key] = true
+	}
+	features := map[Feature]bool{}
+	for _, f := range c.Features {
+		if f.Key == "" || features[f.Key] {
+			return Config{}, fmt.Errorf("plan: feature %q is empty or repeated", f.Key)
+		}
+		features[f.Key] = true
+	}
+	if c.Bands != nil && len(c.Bands) == 0 {
+		return Config{}, errors.New("plan: a ladder needs at least one band")
+	}
+	return c, nil
+}
+
+// Load registers PLANS' value in r: its limits and features, then its
+// ladder when it has one. The ladder is checked as SetBands checks it,
+// before anything changes, so a bad value is an error at start and leaves
+// r as it was.
+func (r *Registry) Load(s string) error {
+	c, err := ParseConfig(s)
+	if err != nil {
+		return err
+	}
+	if len(c.Bands) > 0 {
+		limits, features := map[Limit]bool{}, map[Feature]bool{}
+		for _, l := range c.Limits {
+			limits[l.Key] = true
+		}
+		for _, f := range c.Features {
+			features[f.Key] = true
+		}
+		r.mu.RLock()
+		err := r.checkBands(c.Bands, limits, features)
+		r.mu.RUnlock()
+		if err != nil {
+			return err
+		}
+	}
+	for _, l := range c.Limits {
+		r.RegisterLimit(l)
+	}
+	for _, f := range c.Features {
+		r.RegisterFeature(f)
+	}
+	if len(c.Bands) > 0 {
+		r.SetBands(c.Bands)
+	}
+	return nil
+}

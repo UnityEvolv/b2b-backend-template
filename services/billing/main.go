@@ -28,6 +28,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/billing/internal/provider"
 	"github.com/UnityEvolv/b2b-backend-template/services/billing/internal/server"
@@ -94,6 +95,11 @@ func run() error {
 	// accepted here.
 	if err := dataowner.Default.Load(env.String("DATA_OWNERS", "")); err != nil {
 		return fmt.Errorf("DATA_OWNERS: %w", err)
+	}
+	// A product's plan ladder, limits and features, when it runs this service
+	// unchanged (pkg/plan, docs/plans.md); the template's own ladder without.
+	if err := plan.Default.Load(env.String("PLANS", "")); err != nil {
+		return fmt.Errorf("PLANS: %w", err)
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {

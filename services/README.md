@@ -114,6 +114,7 @@ configuration:
 
 | setting | read by | what |
 |---|---|---|
+| `PLANS` | organization, user, billing | the product's plan ladder, limits and features, JSON ([docs/plans.md](../docs/plans.md)) |
 | `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
 | `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
 | `NOTIFICATION_CATEGORIES` | notification | the product's notification categories, JSON ([docs/notifications.md](../docs/notifications.md)) |

@@ -44,6 +44,41 @@ plan.Default.SetBands([]plan.BandSpec{
 })
 ```
 
+A product that runs the template's services unchanged declares the same
+through `PLANS`, JSON, set on every service that reads plans (organization,
+user and billing). Each loads it at start into `plan.Default`
+(`plan.Default.Load`), with the checks the code path makes: an unknown field,
+a repeated band, limit or feature, an empty ladder, a negative cap, or a band
+naming a limit or feature that is not registered fails start and names the
+setting.
+
+```sh
+PLANS='{"limits":[{"key":"projects","label":"projects"}],
+  "features":[{"key":"exports","label":"scheduled exports","lost_code":"exports_stop","lost_message":"Scheduled exports stop; the files already made stay."}],
+  "bands":[{"name":"starter","label":"Starter","limits":{"users":3,"projects":2}},
+           {"name":"pro","limits":{"users":30,"projects":20},"features":["exports"]},
+           {"name":"scale","contractual":true,"features":["exports","scim"]}]}'
+```
+
+- `limits` (`key`, `label`) and `features` (`key`, `label`, `lost_code`,
+  `lost_message`) are registered beside the template's own (`users`; `scim`,
+  `audit_export`, `customer_hosted_data_plane`), replacing one with the same
+  key.
+- `bands` (`name`, `label`, `contractual`, `limits` by key, `features`),
+  lowest first, replaces the ladder. Without it the template's ladder stays,
+  and a new limit is unlimited on every band.
+- Downgrade consequences beyond a tightened limit or a lost feature are code
+  (`RegisterConsequence`); they have no configuration.
+
+`plan.ParseConfig` reads the value; `plan.Config` marshals to it, so a product
+renders the setting from the same values its own processes register (as
+[examples/projects](../examples/projects/product/product.go) does).
+
+Every band, limit and feature has a label. One given none is called by its
+name or key, humanized: band `team-50` is "Team 50", feature `audit_export`
+is "audit export". A limit's label is the plural noun a refusal uses
+("users"), a feature's what a refusal calls it ("SCIM provisioning").
+
 - Bands are ordered, lowest first. A new org starts on the lowest; a lapsed
   subscription lands there. `Contractual` marks a band sold by contract:
   invoiced, never moved by billing, and the one on which a platform operator

@@ -144,3 +144,132 @@ func TestDowngradeChecklistNeverDeletes(t *testing.T) {
 		t.Errorf("business to team: %v", list)
 	}
 }
+
+// A product running the template's services unchanged declares its ladder,
+// limits and features in PLANS, and gets exactly what the code path gives:
+// labels, caps, refusals and the checklist.
+func TestPlansFromConfiguration(t *testing.T) {
+	r := plan.New()
+	err := r.Load(`{
+		"limits":[{"key":"projects","label":"projects"},{"key":"storage_gb"}],
+		"features":[{"key":"exports","label":"scheduled exports","lost_code":"exports_stop","lost_message":"Scheduled exports stop."}],
+		"bands":[
+			{"name":"starter","limits":{"users":3,"projects":2,"storage_gb":1}},
+			{"name":"pro-30","label":"Pro","limits":{"users":30,"projects":20},"features":["exports"]},
+			{"name":"scale","contractual":true,"features":["exports","scim"]}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Bands(); len(got) != 3 || got[0] != "starter" || r.Lowest() != "starter" || !r.Contractual("scale") {
+		t.Errorf("ladder %v", got)
+	}
+	labels := map[plan.Band]string{}
+	for _, b := range r.Ladder() {
+		labels[b.Name] = b.Label
+	}
+	if labels["starter"] != "Starter" || labels["pro-30"] != "Pro" || labels["scale"] != "Scale" {
+		t.Errorf("band labels %v", labels)
+	}
+	limitLabels := map[plan.Limit]string{}
+	for _, l := range r.Limits() {
+		limitLabels[l.Key] = l.Label
+	}
+	if limitLabels["users"] != "users" || limitLabels["projects"] != "projects" || limitLabels["storage_gb"] != "storage gb" {
+		t.Errorf("limit labels %v", limitLabels)
+	}
+	for _, f := range r.Features() {
+		if f.Label == "" {
+			t.Errorf("feature %s has no label", f.Key)
+		}
+	}
+	ref, ok := plan.AsRefusal(r.CheckLimit("starter", "projects", 2))
+	if !ok || ref.Required != "pro-30" || !strings.Contains(ref.Message, "2 projects") {
+		t.Errorf("third project: %+v", ref)
+	}
+	if ref, _ := plan.AsRefusal(r.CheckFeature("starter", "exports")); ref == nil || ref.Required != "pro-30" {
+		t.Errorf("exports on starter: %+v", ref)
+	}
+	codes := map[string]bool{}
+	for _, c := range r.Downgrade("pro-30", "starter") {
+		codes[c.Code] = true
+	}
+	if !codes["projects_over_cap_kept"] || !codes["exports_stop"] {
+		t.Errorf("checklist %v", codes)
+	}
+
+	// Limits and features alone keep the ladder; empty is nothing.
+	keep := plan.New()
+	keep.SetBands(plan.DefaultBands())
+	if err := keep.Load(`{"limits":[{"key":"seats"}]}`); err != nil || len(keep.Bands()) != 4 || keep.For("free").Cap("seats") != plan.Unlimited {
+		t.Errorf("limits only: %v %v", err, keep.Bands())
+	}
+	if err := keep.Load(""); err != nil {
+		t.Error(err)
+	}
+}
+
+// PLANS is checked as code registration is, and a bad value changes nothing.
+func TestPlansConfigurationIsChecked(t *testing.T) {
+	for name, s := range map[string]string{
+		"not json":            `[`,
+		"unknown field":       `{"tiers":[]}`,
+		"unknown band field":  `{"bands":[{"name":"a","price":3}]}`,
+		"empty ladder":        `{"bands":[]}`,
+		"repeated band":       `{"bands":[{"name":"a"},{"name":"a"}]}`,
+		"unnamed band":        `{"bands":[{"label":"A"}]}`,
+		"unregistered limit":  `{"bands":[{"name":"a","limits":{"widgets":1}}]}`,
+		"unregistered feat":   `{"bands":[{"name":"a","features":["warp"]}]}`,
+		"negative cap":        `{"bands":[{"name":"a","limits":{"users":-1}}]}`,
+		"limit with no key":   `{"limits":[{"label":"x"}]}`,
+		"repeated feature":    `{"features":[{"key":"x"},{"key":"x"}]}`,
+		"limit then bad band": `{"limits":[{"key":"projects"}],"bands":[{"name":"a","limits":{"widgets":1}}]}`,
+	} {
+		r := plan.New()
+		r.SetBands(plan.DefaultBands())
+		if err := r.Load(s); err == nil {
+			t.Errorf("%s: loaded", name)
+		}
+		if len(r.Bands()) != 4 || len(r.Limits()) != 1 {
+			t.Errorf("%s: the registry changed: %v %v", name, r.Bands(), r.Limits())
+		}
+	}
+	// The code path panics on the same mistakes.
+	for name, bands := range map[string][]plan.BandSpec{
+		"empty":        {},
+		"negative cap": {{Name: "a", Limits: map[plan.Limit]int{plan.Users: -1}}},
+		"unregistered": {{Name: "a", Features: []plan.Feature{"warp"}}},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: SetBands did not panic", name)
+				}
+			}()
+			plan.New().SetBands(bands)
+		}()
+	}
+}
+
+// Every default band has a label, and the registry keeps its own copy of
+// what it is given.
+func TestBandLabelsAndCopies(t *testing.T) {
+	for _, b := range plan.Ladder() {
+		if b.Label == "" || b.Label[:1] != strings.ToUpper(b.Label[:1]) {
+			t.Errorf("%s: label %q", b.Name, b.Label)
+		}
+	}
+	if plan.Humanize("team-50") != "Team 50" || plan.Humanize("audit_export") != "Audit export" {
+		t.Error("humanize")
+	}
+	r := plan.New()
+	bands := []plan.BandSpec{{Name: "a", Limits: map[plan.Limit]int{plan.Users: 3}}}
+	r.SetBands(bands)
+	bands[0].Limits[plan.Users] = 99
+	r.Ladder()[0].Limits[plan.Users] = 98
+	if r.For("a").Cap(plan.Users) != 3 {
+		t.Error("the registry shares its maps")
+	}
+	if d := r.Describe("a"); d.Label != "A" {
+		t.Errorf("described %+v", d)
+	}
+}

@@ -68,7 +68,7 @@ template service to add to it.
 | seam | registry | configuration |
 |---|---|---|
 | its own services, schemas and migrations | `pkg/db.Default` | the product's own `dbinit` and `migrate` (`pkg/db/dbcmd`) |
-| plan bands, limit keys and features | `pkg/plan` | |
+| plan bands, limit keys and features, with labels | `pkg/plan.Default` | `PLANS` |
 | permission groups | `pkg/authz.Default` | `PERMISSION_GROUPS` |
 | services that hold org or member data (export, purge, erase, decrypt) | `pkg/dataowner.Default` | `DATA_OWNERS` |
 | notification categories, with their copy and default channels | `pkg/notifycat.Default` | `NOTIFICATION_CATEGORIES` |

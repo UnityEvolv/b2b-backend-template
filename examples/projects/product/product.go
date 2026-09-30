@@ -6,8 +6,8 @@
 // Some of it is registered in this product's own processes (Register, and
 // the package variables below). The rest is for the template's services,
 // which run unchanged and learn it from their configuration: Env renders
-// PERMISSION_GROUPS, NOTIFICATION_CATEGORIES and DATA_OWNERS from the same
-// values, so what a deployment sets is exactly what the code declares. A
+// PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES and DATA_OWNERS from the
+// same values, so what a deployment sets is exactly what the code declares. A
 // product that builds its own copy of one of those services registers the
 // same values in code instead (authz.Default.Register(PermissionGroup), and
 // so on).
@@ -39,6 +39,10 @@ var Service = db.Service{Name: Name, Schema: "projects", Migrations: migrations.
 
 // Projects is the plan limit: how many projects an org may have.
 const Projects plan.Limit = "projects"
+
+// ProjectsLimit is the limit as the registry lists it, with the plural noun
+// a refusal and the plans page use.
+var ProjectsLimit = plan.LimitSpec{Key: Projects, Label: "projects"}
 
 // Caps is the projects cap on each band of the template's ladder. A band
 // left out (enterprise) has no cap.
@@ -100,7 +104,7 @@ var once sync.Once
 func Register() {
 	once.Do(func() {
 		db.Default.Register(Service)
-		plan.Default.RegisterLimit(plan.LimitSpec{Key: Projects, Label: "projects"})
+		plan.Default.RegisterLimit(ProjectsLimit)
 		plan.Default.SetBands(Bands())
 		livebus.Default.Register(SharedEvent, "A project was shared with someone.")
 	})
@@ -122,6 +126,13 @@ func Bands() []plan.BandSpec {
 	return bands
 }
 
+// Plans is the plan configuration: the projects limit, and the template's
+// ladder with the projects cap on each band. The template's services read it
+// from PLANS; this product's own processes register the same in Register.
+func Plans() plan.Config {
+	return plan.Config{Limits: []plan.LimitSpec{ProjectsLimit}, Bands: Bands()}
+}
+
 // Env is the configuration the template's services need to know this
 // product: the setting's name and its JSON value, from the values above.
 // PROJECTS_URL, the service's own address, is the deployment's.
@@ -136,6 +147,7 @@ func Env() map[string]string {
 		"quiet_hours": SharedCategory.QuietHours, "batched": SharedCategory.Batched, "copy": SharedCategory.Copy,
 	}
 	return map[string]string{
+		"PLANS":                   mustJSON(Plans()),
 		"PERMISSION_GROUPS":       mustJSON([]any{group}),
 		"NOTIFICATION_CATEGORIES": mustJSON([]any{category}),
 		"DATA_OWNERS":             mustJSON([]dataowner.Owner{Owner}),

@@ -2,9 +2,9 @@
 // services, built from this repository and run unchanged as processes, each
 // configured the way a deployment configures it: the product's permission
 // group in PERMISSION_GROUPS, its notification category in
-// NOTIFICATION_CATEGORIES, its data owner entry in DATA_OWNERS, all rendered
-// from package product. Nothing is faked: a seam that did not hold would
-// fail here.
+// NOTIFICATION_CATEGORIES, its data owner entry in DATA_OWNERS, its plan
+// limit and ladder in PLANS, all rendered from package product. Nothing is
+// faked: a seam that did not hold would fail here.
 //
 // The template's services cannot be imported from here (their packages
 // are internal to each service, and a product never imports a service), so
@@ -158,7 +158,8 @@ func newStack(t *testing.T) *stack {
 	}
 	// What a deployment sets for the product, from the product's own
 	// declarations: DATA_OWNERS on every service, the permission group on the
-	// authorization service, the category on the notification service.
+	// authorization service, the category on the notification service, the
+	// ladder with its projects caps on every service that reads plans.
 	productEnv := product.Env()
 	env["DATA_OWNERS"] = productEnv["DATA_OWNERS"]
 	for _, p := range s.procs {
@@ -168,6 +169,8 @@ func newStack(t *testing.T) *stack {
 			mine["PERMISSION_GROUPS"] = productEnv["PERMISSION_GROUPS"]
 		case "notification":
 			mine["NOTIFICATION_CATEGORIES"] = productEnv["NOTIFICATION_CATEGORIES"]
+		case "organization", "user", "billing":
+			mine["PLANS"] = productEnv["PLANS"]
 		}
 		p.env = os.Environ()
 		for k, v := range env {

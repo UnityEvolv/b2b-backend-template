@@ -38,6 +38,21 @@ func TestTheEnvIsTheCode(t *testing.T) {
 	if err != nil || len(owners) != 1 || owners[0] != product.Owner {
 		t.Errorf("DATA_OWNERS parses to %+v (%v), want %+v", owners, err, product.Owner)
 	}
+	plans, err := plan.ParseConfig(env["PLANS"])
+	if err != nil || !reflect.DeepEqual(plans, product.Plans()) {
+		t.Errorf("PLANS parses to %+v (%v), want %+v", plans, err, product.Plans())
+	}
+	// Loaded as the organization, user and billing services load it, it is
+	// the ladder the product's own process registers.
+	loaded := plan.New()
+	if err := loaded.Load(env["PLANS"]); err != nil {
+		t.Fatalf("PLANS: %v", err)
+	}
+	for _, b := range product.Bands() {
+		if got := loaded.Describe(b.Name); got.Limits[string(product.Projects)] != b.Cap(product.Projects) || got.Limits["users"] != b.Cap(plan.Users) {
+			t.Errorf("%s from PLANS: %+v", b.Name, got)
+		}
+	}
 	if product.Owner.URLVar() != "PROJECTS_URL" {
 		t.Errorf("its URL is read from %s", product.Owner.URLVar())
 	}

@@ -79,6 +79,10 @@ template service to add to it.
 A registry refuses a malformed or repeated entry by panicking at start, so a
 mistake never reaches a request.
 
+[examples/projects](examples/projects/README.md) is a small product that uses
+every one of these seams and nothing else. Deleting `examples/` leaves the
+template as it was; `scripts/without-examples.sh` proves it in CI.
+
 ### Services
 
 - One service per directory, owning one Postgres schema and one login role.

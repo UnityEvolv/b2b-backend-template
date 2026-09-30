@@ -97,6 +97,20 @@ jobs:
             exit 1
           fi
 
+  # Nothing in the template depends on examples/: a copy of the tree without
+  # it builds, vets and tests on its own, and needs no module the example
+  # alone brought in.
+  without-examples:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: bash scripts/without-examples.sh
+
   # Syntax, expressions and the shell in every run step.
   actionlint:
     if: ${{ !github.event.pull_request.draft }}

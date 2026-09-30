@@ -47,7 +47,7 @@ func rule(r ratelimit.Rule) ratelimit.Rule {
 
 func TestAllowsTheLimitThenRefuses(t *testing.T) {
 	l := limiter(t)
-	r := rule(ratelimit.Rule{Name: "burst", Limit: 5, Window: time.Second})
+	r := rule(ratelimit.Rule{Name: "burst", Limit: 5, Window: 5 * time.Second})
 	ctx := context.Background()
 
 	for i := range 5 {
@@ -63,28 +63,50 @@ func TestAllowsTheLimitThenRefuses(t *testing.T) {
 	if err != nil || v.Allowed {
 		t.Fatalf("sixth: %+v %v", v, err)
 	}
-	// One request refills every window/limit = 200ms.
-	if v.RetryAfter <= 0 || v.RetryAfter > 200*time.Millisecond {
-		t.Fatalf("retry after %v, want (0, 200ms]", v.RetryAfter)
+	// One request refills every window/limit = 1s: long enough that the
+	// burst above cannot outlast it on a loaded machine.
+	if v.RetryAfter <= 0 || v.RetryAfter > time.Second {
+		t.Fatalf("retry after %v, want (0, 1s]", v.RetryAfter)
 	}
 }
 
+// A drained bucket earns one request back per interval (window/limit), no
+// sooner and no more. The interval is two seconds, so a loaded machine's
+// pauses cannot pass for a refill, and the wait is the one the limiter
+// reports rather than a guess: a second refill is only an error when too
+// little time went by to have earned it.
 func TestRefillsSmoothly(t *testing.T) {
 	l := limiter(t)
-	r := rule(ratelimit.Rule{Name: "refill", Limit: 5, Window: 500 * time.Millisecond})
+	const interval = 2 * time.Second
+	r := rule(ratelimit.Rule{Name: "refill", Limit: 5, Window: 5 * interval})
 	ctx := context.Background()
-	for range 5 {
-		_, _ = l.Take(ctx, r, "k")
+	start := time.Now()
+	for i := range 5 {
+		if v, err := l.Take(ctx, r, "k"); err != nil || !v.Allowed {
+			t.Fatalf("request %d of the burst: %+v %v", i+1, v, err)
+		}
 	}
-	if v, _ := l.Take(ctx, r, "k"); v.Allowed {
-		t.Fatal("allowed past the limit")
+	at := time.Now()
+	refused, err := l.Take(ctx, r, "k")
+	if err != nil {
+		t.Fatal(err)
 	}
-	time.Sleep(130 * time.Millisecond) // one interval is 100ms
+	if refused.Allowed {
+		t.Fatalf("allowed past the limit, %v after the burst began", time.Since(start))
+	}
+	// The wait is at most one interval: the first request spent is the
+	// first one earned back.
+	if refused.RetryAfter <= 0 || refused.RetryAfter > interval {
+		t.Fatalf("retry after %v, want (0, %v]", refused.RetryAfter, interval)
+	}
+	time.Sleep(refused.RetryAfter + 50*time.Millisecond)
 	if v, _ := l.Take(ctx, r, "k"); !v.Allowed {
-		t.Fatal("no refill after one interval")
+		t.Fatalf("no refill after the %v it said to wait", refused.RetryAfter)
 	}
-	if v, _ := l.Take(ctx, r, "k"); v.Allowed {
-		t.Fatal("refilled more than one")
+	if v, _ := l.Take(ctx, r, "k"); v.Allowed && time.Since(at) < refused.RetryAfter+interval {
+		// at is before the refusal, so this is the most time that can
+		// have gone by since it: too little to earn two.
+		t.Fatalf("refilled two in %v, less than the time two take", time.Since(at))
 	}
 }
 
@@ -132,7 +154,9 @@ func TestProductRuleIsEnforced(t *testing.T) {
 
 	l := limiter(t)
 	r := ratelimit.NewRegistry()
-	projectCreate := r.Register(rule(ratelimit.Rule{Name: "project-create", Limit: 10, Window: 10 * time.Second}), ratelimit.PerMembership)
+	// Ten in ten minutes refills one a minute: the flood below cannot take
+	// that long however loaded the machine, so exactly ten get through.
+	projectCreate := r.Register(rule(ratelimit.Rule{Name: "project-create", Limit: 10, Window: 10 * time.Minute}), ratelimit.PerMembership)
 	if got, ok := r.Lookup(projectCreate.Rule.Name); !ok || got.Per != ratelimit.PerMembership || got.Limit != 10 {
 		t.Errorf("lookup: %+v %v", got, ok)
 	}

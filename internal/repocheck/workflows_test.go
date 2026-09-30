@@ -3,6 +3,7 @@ package repocheck
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -214,6 +215,30 @@ func TestCheckWorkflowCatchesWhatIsNotForkSafe(t *testing.T) {
 	for _, c := range cases {
 		if got := checkWorkflow("a.yml", parse(c.src)); len(got) != c.problems {
 			t.Errorf("%s: %d problems, want %d: %v", c.name, len(got), c.problems, got)
+		}
+	}
+}
+
+// Every shell script git tracks is executable in the index, which is the
+// mode a checkout gives it: CI runs scripts/generate.sh by its path, and a
+// script committed from a filesystem that does not keep the bit (Windows)
+// fails there with "permission denied". Fix one with
+// git update-index --chmod=+x <path>.
+func TestScriptsAreExecutable(t *testing.T) {
+	cmd := exec.Command("git", "ls-files", "-s", "-z", "--", "*.sh")
+	cmd.Dir = repoRoot(t)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("not a git checkout: %v", err)
+	}
+	for _, entry := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
+		if entry == "" {
+			continue
+		}
+		mode, rest, _ := strings.Cut(entry, " ")
+		_, path, _ := strings.Cut(rest, "\t")
+		if mode != "100755" {
+			t.Errorf("%s is tracked as %s, not executable; run git update-index --chmod=+x %s", path, mode, path)
 		}
 	}
 }

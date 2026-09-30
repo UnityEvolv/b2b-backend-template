@@ -79,7 +79,7 @@ func (e InviteStatus) Valid() bool {
 // Defines values for InviteAcceptedNext.
 const (
 	SignIn      InviteAcceptedNext = "sign_in"
-	SignInEntra InviteAcceptedNext = "sign_in_entra"
+	SignInSso   InviteAcceptedNext = "sign_in_sso"
 	VerifyEmail InviteAcceptedNext = "verify_email"
 )
 
@@ -88,7 +88,7 @@ func (e InviteAcceptedNext) Valid() bool {
 	switch e {
 	case SignIn:
 		return true
-	case SignInEntra:
+	case SignInSso:
 		return true
 	case VerifyEmail:
 		return true
@@ -109,21 +109,6 @@ func (e MfaChallengeMfa) Valid() bool {
 	case Challenge:
 		return true
 	case Enroll:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for NewIdentityProviderType.
-const (
-	NewIdentityProviderTypeEntra NewIdentityProviderType = "entra"
-)
-
-// Valid indicates whether the value is a known member of the NewIdentityProviderType enum.
-func (e NewIdentityProviderType) Valid() bool {
-	switch e {
-	case NewIdentityProviderTypeEntra:
 		return true
 	default:
 		return false
@@ -195,16 +180,16 @@ func (e ListInvitesParamsStatus) Valid() bool {
 
 // Defines values for SignInMethods200JSONResponseBodyMethod.
 const (
-	SignInMethods200JSONResponseBodyMethodEntra SignInMethods200JSONResponseBodyMethod = "entra"
-	SignInMethods200JSONResponseBodyMethodLocal SignInMethods200JSONResponseBodyMethod = "local"
+	Local SignInMethods200JSONResponseBodyMethod = "local"
+	Sso   SignInMethods200JSONResponseBodyMethod = "sso"
 )
 
 // Valid indicates whether the value is a known member of the SignInMethods200JSONResponseBodyMethod enum.
 func (e SignInMethods200JSONResponseBodyMethod) Valid() bool {
 	switch e {
-	case SignInMethods200JSONResponseBodyMethodEntra:
+	case Local:
 		return true
-	case SignInMethods200JSONResponseBodyMethodLocal:
+	case Sso:
 		return true
 	default:
 		return false
@@ -300,20 +285,81 @@ type Error struct {
 
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
-	ClientId string             `json:"client_id"`
-	Issuer   string             `json:"issuer"`
-	OrgId    openapi_types.UUID `json:"org_id"`
+	ClientId string `json:"client_id"`
 
-	// RedirectUri What to register on the app registration as the redirect URI.
-	RedirectUri string                 `json:"redirect_uri"`
-	Status      IdentityProviderStatus `json:"status"`
-	TenantId    string                 `json:"tenant_id"`
-	Type        string                 `json:"type"`
-	VerifiedAt  *time.Time             `json:"verified_at,omitempty"`
+	// ClientSecretSet A secret is stored. The secret itself is never returned.
+	ClientSecretSet bool   `json:"client_secret_set"`
+	EmailClaim      string `json:"email_claim"`
+
+	// HostedDomain google only.
+	HostedDomain *string `json:"hosted_domain,omitempty"`
+
+	// Issuer The issuer as its discovery document names it.
+	Issuer    string             `json:"issuer"`
+	NameClaim string             `json:"name_claim"`
+	OrgId     openapi_types.UUID `json:"org_id"`
+
+	// Preset `entra`, `google` or `generic`.
+	Preset string `json:"preset"`
+
+	// RedirectUri What to register with the provider as the redirect URI.
+	RedirectUri          string                 `json:"redirect_uri"`
+	RequireEmailVerified bool                   `json:"require_email_verified"`
+	Scopes               []string               `json:"scopes"`
+	Status               IdentityProviderStatus `json:"status"`
+
+	// TenantId entra only.
+	TenantId *string `json:"tenant_id,omitempty"`
+
+	// VerifiedAt When the settings last passed the test before saving.
+	VerifiedAt *time.Time `json:"verified_at,omitempty"`
 }
 
 // IdentityProviderStatus defines model for IdentityProvider.Status.
 type IdentityProviderStatus string
+
+// IdentityProviderCheck defines model for IdentityProviderCheck.
+type IdentityProviderCheck struct {
+	// Check `discovery`, `issuer`, `keys` or `client`.
+	Check string `json:"check"`
+
+	// Field When it failed, the input to fix (issuer, tenant_id, client_id, client_secret).
+	Field *string `json:"field,omitempty"`
+
+	// Message A sentence for the admin. Never a secret or a token.
+	Message string `json:"message"`
+	Ok      bool   `json:"ok"`
+}
+
+// IdentityProviderPreset defines model for IdentityProviderPreset.
+type IdentityProviderPreset struct {
+	EmailClaim string `json:"email_claim"`
+
+	// Fields The inputs the preset asks for besides the client id and secret.
+	Fields []string `json:"fields"`
+
+	// Issuer The issuer the preset uses: `{tenant_id}` stands for Entra's tenant; empty for generic, which asks for it.
+	Issuer               string   `json:"issuer"`
+	NameClaim            string   `json:"name_claim"`
+	Preset               string   `json:"preset"`
+	RequireEmailVerified bool     `json:"require_email_verified"`
+	Scopes               []string `json:"scopes"`
+}
+
+// IdentityProviderTest defines model for IdentityProviderTest.
+type IdentityProviderTest struct {
+	// Checks In order; a check after a failed one is not run and not listed.
+	Checks []IdentityProviderCheck `json:"checks"`
+
+	// Issuer The issuer the discovery document named, once it was fetched.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// Ok Every check passed; a save with these settings would be accepted.
+	Ok bool `json:"ok"`
+
+	// RedirectUri What to register with the provider as the redirect URI.
+	RedirectUri string `json:"redirect_uri"`
+}
 
 // Invite defines model for Invite.
 type Invite struct {
@@ -336,7 +382,7 @@ type InviteStatus string
 type InviteAccepted struct {
 	MembershipId openapi_types.UUID `json:"membership_id"`
 
-	// Next sign_in_entra: the organization's identity provider signs the person in.
+	// Next sign_in_sso: the organization's identity provider signs the person in.
 	// verify_email: a verification link was sent; verify, then set a password.
 	// sign_in: the person already has a password; sign in with it.
 	Next   InviteAcceptedNext `json:"next"`
@@ -344,7 +390,7 @@ type InviteAccepted struct {
 	UserId openapi_types.UUID `json:"user_id"`
 }
 
-// InviteAcceptedNext sign_in_entra: the organization's identity provider signs the person in.
+// InviteAcceptedNext sign_in_sso: the organization's identity provider signs the person in.
 // verify_email: a verification link was sent; verify, then set a password.
 // sign_in: the person already has a password; sign in with it.
 type InviteAcceptedNext string
@@ -405,18 +451,42 @@ type MfaStatus struct {
 	Required bool `json:"required"`
 }
 
-// NewIdentityProvider defines model for NewIdentityProvider.
+// NewIdentityProvider An OpenID Connect provider. The preset fills in what is left out:
+// see `GET /v1/identity-provider-presets` and docs/sso.md.
 type NewIdentityProvider struct {
-	ClientId     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
+	ClientId string `json:"client_id"`
 
-	// TenantId The Entra tenant id (a GUID) or verified domain.
-	TenantId string                  `json:"tenant_id"`
-	Type     NewIdentityProviderType `json:"type"`
+	// ClientSecret Required the first time; left out on a change, the stored secret is kept, but only while the preset, issuer (tenant, hosted domain) and client id stay the same.
+	ClientSecret *string `json:"client_secret,omitempty"`
+
+	// EmailClaim The identity-token claim the address is read from. The preset's when left out.
+	EmailClaim *string `json:"email_claim,omitempty"`
+
+	// HostedDomain google only (required there): the Workspace domain; identity tokens must carry it in hd.
+	HostedDomain *string `json:"hosted_domain,omitempty"`
+
+	// Issuer generic only (required there): the issuer URL, whose
+	// `/.well-known/openid-configuration` is the discovery document.
+	// https, except where the deployment allows plain http (a laptop).
+	// Left out for entra and google, whose issuer the preset derives.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// NameClaim The claim the display name is read from. The preset's when left out.
+	NameClaim *string `json:"name_claim,omitempty"`
+
+	// Preset `entra`, `google` or `generic`; checked by the server.
+	Preset string `json:"preset"`
+
+	// RequireEmailVerified Refuse a token that does not say email_verified=true. A token that
+	// says false is refused either way. The preset's when left out.
+	RequireEmailVerified *bool `json:"require_email_verified,omitempty"`
+
+	// Scopes The scopes asked for; must include openid. The preset's when left out.
+	Scopes *[]string `json:"scopes,omitempty"`
+
+	// TenantId entra only (required there): the tenant id (a GUID) or a verified domain. Not common, organizations or consumers.
+	TenantId *string `json:"tenant_id,omitempty"`
 }
-
-// NewIdentityProviderType defines model for NewIdentityProvider.Type.
-type NewIdentityProviderType string
 
 // NewInternalInvite defines model for NewInternalInvite.
 type NewInternalInvite struct {
@@ -786,6 +856,9 @@ type ConfirmTotpJSONRequestBody ConfirmTotpJSONBody
 // SetIdentityProviderJSONRequestBody defines body for SetIdentityProvider for application/json ContentType.
 type SetIdentityProviderJSONRequestBody = NewIdentityProvider
 
+// TestIdentityProviderJSONRequestBody defines body for TestIdentityProvider for application/json ContentType.
+type TestIdentityProviderJSONRequestBody = NewIdentityProvider
+
 // CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
 type CreateInviteJSONRequestBody = NewInvite
 
@@ -827,6 +900,9 @@ type ServerInterface interface {
 	// VerifyEmail Prove ownership of an email address
 	// (POST /v1/email-verification/verify)
 	VerifyEmail(w http.ResponseWriter, r *http.Request)
+	// ListIdentityProviderPresets The presets a provider is filled in from
+	// (GET /v1/identity-provider-presets)
+	ListIdentityProviderPresets(w http.ResponseWriter, r *http.Request)
 	// CreateInternalInvite An invite made by another service (services only)
 	// (POST /v1/internal/invites)
 	CreateInternalInvite(w http.ResponseWriter, r *http.Request, params CreateInternalInviteParams)
@@ -896,6 +972,9 @@ type ServerInterface interface {
 	// SetIdentityProvider Configure the organization's identity provider
 	// (PUT /v1/organizations/{org_id}/identity-provider)
 	SetIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// TestIdentityProvider Test identity provider settings without saving them
+	// (POST /v1/organizations/{org_id}/identity-provider/test)
+	TestIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// ListInvites The organization's invites
 	// (GET /v1/organizations/{org_id}/invites)
 	ListInvites(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListInvitesParams)
@@ -1026,6 +1105,20 @@ func (siw *ServerInterfaceWrapper) VerifyEmail(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyEmail(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIdentityProviderPresets operation middleware
+func (siw *ServerInterfaceWrapper) ListIdentityProviderPresets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIdentityProviderPresets(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1523,6 +1616,32 @@ func (siw *ServerInterfaceWrapper) SetIdentityProvider(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetIdentityProvider(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestIdentityProvider operation middleware
+func (siw *ServerInterfaceWrapper) TestIdentityProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestIdentityProvider(w, r, orgId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2416,6 +2535,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/session/sign-out", wrapper.SignOut)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider", wrapper.GetIdentityProvider)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider", wrapper.SetIdentityProvider)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider/test", wrapper.TestIdentityProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/identity-provider-presets", wrapper.ListIdentityProviderPresets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sessions", wrapper.RevokeOtherSessions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sessions", wrapper.ListSessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sessions/{session_id}", wrapper.RevokeSession)
@@ -2695,6 +2816,60 @@ type VerifyEmaildefaultJSONResponse struct {
 }
 
 func (response VerifyEmaildefaultJSONResponse) VisitVerifyEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIdentityProviderPresetsRequestObject struct {
+}
+
+type ListIdentityProviderPresetsResponseObject interface {
+	VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error
+}
+
+type ListIdentityProviderPresets200JSONResponse struct {
+	Presets []IdentityProviderPreset `json:"presets"`
+}
+
+func (response ListIdentityProviderPresets200JSONResponse) VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIdentityProviderPresets401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListIdentityProviderPresets401JSONResponse) VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIdentityProviderPresetsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListIdentityProviderPresetsdefaultJSONResponse) VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4305,6 +4480,88 @@ type SetIdentityProviderdefaultJSONResponse struct {
 }
 
 func (response SetIdentityProviderdefaultJSONResponse) VisitSetIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestIdentityProviderRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *TestIdentityProviderJSONRequestBody
+}
+
+type TestIdentityProviderResponseObject interface {
+	VisitTestIdentityProviderResponse(w http.ResponseWriter) error
+}
+
+type TestIdentityProvider200JSONResponse IdentityProviderTest
+
+func (response TestIdentityProvider200JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestIdentityProvider400JSONResponse struct{ ErrorJSONResponse }
+
+func (response TestIdentityProvider400JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestIdentityProvider401JSONResponse Error
+
+func (response TestIdentityProvider401JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestIdentityProvider403JSONResponse Error
+
+func (response TestIdentityProvider403JSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestIdentityProviderdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response TestIdentityProviderdefaultJSONResponse) VisitTestIdentityProviderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5991,6 +6248,9 @@ type StrictServerInterface interface {
 	// VerifyEmail Prove ownership of an email address
 	// (POST /v1/email-verification/verify)
 	VerifyEmail(ctx context.Context, request VerifyEmailRequestObject) (VerifyEmailResponseObject, error)
+	// ListIdentityProviderPresets The presets a provider is filled in from
+	// (GET /v1/identity-provider-presets)
+	ListIdentityProviderPresets(ctx context.Context, request ListIdentityProviderPresetsRequestObject) (ListIdentityProviderPresetsResponseObject, error)
 	// CreateInternalInvite An invite made by another service (services only)
 	// (POST /v1/internal/invites)
 	CreateInternalInvite(ctx context.Context, request CreateInternalInviteRequestObject) (CreateInternalInviteResponseObject, error)
@@ -6060,6 +6320,9 @@ type StrictServerInterface interface {
 	// SetIdentityProvider Configure the organization's identity provider
 	// (PUT /v1/organizations/{org_id}/identity-provider)
 	SetIdentityProvider(ctx context.Context, request SetIdentityProviderRequestObject) (SetIdentityProviderResponseObject, error)
+	// TestIdentityProvider Test identity provider settings without saving them
+	// (POST /v1/organizations/{org_id}/identity-provider/test)
+	TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error)
 	// ListInvites The organization's invites
 	// (GET /v1/organizations/{org_id}/invites)
 	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
@@ -6290,6 +6553,30 @@ func (sh *strictHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(VerifyEmailResponseObject); ok {
 		if err := validResponse.VisitVerifyEmailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListIdentityProviderPresets operation middleware
+func (sh *strictHandler) ListIdentityProviderPresets(w http.ResponseWriter, r *http.Request) {
+	var request ListIdentityProviderPresetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIdentityProviderPresets(ctx, request.(ListIdentityProviderPresetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIdentityProviderPresets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIdentityProviderPresetsResponseObject); ok {
+		if err := validResponse.VisitListIdentityProviderPresetsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6961,6 +7248,39 @@ func (sh *strictHandler) SetIdentityProvider(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetIdentityProviderResponseObject); ok {
 		if err := validResponse.VisitSetIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestIdentityProvider operation middleware
+func (sh *strictHandler) TestIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request TestIdentityProviderRequestObject
+
+	request.OrgId = orgId
+
+	var body TestIdentityProviderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestIdentityProvider(ctx, request.(TestIdentityProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestIdentityProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestIdentityProviderResponseObject); ok {
+		if err := validResponse.VisitTestIdentityProviderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

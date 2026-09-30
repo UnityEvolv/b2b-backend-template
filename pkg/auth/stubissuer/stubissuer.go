@@ -31,6 +31,14 @@ type Issuer struct {
 	issuer, audience string
 	private          jwk.Key
 	public           jwk.Set
+	oidc             *OIDC
+}
+
+// WithOIDC makes the issuer an OpenID provider too, for signing in through
+// an organization's identity provider on a laptop (oidc.go). Before Handler.
+func (i *Issuer) WithOIDC(o *OIDC) *Issuer {
+	i.oidc = o
+	return i
 }
 
 // New is an issuer with a fresh ES256 key.
@@ -118,9 +126,13 @@ type tokenRequest struct {
 //	POST /token  {"user_id", "org_id", "membership_id", "ttl_seconds"}
 //	POST /token  {"service": "organization"}   a service token
 //
-// Any id left out is made up, so an empty body is a valid request.
+// Any id left out is made up, so an empty body is a valid request. With
+// WithOIDC, the OpenID provider's endpoints too.
 func (i *Issuer) Handler() http.Handler {
 	mux := httpx.NewMux()
+	if i.oidc != nil {
+		i.oidc.routes(i, mux)
+	}
 	mux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, i.public)
 	})

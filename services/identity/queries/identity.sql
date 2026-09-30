@@ -13,11 +13,15 @@ RETURNING *;
 SELECT * FROM identity_providers WHERE org_id = @org_id;
 
 -- name: UpsertIdentityProvider :one
-INSERT INTO identity_providers (org_id, id, type, tenant_id, client_id, client_secret, issuer, verified_at)
-VALUES (@org_id, @id, @type, @tenant_id, @client_id, @client_secret, @issuer, now())
+INSERT INTO identity_providers (org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret,
+                                scopes, email_claim, name_claim, require_email_verified, verified_at)
+VALUES (@org_id, @id, @preset, @issuer, sqlc.narg('tenant_id'), sqlc.narg('hosted_domain'), @client_id, @client_secret,
+        @scopes, @email_claim, @name_claim, @require_email_verified, now())
 ON CONFLICT (org_id) DO UPDATE
-SET type = excluded.type, tenant_id = excluded.tenant_id, client_id = excluded.client_id,
-    client_secret = excluded.client_secret, issuer = excluded.issuer, status = 'active', verified_at = now()
+SET preset = excluded.preset, issuer = excluded.issuer, tenant_id = excluded.tenant_id,
+    hosted_domain = excluded.hosted_domain, client_id = excluded.client_id, client_secret = excluded.client_secret,
+    scopes = excluded.scopes, email_claim = excluded.email_claim, name_claim = excluded.name_claim,
+    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now()
 RETURNING *;
 
 -- name: SetIdentityProviderStatus :one

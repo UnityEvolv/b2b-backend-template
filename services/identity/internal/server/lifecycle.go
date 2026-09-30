@@ -63,14 +63,19 @@ func textOf(t pgtype.Text) *string {
 }
 
 type exportedProvider struct {
-	Type         string     `json:"type"`
-	TenantID     string     `json:"tenant_id"`
-	ClientID     string     `json:"client_id"`
-	ClientSecret string     `json:"client_secret"`
-	Issuer       string     `json:"issuer"`
-	Status       string     `json:"status"`
-	VerifiedAt   *time.Time `json:"verified_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
+	Preset               string     `json:"preset"`
+	Issuer               string     `json:"issuer"`
+	TenantID             *string    `json:"tenant_id,omitempty"`
+	HostedDomain         *string    `json:"hosted_domain,omitempty"`
+	ClientID             string     `json:"client_id"`
+	ClientSecret         string     `json:"client_secret"`
+	Scopes               []string   `json:"scopes"`
+	EmailClaim           string     `json:"email_claim"`
+	NameClaim            string     `json:"name_claim"`
+	RequireEmailVerified bool       `json:"require_email_verified"`
+	Status               string     `json:"status"`
+	VerifiedAt           *time.Time `json:"verified_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
 }
 
 type exportedPolicy struct {
@@ -111,8 +116,9 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 		switch {
 		case err == nil:
 			out.IdentityProvider = &exportedProvider{
-				Type: idp.Type, TenantID: idp.TenantID, ClientID: idp.ClientID, ClientSecret: "not exported",
-				Issuer: idp.Issuer, Status: idp.Status, VerifiedAt: timeOf(idp.VerifiedAt), CreatedAt: idp.CreatedAt.UTC(),
+				Preset: idp.Preset, Issuer: idp.Issuer, TenantID: textPtr(idp.TenantID), HostedDomain: textPtr(idp.HostedDomain),
+				ClientID: idp.ClientID, ClientSecret: "not exported", Scopes: idp.Scopes, EmailClaim: idp.EmailClaim,
+				NameClaim: idp.NameClaim, RequireEmailVerified: idp.RequireEmailVerified, Status: idp.Status, VerifiedAt: timeOf(idp.VerifiedAt), CreatedAt: idp.CreatedAt.UTC(),
 			}
 		case err != pgx.ErrNoRows:
 			return err

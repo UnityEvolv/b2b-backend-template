@@ -383,7 +383,7 @@ func (q *Queries) GetEmailVerification(ctx context.Context, tokenHash []byte) (E
 }
 
 const getIdentityProvider = `-- name: GetIdentityProvider :one
-SELECT org_id, id, type, tenant_id, client_id, client_secret, issuer, status, verified_at, created_by, created_at, last_modified_by, last_modified_at FROM identity_providers WHERE org_id = $1
+SELECT org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at FROM identity_providers WHERE org_id = $1
 `
 
 func (q *Queries) GetIdentityProvider(ctx context.Context, orgID uuid.UUID) (IdentityProvider, error) {
@@ -392,11 +392,16 @@ func (q *Queries) GetIdentityProvider(ctx context.Context, orgID uuid.UUID) (Ide
 	err := row.Scan(
 		&i.OrgID,
 		&i.ID,
-		&i.Type,
+		&i.Preset,
+		&i.Issuer,
 		&i.TenantID,
+		&i.HostedDomain,
 		&i.ClientID,
 		&i.ClientSecret,
-		&i.Issuer,
+		&i.Scopes,
+		&i.EmailClaim,
+		&i.NameClaim,
+		&i.RequireEmailVerified,
 		&i.Status,
 		&i.VerifiedAt,
 		&i.CreatedBy,
@@ -1744,7 +1749,7 @@ func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) (S
 }
 
 const setIdentityProviderStatus = `-- name: SetIdentityProviderStatus :one
-UPDATE identity_providers SET status = $1 WHERE org_id = $2 RETURNING org_id, id, type, tenant_id, client_id, client_secret, issuer, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
+UPDATE identity_providers SET status = $1 WHERE org_id = $2 RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type SetIdentityProviderStatusParams struct {
@@ -1758,11 +1763,16 @@ func (q *Queries) SetIdentityProviderStatus(ctx context.Context, arg SetIdentity
 	err := row.Scan(
 		&i.OrgID,
 		&i.ID,
-		&i.Type,
+		&i.Preset,
+		&i.Issuer,
 		&i.TenantID,
+		&i.HostedDomain,
 		&i.ClientID,
 		&i.ClientSecret,
-		&i.Issuer,
+		&i.Scopes,
+		&i.EmailClaim,
+		&i.NameClaim,
+		&i.RequireEmailVerified,
 		&i.Status,
 		&i.VerifiedAt,
 		&i.CreatedBy,
@@ -1829,43 +1839,62 @@ func (q *Queries) SetPassword(ctx context.Context, arg SetPasswordParams) (Local
 }
 
 const upsertIdentityProvider = `-- name: UpsertIdentityProvider :one
-INSERT INTO identity_providers (org_id, id, type, tenant_id, client_id, client_secret, issuer, verified_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+INSERT INTO identity_providers (org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret,
+                                scopes, email_claim, name_claim, require_email_verified, verified_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, now())
 ON CONFLICT (org_id) DO UPDATE
-SET type = excluded.type, tenant_id = excluded.tenant_id, client_id = excluded.client_id,
-    client_secret = excluded.client_secret, issuer = excluded.issuer, status = 'active', verified_at = now()
-RETURNING org_id, id, type, tenant_id, client_id, client_secret, issuer, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
+SET preset = excluded.preset, issuer = excluded.issuer, tenant_id = excluded.tenant_id,
+    hosted_domain = excluded.hosted_domain, client_id = excluded.client_id, client_secret = excluded.client_secret,
+    scopes = excluded.scopes, email_claim = excluded.email_claim, name_claim = excluded.name_claim,
+    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now()
+RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
 `
 
 type UpsertIdentityProviderParams struct {
-	OrgID        uuid.UUID
-	ID           uuid.UUID
-	Type         string
-	TenantID     string
-	ClientID     string
-	ClientSecret []byte
-	Issuer       string
+	OrgID                uuid.UUID
+	ID                   uuid.UUID
+	Preset               string
+	Issuer               string
+	TenantID             pgtype.Text
+	HostedDomain         pgtype.Text
+	ClientID             string
+	ClientSecret         []byte
+	Scopes               []string
+	EmailClaim           string
+	NameClaim            string
+	RequireEmailVerified bool
 }
 
 func (q *Queries) UpsertIdentityProvider(ctx context.Context, arg UpsertIdentityProviderParams) (IdentityProvider, error) {
 	row := q.db.QueryRow(ctx, upsertIdentityProvider,
 		arg.OrgID,
 		arg.ID,
-		arg.Type,
+		arg.Preset,
+		arg.Issuer,
 		arg.TenantID,
+		arg.HostedDomain,
 		arg.ClientID,
 		arg.ClientSecret,
-		arg.Issuer,
+		arg.Scopes,
+		arg.EmailClaim,
+		arg.NameClaim,
+		arg.RequireEmailVerified,
 	)
 	var i IdentityProvider
 	err := row.Scan(
 		&i.OrgID,
 		&i.ID,
-		&i.Type,
+		&i.Preset,
+		&i.Issuer,
 		&i.TenantID,
+		&i.HostedDomain,
 		&i.ClientID,
 		&i.ClientSecret,
-		&i.Issuer,
+		&i.Scopes,
+		&i.EmailClaim,
+		&i.NameClaim,
+		&i.RequireEmailVerified,
 		&i.Status,
 		&i.VerifiedAt,
 		&i.CreatedBy,

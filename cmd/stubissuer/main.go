@@ -1,5 +1,6 @@
-// Command stubissuer mints tokens for local development, until the
-// identity service issues real ones.
+// Command stubissuer mints tokens for local development, and is the OpenID
+// provider an organization signs in through on a laptop (the generic
+// preset: docs/sso.md).
 //
 // It refuses to start unless STUB_ISSUER_LOCAL_ONLY=true, which only the
 // compose stack sets. Its keys are generated at start, so restarting it
@@ -43,6 +44,14 @@ func run() error {
 		issuer   = env.String("AUTH_ISSUER", brand.ID+"-local-stub")
 		audience = env.String("AUTH_AUDIENCE", brand.ID)
 		origins  = env.String("ALLOWED_ORIGINS", "")
+		// The OpenID provider an organization signs in through on a laptop:
+		// the generic preset with this issuer, client id and secret. The
+		// browser URL is where a browser reaches it, when the identity
+		// service reaches it by another name (the compose network).
+		oidcIssuer   = env.String("STUB_OIDC_ISSUER", fmt.Sprintf("http://localhost:%d", port))
+		oidcBrowser  = env.String("STUB_OIDC_BROWSER_URL", "")
+		oidcClientID = env.String("STUB_OIDC_CLIENT_ID", "local-sso")
+		oidcSecret   = env.String("STUB_OIDC_CLIENT_SECRET", "local-sso-secret")
 	)
 	if err := env.Err(); err != nil {
 		return err
@@ -61,6 +70,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	iss.WithOIDC(&stubissuer.OIDC{Issuer: oidcIssuer, BrowserURL: oidcBrowser, ClientID: oidcClientID, ClientSecret: oidcSecret})
+	logger.Info("OpenID provider", "issuer", oidcIssuer, "client_id", oidcClientID)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

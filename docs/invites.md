@@ -55,7 +55,7 @@ Audited as `invite.sent` or `invite.resent`.
   Audited as `invite.accepted`.
 
 The answer says what comes next. A member of an organization with an
-identity provider signs in through it (`sign_in_entra`). Everyone else
+identity provider signs in through it (`sign_in_sso`). Everyone else
 (members of a local organization) gets a local account: a
 verification link is sent and they set a password (`verify_email`), unless
 they already have one (`sign_in`). See [local-accounts.md](local-accounts.md).

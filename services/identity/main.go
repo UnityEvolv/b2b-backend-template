@@ -99,6 +99,11 @@ func run() error {
 		// Local only: mint service tokens for any service that asks, as the
 		// stub issuer did. Deployed, a service proves who it is first.
 		localServiceTokens = env.Bool("LOCAL_SERVICE_TOKENS", false)
+		// Local only: identity providers may be plain http on a private
+		// address (the stub issuer on the compose network). Deployed, an
+		// issuer is https on a public address; an admin names it, so the
+		// service never fetches anything inside the network for them.
+		localIssuers = env.Bool("OIDC_LOCAL_ISSUERS", false)
 		// Deployed: which service accounts run which service, as
 		// "<prefix><service>@<domain>" (dev-billing@<project>.iam...).
 		workloadPrefix = env.String("SERVICE_ACCOUNT_PREFIX", "")
@@ -127,6 +132,9 @@ func run() error {
 	}
 	if localServiceTokens && environment != "local" {
 		return errors.New("LOCAL_SERVICE_TOKENS is for a laptop only")
+	}
+	if localIssuers && environment != "local" {
+		return errors.New("OIDC_LOCAL_ISSUERS is for a laptop only")
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {
@@ -179,7 +187,7 @@ func run() error {
 	defer rdb.Close()
 	limiter := ratelimit.New(rdb, logger)
 
-	oidcClient, err := oidc.New(ctx, nil)
+	oidcClient, err := oidc.New(ctx, nil, localIssuers)
 	if err != nil {
 		return err
 	}

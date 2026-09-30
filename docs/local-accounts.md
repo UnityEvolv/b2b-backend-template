@@ -1,8 +1,8 @@
 # Local accounts
 
-Organizations without Microsoft Entra use local accounts: a person is
+Organizations without an identity provider use local accounts: a person is
 invited by email, proves the address, then sets a password. Guests in any
-org sign in this way too. Entra users never get one.
+org sign in this way too. People who sign in through a provider never get one.
 
 ## Email verification
 

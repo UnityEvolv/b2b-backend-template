@@ -559,10 +559,10 @@ func (s *Server) AcceptInvite(ctx context.Context, req api.AcceptInviteRequestOb
 	}); err != nil {
 		return nil, err
 	}
-	// What comes next: the org's provider signs members of an Entra org in;
+	// What comes next: the org's provider signs members of an SSO org in;
 	// everyone else gets a local account, verified by email, unless they have
 	// one with a password.
-	next := api.SignInEntra
+	next := api.SignInSso
 	if !s.hasProvider(ctx, row.OrgID) {
 		orgName, err := s.orgName(ctx, row.OrgID)
 		if err != nil {

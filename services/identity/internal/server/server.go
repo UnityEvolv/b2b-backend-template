@@ -61,6 +61,8 @@ type Config struct {
 	Cookies config.Cookies
 	// EntraAuthority is where Entra tenants live; a test points it at a fake.
 	EntraAuthority string
+	// GoogleIssuer is the Google preset's issuer; a test points it at a fake.
+	GoogleIssuer string
 	// DesktopScheme is the desktop app's URL scheme: where a sign-in it
 	// started in the system browser is handed back. Empty turns desktop
 	// sign-in off.
@@ -105,6 +107,9 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 	if cfg.EntraAuthority == "" {
 		cfg.EntraAuthority = oidc.EntraAuthority
 	}
+	if cfg.GoogleIssuer == "" {
+		cfg.GoogleIssuer = oidc.GoogleIssuer
+	}
 	if cfg.MainApp == "" {
 		cfg.MainApp = config.DefaultApps[0]
 	}
@@ -133,6 +138,8 @@ var Limits = map[string]ratelimit.Bound{
 	"POST /v1/session/sign-out":                                    ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
 	"GET /v1/organizations/{org_id}/identity-provider":             ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/identity-provider":             ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/identity-provider/test":       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/identity-provider-presets":                            ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"GET /v1/organizations/{org_id}/session-policy":                ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
 	"PUT /v1/organizations/{org_id}/session-policy":                ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"POST /v1/sign-in/local":                                       ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),

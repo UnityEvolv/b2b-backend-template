@@ -182,7 +182,7 @@ func TestOwnerAndServiceInvites(t *testing.T) {
 	}
 	_, token := f.lastLink(t)
 	rec = b.do(http.MethodPost, "/v1/invites/"+token+"/accept", "", map[string]any{"name": "Olivia"})
-	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "sign_in_entra" {
+	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "sign_in_sso" {
 		t.Fatalf("owner accepting: %d %v", rec.Code, out)
 	}
 	if f.users.created[0].Role != "owner" || f.users.created[0].Kind != "member" {
@@ -227,7 +227,7 @@ func TestOwnerAndServiceInvites(t *testing.T) {
 	}
 	// Accepting: a member of acme, which signs members in through Entra.
 	rec = b.do(http.MethodPost, "/v1/invites/"+gusToken2+"/accept", "", map[string]any{"name": "Gus"})
-	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "sign_in_entra" {
+	if out := body(t, rec); rec.Code != http.StatusOK || out["next"] != "sign_in_sso" {
 		t.Fatalf("accepting: %d %v", rec.Code, out)
 	}
 	last := f.users.created[len(f.users.created)-1]

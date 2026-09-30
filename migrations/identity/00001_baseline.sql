@@ -27,26 +27,42 @@ COMMENT ON TABLE signing_keys IS 'global: the platform''s token signing keys, no
 CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON signing_keys
     FOR EACH ROW EXECUTE FUNCTION set_provenance();
 
--- Each org's identity provider. One per org for now; the type says which
--- kind. The client secret is encrypted under the org's data key.
+-- Each org's identity provider: any OpenID Connect issuer, one per org.
+-- The preset says which form filled it in (docs/sso.md): entra derives the
+-- issuer from the tenant, google is accounts.google.com held to one
+-- Workspace domain, generic is any issuer with discovery. The client secret
+-- is encrypted under the org's data key.
 CREATE TABLE identity_providers (
-    org_id           uuid        NOT NULL,
-    id               uuid        NOT NULL,
-    type             text        NOT NULL CHECK (type IN ('entra')),
-    -- Entra: the tenant id; the issuer is derived from it.
-    tenant_id        text        NOT NULL,
-    client_id        text        NOT NULL,
-    client_secret    bytea       NOT NULL,
-    issuer           text        NOT NULL,
-    status           text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
-    -- The last successful round trip to the provider's discovery document.
-    verified_at      timestamptz,
-    created_by       text        NOT NULL,
-    created_at       timestamptz NOT NULL,
-    last_modified_by text        NOT NULL,
-    last_modified_at timestamptz NOT NULL,
+    org_id                 uuid        NOT NULL,
+    id                     uuid        NOT NULL,
+    preset                 text        NOT NULL CHECK (preset IN ('entra', 'google', 'generic')),
+    -- The issuer as its discovery document names it: what identity tokens
+    -- must carry in iss.
+    issuer                 text        NOT NULL CHECK (length(issuer) BETWEEN 1 AND 500),
+    -- entra: the tenant id or verified domain the issuer came from.
+    tenant_id              text        CHECK (tenant_id IS NULL OR length(tenant_id) BETWEEN 1 AND 200),
+    -- google: the Workspace domain identity tokens must carry in hd.
+    hosted_domain          text        CHECK (hosted_domain IS NULL OR length(hosted_domain) BETWEEN 1 AND 253),
+    client_id              text        NOT NULL CHECK (length(client_id) BETWEEN 1 AND 200),
+    client_secret          bytea       NOT NULL,
+    scopes                 text[]      NOT NULL CHECK ('openid' = ANY (scopes)),
+    -- The claims the address and the display name are read from.
+    email_claim            text        NOT NULL DEFAULT 'email' CHECK (length(email_claim) BETWEEN 1 AND 100),
+    name_claim             text        NOT NULL DEFAULT 'name' CHECK (length(name_claim) BETWEEN 1 AND 100),
+    -- Refuse a token without email_verified=true. A token that says false
+    -- is refused either way.
+    require_email_verified boolean     NOT NULL DEFAULT false,
+    status                 text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+    -- The last time the settings passed the test before saving.
+    verified_at            timestamptz,
+    created_by             text        NOT NULL,
+    created_at             timestamptz NOT NULL,
+    last_modified_by       text        NOT NULL,
+    last_modified_at       timestamptz NOT NULL,
     PRIMARY KEY (org_id, id),
-    UNIQUE (org_id)
+    UNIQUE (org_id),
+    CHECK ((preset = 'entra') = (tenant_id IS NOT NULL)),
+    CHECK ((preset = 'google') = (hosted_domain IS NOT NULL))
 );
 CREATE TRIGGER provenance BEFORE INSERT OR UPDATE ON identity_providers
     FOR EACH ROW EXECUTE FUNCTION set_provenance();

@@ -217,7 +217,7 @@ func (s *Server) StartSignIn(ctx context.Context, req api.StartSignInRequestObje
 	}
 	// The cookie binds the callback to this browser; the state names the attempt.
 	setCookie(ctx, attemptCookie, orgID.String()+"."+attemptID.String(), attemptTTL)
-	location := oidc.AuthorizeURL(provider, idp.ClientID, s.redirectURI(), attemptID.String(), nonce, pkce)
+	location := oidc.AuthorizeURL(provider, settingsOf(idp, ""), s.redirectURI(), attemptID.String(), nonce, pkce)
 	return api.StartSignIn302Response{Headers: api.StartSignIn302ResponseHeaders{Location: &location}}, nil
 }
 
@@ -229,14 +229,14 @@ func (s *Server) SignInMethods(ctx context.Context, req api.SignInMethodsRequest
 		fields := map[string]string{"email": "an email address"}
 		return api.SignInMethods400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Not an email address.", Fields: &fields}}, nil
 	}
-	method := api.SignInMethods200JSONResponseBodyMethodLocal
+	method := api.Local
 	domain := address[strings.LastIndex(address, "@")+1:]
 	orgID, err := s.orgs.ByDomain(ctx, domain)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
 	if err == nil && s.hasProvider(ctx, orgID) {
-		method = api.SignInMethods200JSONResponseBodyMethodEntra
+		method = api.Sso
 	}
 	return api.SignInMethods200JSONResponse{Method: method}, nil
 }
@@ -327,7 +327,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 		return nil, err
 	}
 	if p.Error != nil && *p.Error != "" {
-		s.logger.Warn("identity provider refused a sign-in", "org_id", orgID, "error", *p.Error)
+		s.logger.Warn("identity provider refused a sign-in", "org_id", orgID, "error", oidc.ErrorCode(*p.Error))
 		return s.backFor(attempt, errProviderRefused, nil), nil
 	}
 	if p.Code == nil || *p.Code == "" {
@@ -342,7 +342,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	if err != nil {
 		return nil, err
 	}
-	claims, err := s.oidc.Exchange(ctx, provider, idp.ClientID, string(secret), s.redirectURI(), *p.Code, attempt.CodeVerifier, attempt.Nonce)
+	claims, err := s.oidc.Exchange(ctx, provider, settingsOf(idp, string(secret)), s.redirectURI(), *p.Code, attempt.CodeVerifier, attempt.Nonce)
 	if errors.Is(err, oidc.ErrRefused) {
 		s.logger.Warn("identity token refused", "org_id", orgID, "error", err)
 		return s.backFor(attempt, errProviderRefused, nil), nil
@@ -408,7 +408,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	// The desktop or mobile app started this in the system browser: the
 	// session is the app's, so the browser gets a one-time code for it instead.
 	if appClient(attempt.Client) {
-		raw, err := s.desktopCode(ctx, result.User.ID, orgID, land, idp.Type, attempt.Client, attempt.AppChallenge.String)
+		raw, err := s.desktopCode(ctx, result.User.ID, orgID, land, idp.Preset, attempt.Client, attempt.AppChallenge.String)
 		if err != nil {
 			return nil, err
 		}
@@ -427,7 +427,7 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
 		OrgID: orgID.String(), Action: "session.signed_in", TargetType: "session", TargetID: session.ID.String(),
-		Details: map[string]any{"user_id": result.User.ID.String(), "provider": idp.Type, "chooser": land == nil},
+		Details: map[string]any{"user_id": result.User.ID.String(), "provider": idp.Preset, "chooser": land == nil},
 		Actor:   db.UserActor(result.User.ID.String()),
 	}); err != nil {
 		return nil, err

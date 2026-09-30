@@ -61,9 +61,27 @@ services:
         condition: service_completed_successfully
     restart: 'no'
 
-  # Mints tokens for local development until the identity service does.
-  #   curl -X POST localhost:8090/token -d '{"org_id":"<uuid>"}'
+  # The OpenID provider an organization signs in through on a laptop: set
+  # its identity provider to the generic preset with issuer
+  # http://stubissuer:8090, client id local-sso and secret local-sso-secret
+  # (docs/sso.md). The browser reaches its sign-in page on localhost.
   # Its key is generated at start: restarting it invalidates every token.
+  stubissuer:
+    build:
+      context: ..
+      dockerfile: deploy/tools.Dockerfile
+      secrets:
+        - extra_ca
+    command: ['stubissuer']
+    environment:
+      STUB_ISSUER_LOCAL_ONLY: 'true'
+      PORT: '8090'
+      AUTH_ISSUER: b2bapp-local-stub
+      STUB_OIDC_ISSUER: http://stubissuer:8090
+      STUB_OIDC_BROWSER_URL: http://localhost:${STUB_ISSUER_PORT:-8090}
+    ports:
+      - '${STUB_ISSUER_PORT:-8090}:8090'
+
   # Go services. Each connects as its own role; copy this block for a new one.
   # Sign-in through an org's identity provider, sessions, and the tokens
   # every other service verifies. Locally it also mints service and
@@ -99,6 +117,9 @@ services:
       APP_ORIGIN_PLATFORM: http://localhost:5175
       SECURE_COOKIES: 'false'
       LOCAL_SERVICE_TOKENS: 'true'
+      # Identity providers on plain http and private addresses: the stub
+      # issuer on this network.
+      OIDC_LOCAL_ISSUERS: 'true'
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
       # The first platform operator, invited on start while the platform org
       # is empty; the invite lands in the mail catcher. Empty invites nobody.

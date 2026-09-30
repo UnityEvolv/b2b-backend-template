@@ -17,8 +17,10 @@ verifies. It replaces the stub issuer.
 2. The provider sends the browser to `GET /identity/v1/sign-in/callback`.
    The state must name the attempt in the cookie, the attempt is used once,
    the code is exchanged (client secret decrypted under the org's key, PKCE
-   verifier), the identity token is validated (issuer, audience, signature
-   against the provider's keys, nonce, expiry).
+   verifier), the identity token is validated (issuer, audience and azp, signature
+   against the provider's keys, nonce, expiry; email_verified and the
+   hosted domain where the settings ask for them), and the address must be
+   in the domain the organization has proven it owns.
 3. The user service is told: user created on first sight, membership on
    first sign-in to this org, directory attributes refreshed every time.
    A deactivated membership refuses; the plan's cap refuses the eleventh.
@@ -43,20 +45,16 @@ Errors go back to the app's sign-in page as `?error=`: `provider_refused`,
 `attempt_expired`, `membership_inactive`, `plan_limit`, `no_membership`.
 
 `GET /identity/v1/sign-in/methods?email=…` tells the sign-in page how an
-address signs in (`entra` or `local`) and nothing else, so the page can
+address signs in (`sso` or `local`) and nothing else, so the page can
 send the person to their provider or show the password field without
 naming any organization before they have proven who they are.
 
 ## Configuring a provider
 
-`PUT /identity/v1/organizations/{org_id}/identity-provider` with the Entra
-tenant (id or verified domain), the application (client) id and its secret.
-The discovery document is fetched before anything is saved (422 when it is
-not); the secret is encrypted under the organization's data key and never
-returned. The response carries the `redirect_uri` to register on the app
-registration. Needs the single sign-on permission (an Admin by default). The
-directory attributes (`jobTitle`, `department`, `employeeType`, `country`,
-`city`) arrive when the app registration asks for them as optional claims.
+Any OpenID Connect provider, filled in from a preset (Entra, Google, or
+generic with discovery), tested with a real round trip before it is saved,
+its secret encrypted under the organization's data key. The endpoints, the
+shapes, what the test checks and the local stub issuer: [sso.md](sso.md).
 
 ## Keys and tokens
 

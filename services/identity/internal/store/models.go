@@ -48,19 +48,24 @@ type EmailVerification struct {
 }
 
 type IdentityProvider struct {
-	OrgID          uuid.UUID
-	ID             uuid.UUID
-	Type           string
-	TenantID       string
-	ClientID       string
-	ClientSecret   []byte
-	Issuer         string
-	Status         string
-	VerifiedAt     pgtype.Timestamptz
-	CreatedBy      string
-	CreatedAt      time.Time
-	LastModifiedBy string
-	LastModifiedAt time.Time
+	OrgID                uuid.UUID
+	ID                   uuid.UUID
+	Preset               string
+	Issuer               string
+	TenantID             pgtype.Text
+	HostedDomain         pgtype.Text
+	ClientID             string
+	ClientSecret         []byte
+	Scopes               []string
+	EmailClaim           string
+	NameClaim            string
+	RequireEmailVerified bool
+	Status               string
+	VerifiedAt           pgtype.Timestamptz
+	CreatedBy            string
+	CreatedAt            time.Time
+	LastModifiedBy       string
+	LastModifiedAt       time.Time
 }
 
 type Invite struct {

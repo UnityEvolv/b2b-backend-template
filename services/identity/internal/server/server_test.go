@@ -48,7 +48,11 @@ var (
 	globex = uuid.MustParse("01922b5e-0000-7000-8000-0000000000b2")
 )
 
-// fakeIdP is an OpenID provider: discovery, keys, and a token endpoint
+// fakeIdP is two OpenID providers on one server, sharing a key: one shaped
+// like an Entra tenant (issuer /tenant/v2.0, the address in
+// preferred_username, credentials in the form, keys without alg) and one
+// shaped like Google (issuer /google, email_verified and hd, credentials by
+// HTTP basic authentication). Each has discovery, keys, and a token endpoint
 // that issues an identity token for whoever the test says signed in.
 type fakeIdP struct {
 	srv      *httptest.Server
@@ -58,13 +62,21 @@ type fakeIdP struct {
 	secret   string
 
 	mu    sync.Mutex
-	codes map[string]person // code => who
-	nonce map[string]string // code => nonce the authorize request carried
-	seen  []url.Values      // token requests
+	codes map[string]fakeGrant // code => who, for which issuer
+	seen  []url.Values         // token requests
+}
+
+type fakeGrant struct {
+	who    person
+	nonce  string
+	google bool
 }
 
 type person struct {
 	sub, email, name, department string
+	// unverified sends email_verified=false; hd is Google's hosted domain.
+	unverified bool
+	hd         string
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -75,37 +87,65 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	}
 	key, _ := jwk.Import(raw)
 	_ = key.Set(jwk.KeyIDKey, "idp-1")
-	_ = key.Set(jwk.AlgorithmKey, jwa.ES256())
 	set := jwk.NewSet()
 	_ = set.AddKey(key)
 	public, _ := jwk.PublicSetOf(set)
-	f := &fakeIdP{key: key, public: public, clientID: "client-1", secret: "shh", codes: map[string]person{}, nonce: map[string]string{}}
+	f := &fakeIdP{key: key, public: public, clientID: "client-1", secret: "shh", codes: map[string]fakeGrant{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /tenant/v2.0/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{
-			"issuer": f.srv.URL + "/tenant/v2.0", "authorization_endpoint": f.srv.URL + "/authorize",
+		json.NewEncoder(w).Encode(map[string]any{
+			"issuer": f.tenantIssuer(), "authorization_endpoint": f.srv.URL + "/authorize",
 			"token_endpoint": f.srv.URL + "/token", "jwks_uri": f.srv.URL + "/keys",
+			"token_endpoint_auth_methods_supported": []string{"client_secret_post"},
+		})
+	})
+	mux.HandleFunc("GET /google/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"issuer": f.googleIssuer(), "authorization_endpoint": f.srv.URL + "/google/authorize",
+			"token_endpoint": f.srv.URL + "/google/token", "jwks_uri": f.srv.URL + "/keys",
 		})
 	})
 	mux.HandleFunc("GET /keys", func(w http.ResponseWriter, _ *http.Request) { json.NewEncoder(w).Encode(f.public) })
-	mux.HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
-		_ = r.ParseForm()
-		f.mu.Lock()
-		f.seen = append(f.seen, r.Form)
-		who, ok := f.codes[r.Form.Get("code")]
-		nonce := f.nonce[r.Form.Get("code")]
-		f.mu.Unlock()
-		if !ok || r.Form.Get("client_secret") != f.secret || r.Form.Get("code_verifier") == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
-			return
+	token := func(google bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			f.mu.Lock()
+			f.seen = append(f.seen, r.PostForm)
+			g, ok := f.codes[r.PostForm.Get("code")]
+			delete(f.codes, r.PostForm.Get("code"))
+			f.mu.Unlock()
+			id, secret := r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+			if google {
+				id, secret, _ = r.BasicAuth()
+			}
+			if id != f.clientID || secret != f.secret {
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "invalid_client"})
+				return
+			}
+			if !ok || g.google != google || r.PostForm.Get("code_verifier") == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
+				return
+			}
+			b := jwt.NewBuilder().Audience([]string{f.clientID}).Subject(g.who.sub).
+				IssuedAt(time.Now()).Expiration(time.Now().Add(time.Hour)).
+				Claim("nonce", g.nonce).Claim("name", g.who.name)
+			if google {
+				b = b.Issuer(f.googleIssuer()).Claim("email", g.who.email).Claim("email_verified", !g.who.unverified)
+				if g.who.hd != "" {
+					b = b.Claim("hd", g.who.hd)
+				}
+			} else {
+				b = b.Issuer(f.tenantIssuer()).Claim("preferred_username", g.who.email).Claim("department", g.who.department)
+			}
+			tok, _ := b.Build()
+			signed, _ := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), f.key))
+			json.NewEncoder(w).Encode(map[string]any{"id_token": string(signed), "access_token": "x", "token_type": "Bearer"})
 		}
-		tok, _ := jwt.NewBuilder().Issuer(f.srv.URL+"/tenant/v2.0").Audience([]string{f.clientID}).Subject(who.sub).
-			IssuedAt(time.Now()).Expiration(time.Now().Add(time.Hour)).
-			Claim("nonce", nonce).Claim("preferred_username", who.email).Claim("name", who.name).Claim("department", who.department).Build()
-		signed, _ := jwt.Sign(tok, jwt.WithKey(jwa.ES256(), f.key))
-		json.NewEncoder(w).Encode(map[string]any{"id_token": string(signed), "access_token": "x", "token_type": "Bearer"})
-	})
+	}
+	mux.HandleFunc("POST /token", token(false))
+	mux.HandleFunc("POST /google/token", token(true))
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
@@ -119,18 +159,19 @@ func (f *fakeIdP) authorize(t *testing.T, location string, who person) (code, st
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(location, f.srv.URL+"/authorize") || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" {
+	google := strings.HasPrefix(location, f.srv.URL+"/google/authorize")
+	if !google && !strings.HasPrefix(location, f.srv.URL+"/authorize") || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" {
 		t.Fatalf("not an authorize request with PKCE and a nonce: %s", location)
 	}
 	code = uuid.NewString()
 	f.mu.Lock()
-	f.codes[code] = who
-	f.nonce[code] = u.Query().Get("nonce")
+	f.codes[code] = fakeGrant{who: who, nonce: u.Query().Get("nonce"), google: google}
 	f.mu.Unlock()
 	return code, u.Query().Get("state")
 }
 
 func (f *fakeIdP) tenantIssuer() string { return f.srv.URL + "/tenant/v2.0" }
+func (f *fakeIdP) googleIssuer() string { return f.srv.URL + "/google" }
 
 // fakeUsers is the user service in memory.
 type fakeUsers struct {
@@ -391,6 +432,27 @@ type fixture struct {
 	apps     map[string]string
 	srv      *server.Server
 	public   string
+	// logs is everything the service logged, for tests that no secret or
+	// token is among it.
+	logs *syncBuffer
+}
+
+// syncBuffer is a buffer the service may log to from several goroutines.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 const identityURL = "http://identity.test"
@@ -440,7 +502,7 @@ func newAPI(t *testing.T) *fixture {
 	verifier := auth.NewStaticVerifier("identity-test", "b2bapp", sig.PublicKeys())
 
 	idp := newFakeIdP(t)
-	oidcClient, err := oidc.New(ctx, idp.srv.Client())
+	oidcClient, err := oidc.New(ctx, idp.srv.Client(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,13 +530,14 @@ func newAPI(t *testing.T) *fixture {
 	}
 	grants := authz.Static{}
 	apps := map[string]string{"account": "http://account.test", "admin": "http://admin.test", "platform": "http://platform.test"}
-	var logOut io.Writer = io.Discard
+	logs := &syncBuffer{}
+	var logOut io.Writer = logs
 	if os.Getenv("TEST_LOG") != "" {
-		logOut = os.Stderr
+		logOut = io.MultiWriter(logs, os.Stderr)
 	}
 	logger := slog.New(slog.NewTextHandler(logOut, nil))
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, envelope.New(&memoryKeys{wrapper: wrapper, keys: map[string]envelope.WrappedKey{}}, wrapper),
-		users, orgs, grants, events, mail, limiter, wrapper, server.Config{PublicURL: identityURL, Apps: apps, PlatformApp: "platform", AccessTTL: time.Minute, SecureCookies: false, EntraAuthority: idp.srv.URL, DesktopScheme: "b2bapp"})
+		users, orgs, grants, events, mail, limiter, wrapper, server.Config{PublicURL: identityURL, Apps: apps, PlatformApp: "platform", AccessTTL: time.Minute, SecureCookies: false, EntraAuthority: idp.srv.URL, GoogleIssuer: idp.googleIssuer(), DesktopScheme: "b2bapp"})
 	api := srv.Handler(httpx.NewMux())
 
 	root := http.NewServeMux()
@@ -483,7 +546,7 @@ func newAPI(t *testing.T) *fixture {
 		root.Handle(p, api)
 	}
 	root.Handle("/", auth.Require(verifier, api))
-	return &fixture{srv: srv, t: t, h: httpx.Logged(logger, root), idp: idp, users: users, orgs: orgs, recorder: recorder, events: events, mail: mail, pool: pool, verifier: verifier, sig: sig, grants: grants, apps: apps, public: identityURL}
+	return &fixture{logs: logs, srv: srv, t: t, h: httpx.Logged(logger, root), idp: idp, users: users, orgs: orgs, recorder: recorder, events: events, mail: mail, pool: pool, verifier: verifier, sig: sig, grants: grants, apps: apps, public: identityURL}
 }
 
 // A browser: keeps cookies between requests.
@@ -553,7 +616,7 @@ func (f *fixture) configure(org uuid.UUID) {
 	f.t.Helper()
 	b := f.browser()
 	rec := b.do(http.MethodPut, "/v1/organizations/"+org.String()+"/identity-provider", f.platform(),
-		map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret})
+		map[string]any{"preset": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret})
 	if rec.Code != http.StatusOK {
 		f.t.Fatalf("configure provider: %d %s", rec.Code, rec.Body.String())
 	}

@@ -250,31 +250,31 @@ func TestProviderConfiguration(t *testing.T) {
 		t.Errorf("before: %d", rec.Code)
 	}
 	// A tenant that does not answer is refused with 422, nothing saved.
-	rec := b.do(http.MethodPut, path, operator, map[string]any{"type": "entra", "tenant_id": "nowhere", "client_id": "c", "client_secret": "s"})
+	rec := b.do(http.MethodPut, path, operator, map[string]any{"preset": "entra", "tenant_id": "nowhere", "client_id": "c", "client_secret": "s"})
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("unreachable tenant: %d %s", rec.Code, rec.Body.String())
 	}
 	// Missing fields.
-	if rec := b.do(http.MethodPut, path, operator, map[string]any{"type": "entra", "tenant_id": "", "client_id": "", "client_secret": ""}); rec.Code != http.StatusBadRequest {
+	if rec := b.do(http.MethodPut, path, operator, map[string]any{"preset": "entra", "tenant_id": "", "client_id": "", "client_secret": ""}); rec.Code != http.StatusBadRequest {
 		t.Errorf("blank: %d", rec.Code)
 	}
 	// A member without the sso permission cannot see or configure it; an
 	// Admin with it (the default) can; so can an operator.
 	member, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: uuid.NewString()}, time.Hour)
-	if rec := b.do(http.MethodPut, path, member, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": "c", "client_secret": "s"}); rec.Code != http.StatusForbidden {
+	if rec := b.do(http.MethodPut, path, member, map[string]any{"preset": "entra", "tenant_id": "tenant", "client_id": "c", "client_secret": "s"}); rec.Code != http.StatusForbidden {
 		t.Errorf("member configuring: %d", rec.Code)
 	}
 	adminID := uuid.NewString()
 	f.grants[acme.String()+"/"+adminID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
 	admin, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: adminID}, time.Hour)
-	if rec := b.do(http.MethodPut, path, admin, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusOK {
+	if rec := b.do(http.MethodPut, path, admin, map[string]any{"preset": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusOK {
 		t.Errorf("admin configuring: %d %s", rec.Code, rec.Body.String())
 	}
 	// An Admin whose Owner took sso away is refused both ways.
 	narrowID := uuid.NewString()
 	f.grants[acme.String()+"/"+narrowID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Config{Admin: []authz.Permission{authz.Users}})}
 	narrow, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: narrowID}, time.Hour)
-	if rec := b.do(http.MethodPut, path, narrow, map[string]any{"type": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusForbidden {
+	if rec := b.do(http.MethodPut, path, narrow, map[string]any{"preset": "entra", "tenant_id": "tenant", "client_id": f.idp.clientID, "client_secret": f.idp.secret}); rec.Code != http.StatusForbidden {
 		t.Errorf("admin without sso configuring: %d", rec.Code)
 	}
 	if rec := b.do(http.MethodGet, path, narrow, nil); rec.Code != http.StatusForbidden {
@@ -355,7 +355,7 @@ func TestSignInMethodsNamesNoOrganization(t *testing.T) {
 	f.configure(acme)
 	b := f.browser()
 	for email, want := range map[string]string{
-		"ada@ACME.com":       "entra", // acme has a provider
+		"ada@ACME.com":       "sso",   // acme has a provider
 		"gina@globex.com":    "local", // globex is known but has none
 		"guest@nowhere.test": "local", // unknown domain: guests and local orgs
 	} {

@@ -1,5 +1,5 @@
-// Package images resizes what people upload: a profile photo to a square, an
-// office background to a bounded size, and a thumbnail of either. Decoding is
+// Package images resizes what people upload: a profile photo to a square,
+// any other image to a bounded size, and a thumbnail of either. Decoding is
 // bounded, so a crafted image cannot exhaust memory.
 package images
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,26 +118,85 @@ func TestFailedSignInsThrottleOnlyThatAccount(t *testing.T) {
 	}
 }
 
-// Done criterion: a client sending a hundred messages a second is throttled
-// without the room noticing.
-func TestMessageFloodIsThrottledPerMember(t *testing.T) {
-	l := limiter(t)
-	r := rule(ratelimit.MessageSend)
-	ctx := context.Background()
+// The template registers only its own rules; a product's rule, registered
+// with what it counts by, is enforced like them: a flood from one member is
+// refused at the limit and their neighbour is not slowed.
+func TestProductRuleIsEnforced(t *testing.T) {
+	var names []string
+	for _, x := range ratelimit.NewRegistry().Rules() {
+		names = append(names, x.Name)
+	}
+	if strings.Join(names, ",") != "address,unauthenticated,read,write,signin-failed,password-reset,invite-send,scim,webhook" {
+		t.Errorf("template rules: %v", names)
+	}
 
-	allowed := 0
+	l := limiter(t)
+	r := ratelimit.NewRegistry()
+	projectCreate := r.Register(rule(ratelimit.Rule{Name: "project-create", Limit: 10, Window: 10 * time.Second}), ratelimit.PerMembership)
+	if got, ok := r.Lookup(projectCreate.Rule.Name); !ok || got.Per != ratelimit.PerMembership || got.Limit != 10 {
+		t.Errorf("lookup: %+v %v", got, ok)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /v1/projects", l.Routes(map[string]ratelimit.Bound{"POST /v1/projects": projectCreate})(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })))
+	send := func(membership string) int {
+		req := httptest.NewRequest(http.MethodPost, "/v1/projects", nil)
+		req = req.WithContext(auth.WithCaller(req.Context(), auth.Caller{UserID: uuid.NewString(), OrgID: uuid.NewString(), MembershipID: membership}))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	flooder, created := uuid.NewString(), 0
 	for range 100 {
-		if v, _ := l.Take(ctx, r, "mbr:flooder"); v.Allowed {
-			allowed++
+		switch code := send(flooder); code {
+		case http.StatusCreated:
+			created++
+		case http.StatusTooManyRequests:
+		default:
+			t.Fatalf("flood: %d", code)
 		}
 	}
-	if allowed != r.Limit {
-		t.Fatalf("flooder got %d of 100 through, want %d", allowed, r.Limit)
+	if created != 10 {
+		t.Fatalf("flooder got %d of 100 through, want 10", created)
 	}
+	neighbour := uuid.NewString()
 	for i := range 5 {
-		if v, _ := l.Take(ctx, r, "mbr:neighbour"); !v.Allowed {
-			t.Fatalf("a neighbour's message %d was refused", i+1)
+		if code := send(neighbour); code != http.StatusCreated {
+			t.Fatalf("a neighbour's request %d: %d", i+1, code)
 		}
+	}
+}
+
+// A bad rule is a programming error at start.
+func TestBadRulesPanic(t *testing.T) {
+	for name, fn := range map[string]func(r *ratelimit.Registry){
+		"no name": func(r *ratelimit.Registry) {
+			r.Register(ratelimit.Rule{Limit: 1, Window: time.Second}, ratelimit.PerIP)
+		},
+		"no limit": func(r *ratelimit.Registry) {
+			r.Register(ratelimit.Rule{Name: "x", Window: time.Second}, ratelimit.PerIP)
+		},
+		"no window": func(r *ratelimit.Registry) { r.Register(ratelimit.Rule{Name: "x", Limit: 1}, ratelimit.PerIP) },
+		"taken": func(r *ratelimit.Registry) {
+			r.Register(ratelimit.Rule{Name: "read", Limit: 1, Window: time.Second}, ratelimit.PerIP)
+		},
+		"nothing keys": func(r *ratelimit.Registry) {
+			r.Register(ratelimit.Rule{Name: "x", Limit: 1, Window: time.Second}, ratelimit.PerCaller)
+		},
+		"unknown key": func(r *ratelimit.Registry) {
+			r.Register(ratelimit.Rule{Name: "x", Limit: 1, Window: time.Second}, "device")
+		},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: no panic", name)
+				}
+			}()
+			fn(ratelimit.NewRegistry())
+		}()
 	}
 }
 

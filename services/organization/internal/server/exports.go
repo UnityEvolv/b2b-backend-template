@@ -32,8 +32,10 @@ import (
 // one person for them, made by the loop rather than on request, since a
 // large org's export is not a request's work, and emailed as a link.
 
+// exportLink is how long an export's link, and its file, last.
+var exportLink = storage.DataExport.Retention
+
 const (
-	exportLink     = 7 * 24 * time.Hour
 	exportsPerDay  = 3
 	kindOrg        = "organization"
 	kindPersonal   = "personal"

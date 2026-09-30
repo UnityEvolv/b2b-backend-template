@@ -1,5 +1,6 @@
 // Package storage is the object store every service uses for files people
-// upload (UO-80): profile photos, office backgrounds, chat attachments.
+// upload or services write (UO-80): profile photos and data exports in the
+// template, and whatever a product registers (see Registry).
 //
 // It speaks the S3 API, which is what keeps it portable: RustFS on a laptop,
 // Google Cloud Storage's S3-compatible endpoint deployed, and any S3-shaped
@@ -15,7 +16,10 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -85,29 +89,103 @@ func nonEmpty(s string) *string {
 	return aws.String(s)
 }
 
-// Purpose is what a file is for. It decides the allowed types and the size
-// ceiling, so a story that adds a kind of upload adds a Purpose, not a rule
-// somewhere in a handler.
+// Purpose is what a file is for. It decides the allowed types, the size
+// ceiling and how long the file is kept, so a service that adds a kind of
+// upload registers a Purpose, not a rule somewhere in a handler.
 type Purpose struct {
+	// Name is the key segment after the org: lower case, digits and dashes.
 	Name string
-	// ContentTypes allowed, exactly. Nothing else is stored.
+	// ContentTypes allowed, exactly. Nothing else is stored. Nil takes any
+	// type, still bounded by size.
 	ContentTypes []string
 	// MaxBytes for one file.
 	MaxBytes int64
+	// Retention is how long a file is kept after it is made; DeleteExpired
+	// removes it after that. Zero keeps it until its record goes.
+	Retention time.Duration
 }
 
-// The purposes every consumer starts from.
+// The purposes the template itself uses.
 var (
-	ProfilePhoto     = Purpose{Name: "profile-photo", ContentTypes: []string{"image/jpeg", "image/png", "image/webp"}, MaxBytes: 5 << 20}
-	OfficeBackground = Purpose{Name: "office-background", ContentTypes: []string{"image/jpeg", "image/png", "image/webp"}, MaxBytes: 5 << 20}
-	ChatAttachment   = Purpose{Name: "chat-attachment", ContentTypes: nil, MaxBytes: 10 << 20} // any type; the plan decides the ceiling
+	// ProfilePhoto is a person's photo, kept until they change or remove it.
+	ProfilePhoto = Purpose{Name: "profile-photo", ContentTypes: []string{"image/jpeg", "image/png", "image/webp"}, MaxBytes: 5 << 20}
 	// DataExport is an org or personal export (UO-184): written by the
-	// organization service, never uploaded by a person.
-	DataExport = Purpose{Name: "data-export", ContentTypes: []string{"application/zip"}, MaxBytes: 10 << 30}
+	// organization service, never uploaded by a person, and gone when its
+	// link expires.
+	DataExport = Purpose{Name: "data-export", ContentTypes: []string{"application/zip"}, MaxBytes: 10 << 30, Retention: 7 * 24 * time.Hour}
 )
+
+// Registry is the purposes files may be stored for: the template's and the
+// ones a product registers. Safe for concurrent use; registration is
+// expected at start, before requests.
+type Registry struct {
+	mu       sync.RWMutex
+	purposes []Purpose
+}
+
+// NewRegistry is a registry with the template's own purposes, ProfilePhoto and
+// DataExport.
+func NewRegistry() *Registry {
+	r := &Registry{}
+	r.Register(ProfilePhoto)
+	r.Register(DataExport)
+	return r
+}
+
+// Default is the registry NewKey reads. A product adds its purposes at
+// start; the template's own are in it until then.
+var Default = NewRegistry()
+
+var purposeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+
+// Register adds a purpose and returns it, for a product's package variable:
+//
+//	var ProjectFile = storage.Default.Register(storage.Purpose{Name: "project-file",
+//	    ContentTypes: []string{"application/pdf"}, MaxBytes: 20 << 20, Retention: 90 * 24 * time.Hour})
+//
+// A name that is not a plain key segment or is already registered, a size
+// ceiling that is not positive, or a negative retention panics: it is a
+// programming error at start, not a request.
+func (r *Registry) Register(p Purpose) Purpose {
+	if !purposeName.MatchString(p.Name) || p.MaxBytes <= 0 || p.Retention < 0 {
+		panic(fmt.Sprintf("storage: purpose %q is not valid", p.Name))
+	}
+	p.ContentTypes = slices.Clone(p.ContentTypes)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, x := range r.purposes {
+		if x.Name == p.Name {
+			panic(fmt.Sprintf("storage: purpose %q is already registered", p.Name))
+		}
+	}
+	r.purposes = append(r.purposes, p)
+	return p
+}
+
+// Purposes is every registered purpose, in registration order.
+func (r *Registry) Purposes() []Purpose {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return slices.Clone(r.purposes)
+}
+
+// Lookup is the registered purpose called name.
+func (r *Registry) Lookup(name string) (Purpose, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, p := range r.purposes {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return Purpose{}, false
+}
 
 // ErrNotAllowed means the type or size does not fit the purpose.
 var ErrNotAllowed = errors.New("storage: not allowed for this purpose")
+
+// ErrUnknownPurpose means a key was asked for a purpose nobody registered.
+var ErrUnknownPurpose = errors.New("storage: purpose is not registered")
 
 // Validate checks a proposed upload against p.
 func (p Purpose) Validate(contentType string, size int64) error {
@@ -126,6 +204,21 @@ func (p Purpose) Validate(contentType string, size int64) error {
 	return fmt.Errorf("%w: type %q", ErrNotAllowed, contentType)
 }
 
+// Expired reports whether the file under k is past p's retention at now.
+// A key's id is a UUIDv7 this package made, so it carries when the file was
+// made; a key of another purpose, or one with no time, is never expired.
+func (p Purpose) Expired(k Key, now time.Time) bool {
+	if p.Retention == 0 || k.Purpose != p.Name {
+		return false
+	}
+	id, err := uuid.Parse(k.ID)
+	if err != nil || id.Version() != 7 {
+		return false
+	}
+	sec, nsec := id.Time().UnixTime()
+	return now.Sub(time.Unix(sec, nsec)) > p.Retention
+}
+
 // Key names an object: the org first, always, then the purpose, then an id
 // this package chose. A caller never composes one, so a key can never point
 // outside its org.
@@ -135,10 +228,14 @@ type Key struct {
 	ID      string
 }
 
-// NewKey is a fresh key for a file of purpose p in org orgID.
+// NewKey is a fresh key for a file of purpose p in org orgID. p must be
+// registered in Default: a kind of file nobody declared is never stored.
 func NewKey(orgID string, p Purpose) (Key, error) {
 	if uuid.Validate(orgID) != nil {
 		return Key{}, errors.New("storage: an org id is required")
+	}
+	if _, ok := Default.Lookup(p.Name); !ok {
+		return Key{}, fmt.Errorf("%w: %q", ErrUnknownPurpose, p.Name)
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -198,7 +295,7 @@ func (c *Client) Get(ctx context.Context, orgID string, key Key) (io.ReadCloser,
 	return out.Body, aws.ToString(out.ContentType), nil
 }
 
-// Delete removes the object under key. Removing a user or an office deletes
+// Delete removes the object under key. Removing a user or a record deletes
 // their files this way, so nothing is orphaned.
 func (c *Client) Delete(ctx context.Context, orgID string, key Key) error {
 	if err := key.check(orgID); err != nil {
@@ -225,6 +322,42 @@ func (c *Client) DeleteAll(ctx context.Context, orgID, purpose string) (int, err
 			return deleted, fmt.Errorf("storage: list: %w", err)
 		}
 		for _, o := range page.Contents {
+			if _, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(c.bucket), Key: o.Key}); err != nil {
+				return deleted, fmt.Errorf("storage: delete: %w", err)
+			}
+			deleted++
+		}
+		if !aws.ToBool(page.IsTruncated) {
+			return deleted, nil
+		}
+		token = page.NextContinuationToken
+	}
+}
+
+// DeleteExpired removes an org's files of purpose p that are past its
+// retention at now, and answers how many: the sweep a service runs for each
+// org over each purpose it owns that has one. A purpose kept until its
+// record goes deletes nothing.
+func (c *Client) DeleteExpired(ctx context.Context, orgID string, p Purpose, now time.Time) (int, error) {
+	if uuid.Validate(orgID) != nil {
+		return 0, errors.New("storage: an org id is required")
+	}
+	if p.Retention == 0 {
+		return 0, nil
+	}
+	prefix := path.Join("orgs", orgID, p.Name) + "/"
+	deleted := 0
+	var token *string
+	for {
+		page, err := c.s3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: aws.String(c.bucket), Prefix: aws.String(prefix), ContinuationToken: token})
+		if err != nil {
+			return deleted, fmt.Errorf("storage: list: %w", err)
+		}
+		for _, o := range page.Contents {
+			k, err := ParseKey(aws.ToString(o.Key))
+			if err != nil || !p.Expired(k, now) {
+				continue
+			}
 			if _, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(c.bucket), Key: o.Key}); err != nil {
 				return deleted, fmt.Errorf("storage: delete: %w", err)
 			}

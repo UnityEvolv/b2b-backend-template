@@ -214,7 +214,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		root.Handle("POST /v1/webhooks/resend", limiter.Wrap(ratelimit.On(ratelimit.ProviderWebhook, ratelimit.ByIP), hook))
+		root.Handle("POST /v1/webhooks/resend", limiter.Wrap(ratelimit.On(ratelimit.Webhook, ratelimit.ByIP), hook))
 	}
 	perIP := ratelimit.On(ratelimit.PerAddress, ratelimit.ByIP)
 	// No token: the web push key, and the one-click unsubscribe a mail client

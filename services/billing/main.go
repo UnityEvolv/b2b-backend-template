@@ -160,7 +160,7 @@ func run() error {
 	)
 	perIP := ratelimit.On(ratelimit.PerAddress, ratelimit.ByIP)
 	// The provider's webhooks: signed, no bearer token.
-	root.Handle("POST /v1/webhooks/stripe", limiter.Wrap(ratelimit.On(ratelimit.ProviderWebhook, ratelimit.ByIP), http.HandlerFunc(srv.Webhook)))
+	root.Handle("POST /v1/webhooks/stripe", limiter.Wrap(ratelimit.On(ratelimit.Webhook, ratelimit.ByIP), http.HandlerFunc(srv.Webhook)))
 	root.Handle("/", limiter.Wrap(perIP, auth.Require(verifier, api)))
 
 	handler := httpx.SecurityHeaders(httpx.CORS(origins, httpx.Logged(logger, root)))

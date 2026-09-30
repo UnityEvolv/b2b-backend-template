@@ -71,11 +71,30 @@ or schema registered twice panics at start.
 ## Rate limits
 
 A new endpoint gets one line in its service's `Limits` table, binding it to a
-rule from `pkg/ratelimit/defaults.go` and what to count by:
+rule and what to count by:
 
 ```go
 "POST /v1/invites": ratelimit.On(ratelimit.InviteSend, ratelimit.ByMembership),
 ```
+
+The rules are a registry. The template's own are in
+[pkg/ratelimit/defaults.go](../pkg/ratelimit/defaults.go) and in
+`ratelimit.Default`: per address, unauthenticated, authenticated read and
+write, failed sign-in, password reset, invite send, SCIM and incoming
+webhooks. A product registers its own, each with a limit, a window and what
+it counts by (`PerIP`, `PerUser`, `PerMembership` or `PerOrg`), and gets back
+the line for its table:
+
+```go
+var ProjectCreate = ratelimit.Default.Register(
+    ratelimit.Rule{Name: "project-create", Limit: 30, Window: time.Minute}, ratelimit.PerMembership)
+
+"POST /v1/organizations/{org_id}/projects": ProjectCreate,
+```
+
+A name is registered once, so two rules never share a bucket; a rule with no
+name, limit or window panics at start. Every rule runs on the same Redis
+script.
 
 Over the limit, the client gets 429 with `Retry-After` and the `rate_limited`
 envelope. For sign-in style endpoints, where only failures should count, use

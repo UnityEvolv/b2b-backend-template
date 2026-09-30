@@ -16,6 +16,12 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
 )
 
+// A product's purposes, registered the way a product registers its own.
+var (
+	projectFile = storage.Default.Register(storage.Purpose{Name: "project-file", ContentTypes: []string{"application/pdf", "image/png", "image/jpeg"}, MaxBytes: 1 << 20, Retention: 30 * 24 * time.Hour})
+	anyFile     = storage.Default.Register(storage.Purpose{Name: "any-file", MaxBytes: 10 << 20})
+)
+
 func TestPurposeValidation(t *testing.T) {
 	p := storage.ProfilePhoto
 	if err := p.Validate("image/png", 1000); err != nil {
@@ -33,21 +39,21 @@ func TestPurposeValidation(t *testing.T) {
 		}
 	}
 	// A purpose with no type list takes anything, still bounded by size.
-	if err := storage.ChatAttachment.Validate("application/octet-stream", 5); err != nil {
+	if err := anyFile.Validate("application/octet-stream", 5); err != nil {
 		t.Error(err)
 	}
-	if err := storage.ChatAttachment.Validate("application/octet-stream", storage.ChatAttachment.MaxBytes+1); err == nil {
+	if err := anyFile.Validate("application/octet-stream", anyFile.MaxBytes+1); err == nil {
 		t.Error("oversize attachment accepted")
 	}
 }
 
 func TestKeysAreOrgFirstAndRoundTrip(t *testing.T) {
 	org := uuid.Must(uuid.NewV7()).String()
-	k, err := storage.NewKey(org, storage.OfficeBackground)
+	k, err := storage.NewKey(org, projectFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(k.String(), "orgs/"+org+"/office-background/") {
+	if !strings.HasPrefix(k.String(), "orgs/"+org+"/project-file/") {
 		t.Errorf("key %q does not lead with the org", k)
 	}
 	back, err := storage.ParseKey(k.String())
@@ -157,7 +163,7 @@ func TestSignedURLs(t *testing.T) {
 	c := client(t)
 	ctx := context.Background()
 	org := uuid.Must(uuid.NewV7()).String()
-	k, _ := storage.NewKey(org, storage.OfficeBackground)
+	k, _ := storage.NewKey(org, projectFile)
 	body := []byte("background bytes")
 	t.Cleanup(func() { c.Delete(ctx, org, k) })
 
@@ -235,7 +241,7 @@ func TestDeleteAllForAnOrg(t *testing.T) {
 	}
 	put(org, storage.ProfilePhoto)
 	put(org, storage.ProfilePhoto)
-	bg := put(org, storage.OfficeBackground)
+	bg := put(org, projectFile)
 	theirs := put(other, storage.ProfilePhoto)
 	t.Cleanup(func() { c.DeleteAll(ctx, other, "") })
 
@@ -253,5 +259,108 @@ func TestDeleteAllForAnOrg(t *testing.T) {
 	}
 	if _, err := c.DeleteAll(ctx, "", ""); err == nil {
 		t.Error("delete-all without an org")
+	}
+}
+
+// The template keeps only its own purposes; a product's is enforced like
+// them: its types, its size, and nothing stored under a purpose nobody
+// registered.
+func TestProductPurposeIsEnforced(t *testing.T) {
+	var names []string
+	for _, p := range storage.NewRegistry().Purposes() {
+		names = append(names, p.Name)
+	}
+	if strings.Join(names, ",") != "profile-photo,data-export" {
+		t.Errorf("template purposes: %v", names)
+	}
+	if p, ok := storage.Default.Lookup("project-file"); !ok || p.MaxBytes != 1<<20 {
+		t.Errorf("lookup: %+v %v", p, ok)
+	}
+	if err := projectFile.Validate("application/pdf", 1<<20); err != nil {
+		t.Errorf("pdf at the ceiling: %v", err)
+	}
+	if err := projectFile.Validate("application/pdf", 1<<20+1); !errors.Is(err, storage.ErrNotAllowed) {
+		t.Errorf("oversize: %v", err)
+	}
+	if err := projectFile.Validate("text/html", 10); !errors.Is(err, storage.ErrNotAllowed) {
+		t.Errorf("html: %v", err)
+	}
+	org := uuid.Must(uuid.NewV7()).String()
+	unregistered := storage.Purpose{Name: "office-background", MaxBytes: 5 << 20}
+	if _, err := storage.NewKey(org, unregistered); !errors.Is(err, storage.ErrUnknownPurpose) {
+		t.Errorf("unregistered purpose: %v", err)
+	}
+
+	// Retention: a file is past it thirty days on, not before; a purpose
+	// with none keeps its files.
+	k, err := storage.NewKey(org, projectFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if projectFile.Expired(k, now.Add(29*24*time.Hour)) || !projectFile.Expired(k, now.Add(31*24*time.Hour)) {
+		t.Error("retention not applied at thirty days")
+	}
+	photo, _ := storage.NewKey(org, storage.ProfilePhoto)
+	if storage.ProfilePhoto.Expired(photo, now.Add(10*365*24*time.Hour)) || projectFile.Expired(photo, now.Add(365*24*time.Hour)) {
+		t.Error("a file with no retention expired")
+	}
+}
+
+func TestBadPurposesPanic(t *testing.T) {
+	for name, p := range map[string]storage.Purpose{
+		"empty name":   {MaxBytes: 1},
+		"slash":        {Name: "a/b", MaxBytes: 1},
+		"upper case":   {Name: "Photos", MaxBytes: 1},
+		"no ceiling":   {Name: "things"},
+		"negative":     {Name: "things", MaxBytes: 1, Retention: -time.Hour},
+		"already here": {Name: "profile-photo", MaxBytes: 1},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: no panic", name)
+				}
+			}()
+			storage.NewRegistry().Register(p)
+		}()
+	}
+}
+
+// The sweep removes an org's files past their purpose's retention and
+// nothing else: not younger ones, not another purpose's, not another org's.
+func TestDeleteExpired(t *testing.T) {
+	c := client(t)
+	ctx := context.Background()
+	org := uuid.Must(uuid.NewV7()).String()
+	other := uuid.Must(uuid.NewV7()).String()
+	put := func(o string, p storage.Purpose) storage.Key {
+		k, _ := storage.NewKey(o, p)
+		if err := c.Put(ctx, o, k, "image/png", 1, strings.NewReader("x")); err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+	put(org, projectFile)
+	put(org, projectFile)
+	photo := put(org, storage.ProfilePhoto)
+	theirs := put(other, projectFile)
+	t.Cleanup(func() { c.DeleteAll(ctx, org, ""); c.DeleteAll(ctx, other, "") })
+
+	if n, err := c.DeleteExpired(ctx, org, projectFile, time.Now()); err != nil || n != 0 {
+		t.Fatalf("nothing is old yet: %d %v", n, err)
+	}
+	later := time.Now().Add(31 * 24 * time.Hour)
+	if n, err := c.DeleteExpired(ctx, org, projectFile, later); err != nil || n != 2 {
+		t.Fatalf("past retention: %d %v", n, err)
+	}
+	if n, err := c.DeleteExpired(ctx, org, storage.ProfilePhoto, later); err != nil || n != 0 {
+		t.Fatalf("no retention: %d %v", n, err)
+	}
+	if _, _, err := c.Get(ctx, org, photo); err != nil {
+		t.Error("another purpose's file was deleted")
+	}
+	if _, _, err := c.Get(ctx, other, theirs); err != nil {
+		t.Error("another org's file was deleted")
 	}
 }

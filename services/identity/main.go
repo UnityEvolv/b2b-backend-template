@@ -189,6 +189,8 @@ func run() error {
 		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), bus, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
 		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, DesktopScheme: desktopScheme})
 	srv.WithLive(bus)
+	// Security and membership notices, on the notification service's channel.
+	srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

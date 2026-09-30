@@ -54,15 +54,17 @@ func (s *Server) WithGroupSync(sync GroupSync) *Server {
 	return s
 }
 
-// Notice is an event for the notification service.
+// Notice is an event for the notification service: to everyone an
+// audience names ("admins"), or to the memberships in Recipients.
 type Notice struct {
-	ID       string         `json:"id"`
-	OrgID    string         `json:"org_id"`
-	Kind     string         `json:"kind"`
-	Category string         `json:"category"`
-	Audience string         `json:"audience"`
-	Link     string         `json:"link"`
-	Data     map[string]any `json:"data"`
+	ID         string         `json:"id"`
+	OrgID      string         `json:"org_id"`
+	Kind       string         `json:"kind"`
+	Category   string         `json:"category"`
+	Audience   string         `json:"audience,omitempty"`
+	Recipients []uuid.UUID    `json:"recipients,omitempty"`
+	Link       string         `json:"link"`
+	Data       map[string]any `json:"data"`
 }
 
 // Notifier hands notices to the notification service.

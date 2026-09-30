@@ -153,6 +153,9 @@ func (s *Server) confirmEnrolment(ctx context.Context, userID uuid.UUID, code st
 		OrgID: orgID.String(), Action: "mfa.enrolled", TargetType: "user", TargetID: userID.String(),
 		Actor: db.UserActor(userID.String()),
 	})
+	if err == nil {
+		s.mfaChanged(ctx, userID, orgID, callerMembership(ctx, orgID), mfaEnrolled, nil)
+	}
 	return codes, "", err
 }
 
@@ -456,6 +459,8 @@ func (s *Server) RegenerateRecoveryCodes(ctx context.Context, req api.Regenerate
 	}); err != nil {
 		return nil, err
 	}
+	org, _ := uuid.Parse(c.OrgID)
+	s.mfaChanged(ctx, userID, org, callerMembership(ctx, org), mfaRecoveryCodes, nil)
 	return api.RegenerateRecoveryCodes200JSONResponse{RecoveryCodes: codes}, nil
 }
 
@@ -505,6 +510,8 @@ func (s *Server) DisableMfa(ctx context.Context, req api.DisableMfaRequestObject
 	}); err != nil {
 		return nil, err
 	}
+	org, _ := uuid.Parse(c.OrgID)
+	s.mfaChanged(ctx, userID, org, callerMembership(ctx, org), mfaRemoved, nil)
 	return api.DisableMfa204Response{}, nil
 }
 
@@ -545,5 +552,11 @@ func (s *Server) ResetMemberMfa(ctx context.Context, req api.ResetMemberMfaReque
 	}); err != nil {
 		return nil, err
 	}
+	// Told in this org, with the admin who did it named.
+	var by *uuid.UUID
+	if id, err := uuid.Parse(actor.MembershipID); err == nil {
+		by = &id
+	}
+	s.mfaChanged(ctx, req.UserId, req.OrgId, activeIn(all, req.OrgId), mfaReset, by)
 	return api.ResetMemberMfa204Response{}, nil
 }

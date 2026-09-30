@@ -483,6 +483,8 @@ func newAPI(t *testing.T) *fixture {
 type browser struct {
 	f       *fixture
 	cookies map[string]*http.Cookie
+	// agent is its user agent; test-browser/1.0 when empty.
+	agent string
 }
 
 func (f *fixture) browser() *browser { return &browser{f: f, cookies: map[string]*http.Cookie{}} }
@@ -495,7 +497,11 @@ func (b *browser) do(method, path, token string, body any) *httptest.ResponseRec
 		reader = strings.NewReader(string(raw))
 	}
 	req := httptest.NewRequest(method, path, reader)
-	req.Header.Set("User-Agent", "test-browser/1.0")
+	agent := b.agent
+	if agent == "" {
+		agent = "test-browser/1.0"
+	}
+	req.Header.Set("User-Agent", agent)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

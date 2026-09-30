@@ -615,8 +615,16 @@ func (s *Server) startSession(ctx context.Context, userID, signedInOrg uuid.UUID
 		ID: id, UserID: userID, RefreshTokenHash: hash, SignedInOrgID: signedInOrg,
 		ExpiresAt: time.Now().Add(p.Lifetime), IdleTimeoutSeconds: int32(p.Idle.Seconds()),
 	}
-	if ua := userAgent(ctx); ua != "" {
+	ua := userAgent(ctx)
+	if ua != "" {
 		params.UserAgent = pgtype.Text{String: ua, Valid: true}
+	}
+	// Whether to tell the person about it, asked before it is one of theirs.
+	fresh := false
+	if s.notices != nil {
+		if fresh, err = s.newDevice(ctx, userID, ua); err != nil {
+			return store.Session{}, "", err
+		}
 	}
 	if land != nil {
 		params.ActiveOrgID = pgtype.UUID{Bytes: land.OrgID, Valid: true}
@@ -628,5 +636,8 @@ func (s *Server) startSession(ctx context.Context, userID, signedInOrg uuid.UUID
 		session, err = store.New(tx).InsertSessionWithPolicy(ctx, params)
 		return err
 	})
+	if err == nil && fresh {
+		s.signedInFromNewDevice(ctx, session, land)
+	}
 	return session, raw, err
 }

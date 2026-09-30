@@ -77,8 +77,11 @@ type Server struct {
 	authz    authz.Checker
 	events   livebus.Publisher
 	// live is the bus's listening end, for GET /v1/session/events.
-	live    Subscriber
-	email   email.Sender
+	live  Subscriber
+	email email.Sender
+	// notices tells people about their own security and membership; nil
+	// tells nobody.
+	notices Notifier
 	limiter *ratelimit.Limiter
 	kms     kms.Wrapper
 	cfg     Config

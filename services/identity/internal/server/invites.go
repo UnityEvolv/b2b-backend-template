@@ -140,6 +140,7 @@ func (s *Server) issue(ctx context.Context, orgID uuid.UUID, in inviteRequest) (
 	if err := s.sendInvite(ctx, row, raw); err != nil {
 		return store.Invite{}, "", err
 	}
+	s.invited(ctx, row)
 	action := "invite.sent"
 	if reissued {
 		action = "invite.resent"

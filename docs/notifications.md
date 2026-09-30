@@ -40,6 +40,17 @@ The template registers four:
 | `billing` | admin | feed, email | yes | the billing service sends its own heading and line |
 | `admin_notices` | admin | feed, email | yes | the SCIM sync's notices send their own |
 
+The service that owns each change emits it, on the notify channel, to the
+person's membership by id. Nothing personal travels with it: the router
+looks the person up, and names whoever did it from the `actor` membership.
+
+| kind | emitted by | when | data |
+| --- | --- | --- | --- |
+| `new_sign_in` | identity | a session starts from a user agent the person has never signed in with before (not their first sign-in) | none |
+| `mfa_changed` | identity | an authenticator is confirmed, recovery codes are regenerated, the person turns it off, or an admin resets it (the admin is the actor) | `change`: `enrolled`, `recovery_codes`, `removed`, `reset` |
+| `invited` | identity | someone who already has an account elsewhere is invited; told in the org they use, and the invite's link stays in the email | `where` (the inviting org), `role` |
+| `role_changed` | user | an active member's role changes | `role`, as the admin console names it |
+
 A product registers its own in the notification service's `main`:
 
 ```go

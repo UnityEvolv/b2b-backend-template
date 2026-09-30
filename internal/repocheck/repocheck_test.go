@@ -100,12 +100,37 @@ func TestEveryServiceIsRegistered(t *testing.T) {
 
 var queryName = regexp.MustCompile(`(?m)^-- name: (\w+)`)
 
+// queryFiles is every file of queries sqlc generates code from: the
+// queries/ beside each sqlc.yaml, in services/ and anywhere else in the tree.
+func queryFiles(t *testing.T) []string {
+	t.Helper()
+	var files []string
+	err := filepath.WalkDir(repoRoot(t), func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && (d.Name() == ".git" || d.Name() == "node_modules") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || d.Name() != "sqlc.yaml" {
+			return nil
+		}
+		matches, err := filepath.Glob(filepath.Join(filepath.Dir(path), "queries", "*.sql"))
+		files = append(files, matches...)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
 // Every query names org_id: it routes the shard and leads every index. A query
 // that is genuinely not per-org says so with a "-- global: <reason>" line.
 func TestQueriesAreOrgScoped(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join(repoRoot(t), "services", "*", "queries", "*.sql"))
-	if err != nil {
-		t.Fatal(err)
+	files := queryFiles(t)
+	if len(files) == 0 {
+		t.Fatal("no queries found; is the walk looking in the right place?")
 	}
 	for _, file := range files {
 		body, err := os.ReadFile(file)

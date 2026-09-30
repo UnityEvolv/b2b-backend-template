@@ -1,0 +1,11 @@
+# The server interface, generated from api/projects.yaml. Regenerate with
+# generate.sh (scripts/generate.sh runs it); never edit the output by hand.
+package: api
+output: internal/api/api.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: false
+output-options:
+  nullable-type: true

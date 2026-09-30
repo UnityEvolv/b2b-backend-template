@@ -29,3 +29,13 @@ for config in services/*/oapi-codegen.yaml; do
 done
 
 gofmt -w services
+
+# Generated code that lives outside services/ (a worked example, a product's
+# own services kept in their own directory) comes with its own generate.sh
+# beside it. Each one runs here too, so the drift check covers it; with none,
+# nothing runs.
+for extra in */*/generate.sh; do
+  [ -f "$extra" ] || continue
+  echo "generate: $(dirname "$extra")"
+  bash "$extra"
+done

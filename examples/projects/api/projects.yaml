@@ -1,0 +1,571 @@
+openapi: 3.0.3
+info:
+  title: projects
+  version: 1.0.0
+  description: |
+    The example product's one service: an organization's projects, the
+    members each is shared with, and a cover image per project. It is built
+    only from the template's extension points; see examples/projects/README.md.
+
+    Anyone in the organization reads its projects. Creating, changing,
+    sharing and deleting them needs the `projects` permission group, which
+    Admins hold by default and an Owner configures per organization. The
+    number of projects is capped by the organization's plan: a create over
+    the cap is refused with `plan.limit_reached`.
+
+    Every error is the same envelope, `{ code, message, fields? }`.
+servers:
+  - url: /projects
+security:
+  - bearer: []
+paths:
+  /v1/organizations/{org_id}/projects:
+    get:
+      operationId: listProjects
+      summary: The organization's projects, newest first
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: cursor
+          in: query
+          description: From the previous page's next_cursor. Omit for the first page.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: One page; next_cursor is absent on the last
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createProject
+      summary: Create a project (the projects permission)
+      description: |
+        The Idempotency-Key header is required: a retried request with the
+        same key returns the project the first one created and never makes a
+        second, even at the plan's cap. The same key with a different name
+        is refused (409, `request.idempotency_key_reused`). Over the plan's
+        cap, 403 `plan.limit_reached` with `fields.plan`, `fields.limit`
+        (`projects`) and, when a higher plan allows more, `fields.required_plan`.
+        Audited as `project.created`.
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewProject'
+      responses:
+        '201':
+          description: The project, whether created now or by the first request with this key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/projects/{project_id}:
+    get:
+      operationId: getProject
+      summary: One project
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateProject
+      summary: Rename a project or change its description (the projects permission)
+      description: Fields left out are unchanged; an empty description clears it. Audited as `project.updated`.
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectChange'
+      responses:
+        '200':
+          description: The project as it is now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteProject
+      summary: Delete a project, its members and its cover (the projects permission)
+      description: Audited as `project.deleted`.
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/projects/{project_id}/members:
+    get:
+      operationId: listProjectMembers
+      summary: The memberships a project is shared with, in the order they were added
+      tags: [members]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Every member; a project has at most 500
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/projects/{project_id}/members/{membership_id}:
+    put:
+      operationId: addProjectMember
+      summary: Share a project with an active member of the organization (the projects permission)
+      description: |
+        Idempotent: sharing again answers with the member as it is. The first
+        time, the member is told (the `project_shared` notification
+        category), their open sessions get a `project.shared` live event, and
+        it is audited as `project.member_added`. A membership that is not
+        active in this organization is refused (400, `member.not_active`).
+      tags: [members]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: The member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeProjectMember
+      summary: Stop sharing a project with a member (the projects permission)
+      description: Removed, or was never a member. Audited as `project.member_removed` when there was one.
+      tags: [members]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '204':
+          description: Not a member now
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/projects/{project_id}/cover:
+    post:
+      operationId: setProjectCover
+      summary: Start uploading a new cover image (the projects permission)
+      description: |
+        JPEG, PNG or WebP, at most 2 MB (the `project-cover` storage
+        purpose). The answer is a signed URL the browser PUTs the file to
+        within ten minutes, with exactly the content type and size it
+        declared here; the project already points at the new cover, and the
+        previous one is deleted. Audited as `project.cover_set`.
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewCover'
+      responses:
+        '200':
+          description: Where to upload it, and the project pointing at it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverUpload'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeProjectCover
+      summary: Remove the cover image (the projects permission)
+      tags: [projects]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Removed, or there was none
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/memberships/{membership_id}/data:
+    delete:
+      operationId: forgetMembershipData
+      summary: Delete what this service keeps personally under one membership, for account deletion (the organization and user services only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '204':
+          description: Forgotten
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        A key the client makes up once per intended create and reuses on
+        every retry of it. A second request with the same key returns what
+        the first one made.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipId:
+      name: membership_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Project:
+      type: object
+      required: [id, org_id, name, description, member_count, created_by, created_at, last_modified_by, last_modified_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          description: Empty when there is none.
+        member_count:
+          type: integer
+        cover_url:
+          type: string
+          description: A signed link to the cover image, valid for an hour; absent when there is none.
+        created_by:
+          type: string
+          description: The actor, as membership:<uuid>; ids only.
+        created_at:
+          type: string
+          format: date-time
+        last_modified_by:
+          type: string
+        last_modified_at:
+          type: string
+          format: date-time
+    ProjectPage:
+      type: object
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        next_cursor:
+          type: string
+    NewProject:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: 1 to 200 characters.
+        description:
+          type: string
+          description: At most 2000 characters.
+    ProjectChange:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 1 to 200 characters.
+        description:
+          type: string
+          description: At most 2000 characters; empty clears it.
+    ProjectMember:
+      type: object
+      required: [project_id, membership_id, added_by, added_at]
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        added_by:
+          type: string
+        added_at:
+          type: string
+          format: date-time
+    ProjectMemberList:
+      type: object
+      required: [members]
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMember'
+    NewCover:
+      type: object
+      required: [content_type, size]
+      properties:
+        content_type:
+          type: string
+          description: image/jpeg, image/png or image/webp.
+        size:
+          type: integer
+          format: int64
+          description: The file's size in bytes, at most 2 MB.
+    CoverUpload:
+      type: object
+      required: [upload_url, expires_at, project]
+      properties:
+        upload_url:
+          type: string
+          description: PUT the file here, with the declared Content-Type and Content-Length.
+        expires_at:
+          type: string
+          format: date-time
+        project:
+          $ref: '#/components/schemas/Project'
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer

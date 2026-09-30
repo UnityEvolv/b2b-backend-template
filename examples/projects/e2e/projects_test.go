@@ -399,9 +399,17 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 				t.Fatalf("create %d: %s", i, r)
 			}
 		}
-		r := s.call(http.MethodPost, globexProjects, globexAdmin.token, map[string]any{"name": "One too many"}, "batch-20")
+		// The rule refills one every three seconds, so on a slow machine the
+		// burst above may have earned a few more; the refusal comes soon
+		// after either way.
+		var r reply
+		for i := 20; i < 30; i++ {
+			if r = s.call(http.MethodPost, globexProjects, globexAdmin.token, map[string]any{"name": fmt.Sprintf("Batch %d", i)}, fmt.Sprintf("batch-%d", i)); r.status != http.StatusCreated {
+				break
+			}
+		}
 		if r.status != http.StatusTooManyRequests || r.code() != "rate_limited" || r.header.Get("Retry-After") == "" {
-			t.Errorf("the 21st in a minute: %s", r)
+			t.Errorf("past 20 in a minute: %s", r)
 		}
 		// Counted per membership: the Owner is not held up by it.
 		if r := s.call(http.MethodPost, globexProjects, globexOwner.token, map[string]any{"name": "Owner's"}, "owner-1"); r.status != http.StatusCreated {

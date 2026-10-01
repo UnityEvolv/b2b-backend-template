@@ -72,6 +72,7 @@ template service to add to it.
 | permission groups | `pkg/authz.Default` | `PERMISSION_GROUPS` |
 | services that hold org or member data (export, purge, erase, decrypt) | `pkg/dataowner.Default` | `DATA_OWNERS` |
 | notification categories, with their copy and default channels | `pkg/notifycat.Default` | `NOTIFICATION_CATEGORIES` |
+| what a SCIM group grants | `WithGroupSync` (user service) | `SCIM_GROUP_SYNC`, naming a data owner ([docs/users.md](docs/users.md#scim)) |
 | live-session event types | `pkg/livebus.Default` | |
 | storage purposes and rate-limit rules | `pkg/storage`, `pkg/ratelimit.Default` | |
 | its name, id, hostnames, apps, cookies and Redis prefix | | `PRODUCT_NAME`, `PRODUCT_ID`, `BASE_HOSTNAME`, `APP_NAMES`, `COOKIE_PREFIX`, `REDIS_PREFIX` (`pkg/config`) |

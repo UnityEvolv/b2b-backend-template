@@ -24,6 +24,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/errtrack"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/groupsync"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
@@ -87,7 +88,10 @@ func run() error {
 		// or DATA_OWNERS) forgets what it keeps under the person's memberships.
 		notificationURL = env.Required("NOTIFICATION_URL")
 		dataOwners      = env.String("DATA_OWNERS", "")
-		tokenURL        = env.Required("SERVICE_TOKEN_URL")
+		// The product service that carries a SCIM group to what it grants
+		// (pkg/groupsync): a data owner's name. Unset, groups grant nothing.
+		groupSyncName = env.String("SCIM_GROUP_SYNC", "")
+		tokenURL      = env.Required("SERVICE_TOKEN_URL")
 		// Profile photos, in the upload bucket.
 		s3 = storage.Config{
 			Endpoint: env.String("S3_ENDPOINT", ""), Region: env.String("S3_REGION", ""),
@@ -111,6 +115,10 @@ func run() error {
 		return fmt.Errorf("PLANS: %w", err)
 	}
 	if err := dataowner.Default.Locate(env.Lookup, dataowner.Owner.Erases); err != nil {
+		return err
+	}
+	groupSyncURL, err := locateGroupSync(dataowner.Default, env.Lookup, groupSyncName)
+	if err != nil {
 		return err
 	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
@@ -174,7 +182,11 @@ func run() error {
 		scimBase = "https://" + config.HostsFor(baseHost).API + "/" + name
 	}
 	// SCIM groups are stored and grant nothing until a product carries them to
-	// what they grant, with srv.WithGroupSync.
+	// what they grant: the service SCIM_GROUP_SYNC names, or, in a process
+	// the product builds itself, srv.WithGroupSync.
+	if groupSyncURL != "" {
+		srv = srv.WithGroupSyncService(groupsync.NewClient(groupSyncName, groupSyncURL, tokens, nil))
+	}
 	srv = srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()}).WithSCIM(scimBase).WithSCIMTokenPrefix(scimPrefix).
 		WithLive(livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger))
 	// The data owners that keep something personal under a membership forget
@@ -197,6 +209,27 @@ func run() error {
 
 	handler := httpx.SecurityHeaders(httpx.CORS(origins, httpx.Logged(logger, root)))
 	return httpx.Serve(ctx, logger, fmt.Sprintf(":%d", port), handler, grace)
+}
+
+// locateGroupSync is the base URL of the data owner SCIM_GROUP_SYNC names:
+// its DATA_OWNERS url or its <NAME>_URL. A name that is not a data owner,
+// or one with no URL, fails start. Empty is none.
+func locateGroupSync(owners *dataowner.Registry, lookup func(string) string, service string) (string, error) {
+	if service == "" {
+		return "", nil
+	}
+	if !owners.Known(service) {
+		return "", fmt.Errorf("SCIM_GROUP_SYNC: %q is not a data owner; add it to DATA_OWNERS", service)
+	}
+	if err := owners.Locate(lookup, func(o dataowner.Owner) bool { return o.Name == service }); err != nil {
+		return "", fmt.Errorf("SCIM_GROUP_SYNC: %w", err)
+	}
+	for _, o := range owners.Owners() {
+		if o.Name == service {
+			return o.URL, nil
+		}
+	}
+	return "", nil
 }
 
 func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) error {

@@ -52,6 +52,8 @@ x-service-env: &service-env
   PERMISSION_GROUPS: ${PERMISSION_GROUPS:-}
   DATA_OWNERS: ${DATA_OWNERS:-}
   NOTIFICATION_CATEGORIES: ${NOTIFICATION_CATEGORIES:-}
+  # The data owner that carries SCIM groups to what they grant (user).
+  SCIM_GROUP_SYNC: ${SCIM_GROUP_SYNC:-}
 
 # The object store, for the services that keep files.
 x-s3-env: &s3-env

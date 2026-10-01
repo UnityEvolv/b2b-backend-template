@@ -19,6 +19,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/email"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/groupsync"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
@@ -42,7 +43,7 @@ type Server struct {
 	// SCIM.
 	scimPublic   string
 	scimPrefix   string
-	groupSync    GroupSync
+	groupSync    func(context.Context, groupsync.Request) (GroupSyncResult, error)
 	notices      Notifier
 	live         livebus.Publisher
 	haltFraction float64

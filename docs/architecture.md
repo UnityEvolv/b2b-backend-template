@@ -51,6 +51,7 @@ another service.
 | `email` | the one call that sends mail, through the notification outbox, and the templates ([email.md](email.md)) |
 | `envelope` | per-org envelope encryption ([encryption.md](encryption.md)) |
 | `errtrack` | error reports to Sentry, without personal data |
+| `groupsync` | the endpoint a product service answers to carry a SCIM group to what it grants ([users.md](users.md#scim)) |
 | `httpx` | the error shape, security headers, CORS, request logging, metrics, tracing, cursors |
 | `kms` | the master key: Cloud KMS deployed, a local file on a laptop |
 | `livebus` | the live-session event bus and its type registry ([sessions.md](sessions.md#the-push)) |

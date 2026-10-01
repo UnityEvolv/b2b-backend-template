@@ -14,6 +14,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/groupsync"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/store"
@@ -26,19 +27,15 @@ import (
 // away at once is halted for an admin instead of applied.
 //
 // The template stores groups and their members; what a group grants (a
-// team, a project, a workspace) is the product's, through GroupSync.
+// team, a project, a workspace) is the product's: a product service named
+// in SCIM_GROUP_SYNC (pkg/groupsync, WithGroupSyncService), or a GroupSync
+// set in code (WithGroupSync).
 
 // GroupMember is one person in a group.
-type GroupMember struct {
-	MembershipID uuid.UUID `json:"membership_id"`
-	UserID       uuid.UUID `json:"user_id"`
-}
+type GroupMember = groupsync.Member
 
 // GroupSyncResult is what a group sync changed, or would.
-type GroupSyncResult struct {
-	Added   []uuid.UUID `json:"added"`
-	Removed []uuid.UUID `json:"removed"`
-}
+type GroupSyncResult = groupsync.Result
 
 // GroupSync is the hook a product implements to carry a SCIM group to what
 // it grants. Without one, groups are stored and grant nothing.
@@ -48,10 +45,43 @@ type GroupSync interface {
 	SyncGroup(ctx context.Context, org, group uuid.UUID, members []GroupMember, dryRun bool) (GroupSyncResult, error)
 }
 
-// WithGroupSync is s, carrying groups to what they grant through sync.
+// WithGroupSync is s, carrying groups to what they grant through sync, a
+// hook in the process's own code.
 func (s *Server) WithGroupSync(sync GroupSync) *Server {
-	s.groupSync = sync
+	s.groupSync = func(ctx context.Context, r groupsync.Request) (GroupSyncResult, error) {
+		return sync.SyncGroup(ctx, r.OrgID, r.GroupID, r.Members, r.DryRun)
+	}
 	return s
+}
+
+// WithGroupSyncService is s, carrying groups to what they grant through a
+// product service's endpoint (SCIM_GROUP_SYNC): it is sent the whole group,
+// its name and why. A call that fails is logged, and the daily
+// reconciliation sends the group again.
+func (s *Server) WithGroupSyncService(c *groupsync.Client) *Server {
+	s.groupSync = c.Sync
+	return s
+}
+
+// changeOf is what a group sync is told about why it is called.
+func changeOf(cause string) string {
+	switch cause {
+	case "delete":
+		return groupsync.ChangeDeleted
+	case "reconciliation":
+		return groupsync.ChangeReconciliation
+	case "admin":
+		return groupsync.ChangeApproved
+	}
+	return groupsync.ChangeDirectory
+}
+
+// callGroupSync hands the group as it stands to the product.
+func (s *Server) callGroupSync(ctx context.Context, org uuid.UUID, g store.ScimGroup, members []GroupMember, cause string, dryRun bool) (GroupSyncResult, error) {
+	if members == nil {
+		members = []GroupMember{}
+	}
+	return s.groupSync(ctx, groupsync.Request{OrgID: org, GroupID: g.ID, DisplayName: g.DisplayName, Members: members, Change: changeOf(cause), DryRun: dryRun})
 }
 
 // Notice is an event for the notification service: to everyone an
@@ -203,7 +233,7 @@ func (s *Server) syncGroup(ctx context.Context, org, group uuid.UUID, cause stri
 	if err != nil {
 		return false, err
 	}
-	res, err := s.groupSync.SyncGroup(ctx, org, group, members, true)
+	res, err := s.callGroupSync(ctx, org, g, members, cause, true)
 	if err != nil {
 		return false, err
 	}
@@ -216,7 +246,7 @@ func (s *Server) syncGroup(ctx context.Context, org, group uuid.UUID, cause stri
 
 // carry hands a group's members to the product, unguarded.
 func (s *Server) carry(ctx context.Context, org uuid.UUID, g store.ScimGroup, members []GroupMember, cause string) error {
-	res, err := s.groupSync.SyncGroup(ctx, org, g.ID, members, false)
+	res, err := s.callGroupSync(ctx, org, g, members, cause, false)
 	if err != nil {
 		return err
 	}

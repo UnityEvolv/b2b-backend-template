@@ -119,6 +119,7 @@ configuration:
 | `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
 | `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
 | `NOTIFICATION_CATEGORIES` | notification | the product's notification categories, JSON ([docs/notifications.md](../docs/notifications.md)) |
+| `SCIM_GROUP_SYNC` | user | the data owner that carries a SCIM group to what it grants: its name in `DATA_OWNERS` ([docs/users.md](../docs/users.md#scim)). Unset, groups grant nothing |
 | `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `AUDIT_URL`) are these |
 
 The organization service needs the URL of every owner that exports or

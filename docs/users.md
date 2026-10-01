@@ -97,8 +97,44 @@ credentials for local accounts (the identity service).
 
 SCIM 2.0 users and groups are in this service too, in their own tables
 (`scim_*`). A group is stored as the directory sent it and grants nothing
-by itself. What a group grants (a team, a project) is the product's, through
-the `GroupSync` hook
-([scim_sync.go](../services/user/internal/server/scim_sync.go)). The hook
-is set in the user service's `main` (`WithGroupSync`); it has no
-configuration seam yet.
+by itself. What a group grants (a team, a project) is the product's.
+
+A product running the user service unchanged names the service that
+decides in `SCIM_GROUP_SYNC`. It must be a data owner (in `DATA_OWNERS`,
+[data-owners.md](data-owners.md)), so its URL is its entry's `url` or its
+`<NAME>_URL`; a name that is not an owner, or has no URL, stops the user
+service at start. Unset, groups grant nothing. That service answers, in its
+own contract, with the shapes in [pkg/groupsync](../pkg/groupsync/groupsync.go),
+for the user service only, which calls with its own service token:
+
+```
+POST /v1/internal/organizations/{org_id}/scim-groups/{group_id}/sync
+
+{"org_id": "…", "group_id": "…", "display_name": "Design",
+ "members": [{"membership_id": "…", "user_id": "…"}],
+ "change": "directory", "dry_run": true}
+
+200 {"added": ["<membership id>"], "removed": []}
+```
+
+The group is sent whole, never as a delta: SCIM pushes are lost,
+duplicated and reordered, so the product makes what the group grants match
+`members` exactly and answers who that added and removed, by membership id.
+`change` says why it is sent: `directory` (the directory created the group
+or changed it), `deleted` (the directory deleted it; `members` is empty and
+the group goes once this succeeds), `reconciliation` (the daily pass) or
+`approved` (an admin applied a halted change). Except when approved, each
+is sent twice: first with `dry_run: true`, when the product changes nothing
+and only says who would be added and removed, and then for real. A change
+that would take more people away at once than a quarter of the org's active
+members (never fewer than five) is halted for an admin instead of applied.
+
+There is no queue. The call is made when the directory changes the group. A
+failure is logged, the directory's change stays stored, and the daily
+reconciliation (`SCIM_RECONCILE_EVERY`) sends every group again as it then
+stands, so the product catches up within a day. A failed call for a deleted
+group fails the directory's delete, which the directory retries.
+
+A process the product builds itself can set the same hook in code instead,
+with `WithGroupSync` and the `GroupSync` interface
+([scim_sync.go](../services/user/internal/server/scim_sync.go)).

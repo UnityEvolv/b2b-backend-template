@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,8 +14,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/groupsync"
 	"github.com/UnityEvolv/b2b-backend-template/services/user/internal/server"
 )
 
@@ -490,5 +493,139 @@ func TestSCIMTokensCarryTheConfiguredPrefix(t *testing.T) {
 	}
 	if code, _ := f.scim(t, http.MethodGet, "/scim/v2/"+initech.String()+"/Users", id(t, tok, "token"), nil); code != http.StatusOK {
 		t.Errorf("the token is refused: %d", code)
+	}
+}
+
+// productEndpoint is a product service answering pkg/groupsync's endpoint
+// over HTTP, carrying each group to its fake grants, recording every
+// request, and failing while down is set.
+type productEndpoint struct {
+	*httptest.Server
+	fake *fakeGroupSync
+	mu   sync.Mutex
+	got  []groupsync.Request
+	down bool
+}
+
+func newProductEndpoint(t *testing.T) *productEndpoint {
+	p := &productEndpoint{fake: newFakeGroupSync()}
+	p.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req groupsync.Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || r.URL.Path != groupsync.Path(req.OrgID, req.GroupID) || r.Header.Get("Authorization") != "Bearer user-service" {
+			http.Error(w, "wrong call", http.StatusBadRequest)
+			return
+		}
+		p.mu.Lock()
+		down := p.down
+		if !down {
+			p.got = append(p.got, req)
+		}
+		p.mu.Unlock()
+		if down {
+			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
+		res, _ := p.fake.SyncGroup(r.Context(), req.OrgID, req.GroupID, req.Members, req.DryRun)
+		json.NewEncoder(w).Encode(res)
+	}))
+	t.Cleanup(p.Close)
+	return p
+}
+
+func (p *productEndpoint) setDown(down bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.down = down
+}
+
+// requests is what the product was sent since the last call, as
+// "change dry-run name members".
+func (p *productEndpoint) requests() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []string
+	for _, r := range p.got {
+		out = append(out, fmt.Sprintf("%s %t %s %d", r.Change, r.DryRun, r.DisplayName, len(r.Members)))
+	}
+	p.got = nil
+	return out
+}
+
+// SCIM_GROUP_SYNC: a product service carries groups over HTTP. It is sent
+// the whole group, its name and why, a dry run first; a failed call leaves
+// the directory's change stored and the reconciliation sends it again.
+func TestSCIMGroupSyncService(t *testing.T) {
+	f := newAPI(t)
+	product := newProductEndpoint(t)
+	f.srv.WithGroupSyncService(groupsync.NewClient("projects", product.URL, auth.StaticToken("user-service"), nil))
+
+	owner := f.signIn(t, initech, "owner@initech.test", "Owner", nil)
+	ownerID := id(t, owner, "membership", "id")
+	f.grants[initech.String()+"/"+ownerID] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())}
+	ownerToken := f.person(t, id(t, owner, "user", "id"), initech.String(), ownerID)
+	_, tok := f.do(t, http.MethodPost, "/v1/organizations/"+initech.String()+"/scim/tokens", ownerToken, nil)
+	token := id(t, tok, "token")
+	base := "/scim/v2/" + initech.String()
+
+	var people []string
+	for i := range 3 {
+		name := string(rune('a'+i)) + "@initech.test"
+		code, out := f.scim(t, http.MethodPost, base+"/Users", token, scimUser(name, "ext-"+name, "Person "+name, nil))
+		if code != http.StatusCreated {
+			t.Fatalf("user %d: %d %v", i, code, out)
+		}
+		people = append(people, id(t, out, "id"))
+	}
+	members := func(ids ...string) []any {
+		out := make([]any, len(ids))
+		for i, m := range ids {
+			out[i] = map[string]any{"value": m}
+		}
+		return out
+	}
+
+	code, g := f.scim(t, http.MethodPost, base+"/Groups", token, map[string]any{"displayName": "Design", "members": members(people[0], people[1])})
+	if code != http.StatusCreated {
+		t.Fatalf("group: %d %v", code, g)
+	}
+	groupID := id(t, g, "id")
+	if got := strings.Join(product.requests(), ", "); got != "directory true Design 2, directory false Design 2" {
+		t.Errorf("create: %s", got)
+	}
+	if got := product.fake.members(groupID); len(got) != 2 || !slices.Contains(got, uuid.MustParse(people[0])) {
+		t.Errorf("carried: %v", got)
+	}
+
+	// The product is down: the directory's change is stored all the same,
+	// and the daily reconciliation carries it once the product is back.
+	product.setDown(true)
+	if code, _ := f.scim(t, http.MethodPatch, base+"/Groups/"+groupID, token, patch(
+		map[string]any{"op": "Add", "path": "members", "value": members(people[2])},
+	)); code != http.StatusNoContent {
+		t.Fatalf("patch while down: %d", code)
+	}
+	if got := product.fake.members(groupID); len(got) != 2 {
+		t.Errorf("down, yet carried: %v", got)
+	}
+	product.setDown(false)
+	if err := f.srv.Reconcile(context.Background(), initech); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(product.requests(), ", "); got != "reconciliation true Design 3, reconciliation false Design 3" {
+		t.Errorf("reconciliation: %s", got)
+	}
+	if got := product.fake.members(groupID); len(got) != 3 {
+		t.Errorf("caught up: %v", got)
+	}
+
+	// Deleting the group sends it empty, then it goes.
+	if code, _ := f.scim(t, http.MethodDelete, base+"/Groups/"+groupID, token, nil); code != http.StatusNoContent {
+		t.Fatalf("delete: %d", code)
+	}
+	if got := strings.Join(product.requests(), ", "); got != "deleted true Design 0, deleted false Design 0" {
+		t.Errorf("delete: %s", got)
+	}
+	if got := product.fake.members(groupID); len(got) != 0 {
+		t.Errorf("after the delete: %v", got)
 	}
 }

@@ -208,7 +208,12 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 				role = parsed
 			}
 			if !authz.MayManage(grant.Role, role) {
-				r.Errors = append(r.Errors, rowError("role_invalid", "You may not invite a "+strings.ReplaceAll(string(role), "_", " ")+"."))
+				name := strings.ReplaceAll(string(role), "_", " ")
+				article := "a "
+				if strings.ContainsRune("aeiou", rune(name[0])) {
+					article = "an "
+				}
+				r.Errors = append(r.Errors, rowError("role_invalid", "You may not invite "+article+name+"."))
 			}
 		}
 		roleName := string(role)

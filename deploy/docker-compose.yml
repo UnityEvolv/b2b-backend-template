@@ -1,11 +1,98 @@
 # The local stack. Development happens here, not in the cloud.
 #
-#   docker compose -f deploy/docker-compose.yml up --build
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
+#
+# docs/local-dev.md walks through it. Postgres, Redis, a mail catcher, an S3
+# emulator, the stub OpenID provider, the seven services, a gateway that
+# routes /<service>/ to each as the deployed load balancer does, and the
+# three web apps built from the sibling b2b-frontend-template checkout
+# (FRONTEND_DIR).
 #
 # Every value below is a local-only default. Nothing here is used outside a
-# laptop; real secrets live in the cloud secret manager.
+# laptop; real secrets live in the cloud secret manager. Every host port is
+# a setting (deploy/.env), so the stack can sit beside anything else.
 
 name: b2bapp
+
+# What every Go service is told: the database, the token issuer, Redis,
+# where the other services are, and which browser origins may call it.
+x-service-env: &service-env
+  DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
+  # Each service connects as svc_<schema> with password svc_<schema>-local.
+  DB_LOCAL_PASSWORDS: 'true'
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Error tracking is off unless deploy/.env names a DSN.
+  SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+  ENVIRONMENT: local
+  PRODUCT_NAME: ${PRODUCT_NAME:-B2B App}
+  AUTH_ISSUER: b2bapp-local
+  AUTH_AUDIENCE: b2bapp
+  AUTH_JWKS_URL: http://identity:8080/v1/jwks
+  REDIS_URL: redis://redis:6379/0
+  # Service tokens come from the identity service's local token endpoint.
+  SERVICE_TOKEN_URL: http://identity:8080
+  AUDIT_URL: http://audit:8080
+  AUTHORIZATION_URL: http://authorization:8080
+  BILLING_URL: http://billing:8080
+  IDENTITY_URL: http://identity:8080
+  NOTIFICATION_URL: http://notification:8080
+  ORGANIZATION_URL: http://organization:8080
+  USER_URL: http://user:8080
+  # Where each web app is; links in emails and sign-in redirects open these.
+  APP_ORIGIN_ACCOUNT: http://localhost:${ACCOUNT_PORT:-5173}
+  APP_ORIGIN_ADMIN: http://localhost:${ADMIN_PORT:-5174}
+  APP_ORIGIN_PLATFORM: http://localhost:${PLATFORM_PORT:-5175}
+  # CORS admits the apps above; ALLOWED_ORIGINS adds more (a dev server on
+  # another port).
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+  # A product's registrations, as configuration (services/README.md,
+  # "Settings a product sets"). Empty is the template's own.
+  PLANS: ${PLANS:-}
+  PERMISSION_GROUPS: ${PERMISSION_GROUPS:-}
+  DATA_OWNERS: ${DATA_OWNERS:-}
+  NOTIFICATION_CATEGORIES: ${NOTIFICATION_CATEGORIES:-}
+
+# The object store, for the services that keep files.
+x-s3-env: &s3-env
+  S3_ENDPOINT: http://s3:9000
+  S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
+  S3_PATH_STYLE: 'true'
+  S3_BUCKET: ${S3_BUCKET:-b2bapp}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
+
+# Any Go service's image; the service block adds args: {SERVICE: <name>}.
+x-service-build: &service-build
+  context: ..
+  dockerfile: deploy/service.Dockerfile
+  secrets:
+    - extra_ca
+
+x-tools-build: &tools-build
+  context: ..
+  dockerfile: deploy/service.Dockerfile
+  target: tools
+  secrets:
+    - extra_ca
+
+# A service starts once its schema is migrated and Redis answers.
+x-service-depends: &service-depends
+  migrate:
+    condition: service_completed_successfully
+  redis:
+    condition: service_healthy
+
+# A web app: the frontend's own image (deploy/web.Dockerfile there), its
+# pages calling the gateway. The block adds args: {APP: <name>}.
+x-web-build: &web-build
+  context: ${FRONTEND_DIR:-../../b2b-frontend-template}
+  dockerfile: deploy/web.Dockerfile
+
+x-web-env: &web-env
+  # Filled into the pages' Content-Security-Policy.
+  API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
+  STORAGE_ORIGIN: http://localhost:${S3_PORT:-9000}
 
 services:
   postgres:
@@ -29,15 +116,10 @@ services:
   # A schema and a login role per service, on every start. Idempotent,
   # so it also repairs a role or a grant edited by hand.
   dbinit:
-    build:
-      context: ..
-      dockerfile: deploy/tools.Dockerfile
-      secrets:
-        - extra_ca
+    build: *tools-build
     command: ['dbinit']
     environment:
       DATABASE_ADMIN_URL: postgres://b2bapp:${POSTGRES_PASSWORD:-b2bapp-local}@postgres:5432/b2bapp?sslmode=disable
-      # Each service connects as svc_<schema> with password svc_<schema>-local.
       DB_LOCAL_PASSWORDS: 'true'
     depends_on:
       postgres:
@@ -46,11 +128,7 @@ services:
 
   # Every service's migrations, each as its own role, after dbinit.
   migrate:
-    build:
-      context: ..
-      dockerfile: deploy/tools.Dockerfile
-      secrets:
-        - extra_ca
+    build: *tools-build
     command: ['migrate', 'up']
     environment:
       # Host and database only: each service connects as svc_<schema>.
@@ -61,305 +139,10 @@ services:
         condition: service_completed_successfully
     restart: 'no'
 
-  # The OpenID provider an organization signs in through on a laptop: set
-  # its identity provider to the generic preset with issuer
-  # http://stubissuer:8090, client id local-sso and secret local-sso-secret
-  # (docs/sso.md). The browser reaches its sign-in page on localhost.
-  # Its key is generated at start: restarting it invalidates every token.
-  stubissuer:
-    build:
-      context: ..
-      dockerfile: deploy/tools.Dockerfile
-      secrets:
-        - extra_ca
-    command: ['stubissuer']
-    environment:
-      STUB_ISSUER_LOCAL_ONLY: 'true'
-      PORT: '8090'
-      AUTH_ISSUER: b2bapp-local-stub
-      STUB_OIDC_ISSUER: http://stubissuer:8090
-      STUB_OIDC_BROWSER_URL: http://localhost:${STUB_ISSUER_PORT:-8090}
-    ports:
-      - '${STUB_ISSUER_PORT:-8090}:8090'
-
-  # Go services. Each connects as its own role; copy this block for a new one.
-  # Sign-in through an org's identity provider, sessions, and the tokens
-  # every other service verifies. Locally it also mints service and
-  # development tokens at POST /token, as the stub issuer did.
-  identity:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: identity
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      REDIS_URL: redis://redis:6379/0
-      AUDIT_URL: http://audit:8080
-      USER_URL: http://user:8080
-      ORGANIZATION_URL: http://organization:8080
-      AUTHORIZATION_URL: http://authorization:8080
-      NOTIFICATION_URL: http://notification:8080
-      KMS_PROVIDER: file
-      KMS_FILE: /kms/master.json
-      # Where a browser reaches this service and each app, on a laptop.
-      IDENTITY_PUBLIC_URL: http://localhost:${IDENTITY_PORT:-8093}
-      APP_ORIGIN_ACCOUNT: http://localhost:5173
-      APP_ORIGIN_ADMIN: http://localhost:5174
-      APP_ORIGIN_PLATFORM: http://localhost:5175
-      SECURE_COOKIES: 'false'
-      LOCAL_SERVICE_TOKENS: 'true'
-      # Identity providers on plain http and private addresses: the stub
-      # issuer on this network.
-      OIDC_LOCAL_ISSUERS: 'true'
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-      # The first platform operator, invited on start while the platform org
-      # is empty; the invite lands in the mail catcher. Empty invites nobody.
-      BOOTSTRAP_OPERATOR_EMAIL: ${BOOTSTRAP_OPERATOR_EMAIL:-}
-    volumes:
-      - kms:/kms
-    # Not 8085: gcloud auth login listens there for its browser redirect.
-    ports:
-      - '${IDENTITY_PORT:-8093}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
-  organization:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: organization
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Error tracking is off unless deploy/.env names a DSN.
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      # Where this service records audit entries, and where it gets the
-      # service token it presents there.
-      AUDIT_URL: http://audit:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      # Self-serve signup: the Owner, their account, the link, and
-      # where it opens. No CAPTCHA on a laptop.
-      AUTHORIZATION_URL: http://authorization:8080
-      USER_URL: http://user:8080
-      IDENTITY_URL: http://identity:8080
-      NOTIFICATION_URL: http://notification:8080
-      APP_ORIGIN_ACCOUNT: http://localhost:5173
-      APP_ORIGIN_ADMIN: http://localhost:5174
-      APP_ORIGIN_PLATFORM: http://localhost:5175
-      CAPTCHA_PROVIDER: 'off'
-      # Offboarding and exports: every service with data,
-      # and the bucket the archives go to.
-      BILLING_URL: http://billing:8080
-      S3_ENDPOINT: http://s3:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
-      S3_PATH_STYLE: 'true'
-      S3_BUCKET: ${S3_BUCKET:-b2bapp}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
-      # The master key. A file on a laptop, created on first start; Cloud KMS
-      # everywhere else (KMS_PROVIDER=gcp, KMS_KEY_NAME=projects/...).
-      KMS_PROVIDER: file
-      KMS_FILE: /kms/master.json
-      # The three web apps' dev servers; the only origins CORS admits.
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-    volumes:
-      - kms:/kms
-    ports:
-      - '${ORGANIZATION_PORT:-8081}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
-  # Who a person is and which organizations they belong to. The
-  # identity service records sign-ins here; the engine's identity adapter
-  # writes where people are.
-  user:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: user
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      AUDIT_URL: http://audit:8080
-      ORGANIZATION_URL: http://organization:8080
-      AUTHORIZATION_URL: http://authorization:8080
-      IDENTITY_URL: http://identity:8080
-      BILLING_URL: http://billing:8080
-      # Account deletion: the notice, and what each service forgets.
-      NOTIFICATION_URL: http://notification:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-      # Profile photos, in the local bucket.
-      S3_ENDPOINT: http://s3:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9000}
-      S3_PATH_STYLE: 'true'
-      S3_BUCKET: ${S3_BUCKET:-b2bapp}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-b2bapp}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-b2bapp-local}
-    ports:
-      - '${USER_PORT:-8084}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
-  # What each org role may do, configured per org by its Owner, and the
-  # permission check every service makes.
-  authorization:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: authorization
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      AUDIT_URL: http://audit:8080
-      USER_URL: http://user:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      # Ownership transfers email both parties and link into the admin app.
-      NOTIFICATION_URL: http://notification:8080
-      ORGANIZATION_URL: http://organization:8080
-      APP_ORIGIN_ADMIN: http://localhost:5174
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-    ports:
-      - '${AUTHORIZATION_PORT:-8086}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
-  # The append-only record of who did what. Services record through
-  # its API with a service token; an org's admins read their own entries.
-  audit:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: audit
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Error tracking is off unless deploy/.env names a DSN.
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      # Who may read an org's log, asked with this service's own token.
-      AUTHORIZATION_URL: http://authorization:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-    ports:
-      - '${AUDIT_PORT:-8082}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-
-  # Transactional email from its own outbox with retries. Locally
-  # everything goes to Mailpit; deployed, to Resend.
-  notification:
-    build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
-      args:
-        SERVICE: notification
-      secrets:
-        - extra_ca
-    environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-      EMAIL_TRANSPORT: smtp
-      SMTP_ADDR: mailpit:1025
-      EMAIL_FROM: b2bapp <no-reply@b2bapp.local>
-      # Notifications: who people are, links into the
-      # apps, the unsubscribe key, and web push with a local VAPID key from
-      # deploy/.env (push is off without one).
-      USER_URL: http://user:8080
-      ORGANIZATION_URL: http://organization:8080
-      AUTHORIZATION_URL: http://authorization:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      APP_ORIGIN_ACCOUNT: http://localhost:5173
-      APP_ORIGIN_ADMIN: http://localhost:5174
-      APP_ORIGIN_PLATFORM: http://localhost:5175
-      NOTIFICATION_PUBLIC_URL: http://localhost:${NOTIFICATION_PORT:-8083}
-      NOTIFICATION_LINK_KEY: local-notification-link-key
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_SUBJECT: mailto:no-reply@b2bapp.local
-      NOTIFY_POLL: 10s
-    ports:
-      - '${NOTIFICATION_PORT:-8083}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      mailpit:
-        condition: service_started
-
   redis:
     image: redis:7-alpine
-    # Presence and pub/sub are rebuilt from live sockets, so nothing here needs
-    # to survive a restart.
+    # Rate limits, sign-in attempts and the live-session bus: nothing here
+    # needs to survive a restart.
     command: ['redis-server', '--save', '', '--appendonly', 'no']
     ports:
       - '${REDIS_PORT:-6379}:6379'
@@ -414,62 +197,247 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-b2bapp-local}
       AWS_DEFAULT_REGION: us-east-1
       BUCKET: ${S3_BUCKET:-b2bapp}
+    restart: 'no'
 
+  # The OpenID provider an organization signs in through on a laptop: the
+  # seed's SSO organization uses it (generic preset, issuer
+  # http://stubissuer:8090, client local-sso / local-sso-secret; docs/sso.md).
+  # Its sign-in page signs in whoever you type. The identity service reaches
+  # it on the compose network; the browser on localhost.
+  # Its key is generated at start: restarting it invalidates every token.
+  stubissuer:
+    build: *tools-build
+    command: ['stubissuer']
+    environment:
+      STUB_ISSUER_LOCAL_ONLY: 'true'
+      PORT: '8090'
+      AUTH_ISSUER: b2bapp-local-stub
+      STUB_OIDC_ISSUER: http://stubissuer:8090
+      STUB_OIDC_BROWSER_URL: http://localhost:${STUB_ISSUER_PORT:-8090}
+    ports:
+      - '${STUB_ISSUER_PORT:-8090}:8090'
+
+  # Sign-in through an org's identity provider or a local account,
+  # sessions, invites, and the tokens every other service verifies. Locally
+  # it also mints service and development tokens at POST /token.
+  identity:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: identity
+    environment:
+      <<: *service-env
+      KMS_PROVIDER: file
+      KMS_FILE: /kms/master.json
+      # Where a browser reaches this service: through the gateway, as the
+      # web apps do. The sign-in callback is here.
+      IDENTITY_PUBLIC_URL: ${IDENTITY_PUBLIC_URL:-http://localhost:${GATEWAY_PORT:-8000}/identity}
+      SECURE_COOKIES: 'false'
+      LOCAL_SERVICE_TOKENS: 'true'
+      # Identity providers on plain http and private addresses: the stub
+      # issuer on this network.
+      OIDC_LOCAL_ISSUERS: 'true'
+      # The first platform operator, invited on start while the platform org
+      # is empty; the invite lands in the mail catcher. Empty invites nobody.
+      BOOTSTRAP_OPERATOR_EMAIL: ${BOOTSTRAP_OPERATOR_EMAIL:-}
+    volumes:
+      - kms:/kms
+    # Not 8085: gcloud auth login listens there for its browser redirect.
+    ports:
+      - '${IDENTITY_PORT:-8093}:8080'
+    depends_on: *service-depends
+
+  # Organizations: signup, domains, plans, offboarding and exports (to the
+  # bucket), and the per-org data keys under the master key.
+  organization:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: organization
+    environment:
+      <<: [*service-env, *s3-env]
+      # No CAPTCHA on a laptop.
+      CAPTCHA_PROVIDER: 'off'
+      # The master key. A file on a laptop, created on first start; Cloud KMS
+      # everywhere else (KMS_PROVIDER=gcp, KMS_KEY_NAME=projects/...).
+      KMS_PROVIDER: file
+      KMS_FILE: /kms/master.json
+    volumes:
+      - kms:/kms
+    ports:
+      - '${ORGANIZATION_PORT:-8081}:8080'
+    depends_on: *service-depends
+
+  # Who a person is and which organizations they belong to; profile photos
+  # in the bucket; SCIM.
+  user:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: user
+    environment:
+      <<: [*service-env, *s3-env]
+    ports:
+      - '${USER_PORT:-8084}:8080'
+    depends_on: *service-depends
+
+  # What each org role may do, configured per org by its Owner, and the
+  # permission check every service makes.
+  authorization:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: authorization
+    environment:
+      <<: *service-env
+    ports:
+      - '${AUTHORIZATION_PORT:-8086}:8080'
+    depends_on: *service-depends
+
+  # The append-only record of who did what.
+  audit:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: audit
+    environment:
+      <<: *service-env
+    ports:
+      - '${AUDIT_PORT:-8082}:8080'
+    depends_on: *service-depends
+
+  # Email from its own outbox with retries, the in-app feed and push.
+  # Locally every email goes to Mailpit.
+  notification:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: notification
+    environment:
+      <<: *service-env
+      EMAIL_TRANSPORT: smtp
+      SMTP_ADDR: mailpit:1025
+      EMAIL_FROM: ${EMAIL_FROM:-B2B App <no-reply@example.test>}
+      NOTIFICATION_PUBLIC_URL: http://localhost:${NOTIFICATION_PORT:-8083}
+      NOTIFICATION_LINK_KEY: local-notification-link-key
+      # Web push with a local VAPID key from deploy/.env; off without one.
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: mailto:no-reply@example.test
+      NOTIFY_POLL: 10s
+    ports:
+      - '${NOTIFICATION_PORT:-8083}:8080'
+    depends_on:
+      <<: *service-depends
+      mailpit:
+        condition: service_started
+
+  # Plans and Stripe subscriptions. Stripe test mode is optional: with no key
+  # (the default) billing answers, but paid plans cannot be bought.
   billing:
     build:
-      context: ..
-      dockerfile: deploy/service.Dockerfile
+      <<: *service-build
       args:
         SERVICE: billing
-      secrets:
-        - extra_ca
     environment:
-      DATABASE_URL: postgres://postgres:5432/b2bapp?sslmode=disable
-      DB_LOCAL_PASSWORDS: 'true'
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
-      ENVIRONMENT: local
-      AUTH_ISSUER: b2bapp-local
-      AUTH_AUDIENCE: b2bapp
-      AUTH_JWKS_URL: http://identity:8080/v1/jwks
-      REDIS_URL: redis://redis:6379/0
-      ORGANIZATION_URL: http://organization:8080
-      USER_URL: http://user:8080
-      AUTHORIZATION_URL: http://authorization:8080
-      AUDIT_URL: http://audit:8080
-      SERVICE_TOKEN_URL: http://identity:8080
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
-      APP_ORIGIN_ADMIN: http://localhost:5174
-      # Stripe test mode, from the git-ignored deploy/.env; without a key,
-      # paid plans cannot be bought locally.
+      <<: *service-env
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICES: ${STRIPE_PRICES:-}
     ports:
       - '${BILLING_PORT:-8089}:8080'
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
+    depends_on: *service-depends
 
-  # One org, its Owner and a colleague, through the services'
-  # own APIs. Local only; run it on demand, twice changes nothing:
+  # One origin for the API, as deployed: /identity/... to the identity
+  # service with the prefix stripped, and so on for each. The web apps call
+  # it; the services' own ports stay open for a dev server or curl.
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./local/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - '${GATEWAY_PORT:-8000}:8080'
+    depends_on:
+      - identity
+      - organization
+      - user
+      - authorization
+      - audit
+      - notification
+      - billing
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The web apps, from the sibling frontend checkout. Each is its static
+  # build behind nginx with the frontend's security headers; locally the
+  # headers that only make sense over https are left out (local/web).
+  web-account:
+    build:
+      <<: *web-build
+      args:
+        APP: account
+        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
+    environment: *web-env
+    volumes:
+      - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro
+    ports:
+      - '${ACCOUNT_PORT:-5173}:8080'
+    healthcheck: &web-health
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web-admin:
+    build:
+      <<: *web-build
+      args:
+        APP: admin
+        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
+    environment: *web-env
+    volumes:
+      - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro
+    ports:
+      - '${ADMIN_PORT:-5174}:8080'
+    healthcheck: *web-health
+
+  web-platform:
+    build:
+      <<: *web-build
+      args:
+        APP: platform
+        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
+    environment: *web-env
+    volumes:
+      - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro
+    ports:
+      - '${PLATFORM_PORT:-5175}:8080'
+    healthcheck: *web-health
+
+  # Demo data through the services' own APIs: an organization with a person
+  # in each role and its roles configured, and an organization that signs in
+  # through the stub issuer. Local only; run it on demand, twice changes
+  # nothing:
   #   docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
   seed:
     profiles: ['seed']
-    build:
-      context: ..
-      dockerfile: deploy/tools.Dockerfile
-      secrets:
-        - extra_ca
+    build: *tools-build
     command: ['seed']
     environment:
       SEED_IDENTITY_URL: http://identity:8080
       SEED_ORGANIZATION_URL: http://organization:8080
+      SEED_AUTHORIZATION_URL: http://authorization:8080
       SEED_MAIL_URL: http://mailpit:8025
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+      SEED_STUB_ISSUER: http://stubissuer:8090
     depends_on:
       identity:
+        condition: service_started
+      organization:
+        condition: service_started
+      authorization:
         condition: service_started
     restart: 'no'
 

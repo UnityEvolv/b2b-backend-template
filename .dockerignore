@@ -1,0 +1,10 @@
+# The images copy only go.mod, pkg, migrations, services and cmd; nothing
+# else needs to reach the builder.
+.git
+.github
+**/*.exe
+**/*.test
+examples
+docs
+deploy/terraform
+node_modules

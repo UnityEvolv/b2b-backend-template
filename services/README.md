@@ -42,7 +42,8 @@ template's seven; a product adds its own without editing any of them.
    `dbcmd.Init(ctx, db.Default)`). Its role's password is
    `DB_PASSWORD_<SCHEMA>` like every other.
 5. Run `scripts/generate.sh`.
-6. Copy the `organization` block in `deploy/docker-compose.yml`.
+6. Copy the `audit` block in `deploy/docker-compose.yml`, and add its name
+   to the gateway's map in `deploy/local/gateway/nginx.conf`.
 7. If it holds org or member data, or calls the template's services, make
    it a data owner ([docs/data-owners.md](../docs/data-owners.md)): answer
    `pkg/orgdata`'s endpoints and add it to `DATA_OWNERS` on every template

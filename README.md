@@ -38,6 +38,26 @@ and services through registries. It does not edit the template's code.
 - No job queue or message broker. Anything with a deadline is checked at the
   moment it is used.
 
+## Quick start
+
+With Docker, and this repository beside
+[b2b-frontend-template](https://github.com/UnityEvolv/b2b-frontend-template):
+
+```sh
+git clone https://github.com/UnityEvolv/b2b-backend-template.git
+git clone https://github.com/UnityEvolv/b2b-frontend-template.git
+cd b2b-backend-template
+docker compose -f deploy/docker-compose.yml up -d --build
+docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
+```
+
+Then open <http://localhost:5173> and sign in as `owner@demo.example.test`
+with `demo-password-change-me`, or as anyone `@sso.example.test` through the
+local single sign-on provider. Invites and other emails land in
+<http://localhost:8025>. [docs/local-dev.md](docs/local-dev.md) has the
+rest: every port, the demo data, Stripe test mode, and how to work on one
+part.
+
 ## Licence
 
 [MIT](LICENSE).

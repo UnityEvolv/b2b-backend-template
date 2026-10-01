@@ -1,5 +1,8 @@
 # Local development
 
+New here? [getting-started.md](getting-started.md) takes you from a clone to
+signed in, step by step. This page is the reference for the local stack.
+
 The whole product runs on a laptop with Docker: Postgres, Redis, a mail
 catcher (Mailpit), an S3 emulator (RustFS), the stub OpenID provider, the
 seven services, a gateway in front of them, and the three web apps. Nothing
@@ -84,7 +87,8 @@ an operator and an Owner would do by hand.
   and the password.
 - **Single sign-on:** open the account app, enter
   `someone@sso.example.test`: the identity service sends the browser to the
-  stub issuer, its page signs you in, and you come back signed in.
+  stub issuer; type the same address on its page, and you come back signed
+  in.
 
 Either way the session lives in the `b2bapp_session` cookie (its prefix is
 the product id, `PRODUCT_ID`) and the app refreshes access tokens from it.
@@ -105,14 +109,17 @@ answers with an access token for the API and sets the session cookie.
 ## Billing and Stripe
 
 Billing works without Stripe: the billing page shows the plan and the
-bands, and every free action works. To buy a paid band in Stripe's test
-mode, put test keys in `deploy/.env` and restart billing:
+bands, a trial moves the org to the next band, and every free action
+works. To buy a paid band in Stripe's test mode, put test keys in
+`deploy/.env`:
 
 ```sh
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICES=team=price_...,business=price_...
 ```
+
+and apply them with `docker compose -f deploy/docker-compose.yml up -d billing`.
 
 `stripe listen --forward-to localhost:8000/billing/v1/webhooks/stripe`
 forwards Stripe's events to it.

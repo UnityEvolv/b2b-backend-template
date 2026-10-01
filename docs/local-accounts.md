@@ -34,7 +34,7 @@ the account exists and is verified. Starting the account again for a
 verified address sends nothing; for a changed address the proof starts
 over, and the password stays.
 
-Changing an email address after verification is not in the MVP: global
+Changing an email address after verification is not supported yet: global
 uniqueness and IdP-linked accounts make it more than a field edit.
 
 ## Passwords and sign-in
@@ -65,14 +65,14 @@ uniqueness and IdP-linked accounts make it more than a field edit.
   `reset_password` link (`app/reset-password?token=…`, one use, one hour),
   at most three an hour; anything else sends nothing. Setting the new
   password with the reset link ends every session of the person
-  (`password_changed`, pushed to their sockets) and is audited.
+  (`password_changed`, pushed to their open sessions) and is audited.
 
 ## Second factor
 
-TOTP with an authenticator app, for local accounts only; Entra users get
-theirs from Microsoft. RFC 6238 as every app speaks it (SHA-1, thirty
-seconds, six digits), one step of skew either way, and a code is never
-accepted twice. The secret is wrapped by the KMS master key and unwrapped
+TOTP with an authenticator app, for local accounts only; people who sign in
+through a provider get theirs from it. RFC 6238 as every app speaks it
+(SHA-1, thirty seconds, six digits), one step of skew either way, and a code
+is never accepted twice. The secret is wrapped by the KMS master key and unwrapped
 into memory only while a code is checked.
 
 - **Enrol.** `POST /identity/v1/mfa/totp` answers with the secret (base32)
@@ -95,5 +95,5 @@ into memory only while a code is checked.
 - **Reset.** `DELETE /identity/v1/organizations/{org}/members/{user}/mfa`
   (the users permission, for a member of the org) removes the
   authenticator and the recovery codes and ends every session of theirs
-  (`mfa_reset`, pushed to their sockets); they set up a new one at the next
-  sign-in. Audited as `mfa.reset`.
+  (`mfa_reset`, pushed to their open sessions); they set up a new one at
+  the next sign-in. Audited as `mfa.reset`.

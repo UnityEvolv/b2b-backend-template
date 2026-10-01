@@ -173,30 +173,9 @@ curl -X PUT localhost:8093/v1/organizations/$ORG/identity-provider \
 ```
 
 The identity service reaches it as `stubissuer:8090`; the browser is sent to
-its page on `localhost:8090` (`STUB_OIDC_BROWSER_URL`). Its settings:
-`STUB_OIDC_ISSUER`, `STUB_OIDC_BROWSER_URL`, `STUB_OIDC_CLIENT_ID`,
-`STUB_OIDC_CLIENT_SECRET`. It checks the client, the redirect URI, PKCE and
-one use per code, and nothing about the person.
+its page on `localhost:8090` (`STUB_OIDC_BROWSER_URL`), where you type the
+address to sign in as. Its settings: `STUB_OIDC_ISSUER`,
+`STUB_OIDC_BROWSER_URL`, `STUB_OIDC_CLIENT_ID`, `STUB_OIDC_CLIENT_SECRET`.
+It checks the client, the redirect URI, PKCE and one use per code, and
+nothing about the person.
 
-## From the Entra-only configuration
-
-The schema was Entra-only before this; the baseline migration now holds the
-generic one (nothing was deployed on the old one). A saved Entra
-configuration maps as:
-
-| before (`type: entra`) | after |
-|---|---|
-| `type` = `entra` | `preset` = `entra` |
-| `tenant_id` | `tenant_id` |
-| `client_id`, `client_secret` (sealed) | unchanged, same blob purpose |
-| `issuer` | unchanged: the discovered tenant issuer |
-| (fixed in code) scopes openid profile email | `scopes` = `{openid,profile,email}` |
-| (fixed in code) `email`, else `preferred_username` | `email_claim` = `email`, the preset's fallback `preferred_username` |
-| (fixed in code) `name` | `name_claim` = `name` |
-| (not checked) | `require_email_verified` = false |
-| `status`, `verified_at` | unchanged |
-
-The API changed with it: `PUT` takes `preset` instead of `type`;
-`GET /v1/sign-in/methods` answers `sso` instead of `entra`; an accepted
-invite's `next` is `sign_in_sso` instead of `sign_in_entra`; the audit
-detail and the desktop code's provider are the preset.

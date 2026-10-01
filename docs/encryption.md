@@ -1,7 +1,7 @@
 # Per-org encryption
 
-Anything a customer gave us that grants access to something is encrypted under
-that customer's own key: identity-provider client secrets, webhook secrets,
+Anything a customer gives the product that grants access to something is
+encrypted under that customer's own key: identity-provider client secrets, webhook secrets,
 SCIM tokens, and whatever a product keeps of the kind. One org's secrets
 cannot be decrypted with another's key, and no human has a path to the plaintext.
 
@@ -83,8 +83,9 @@ for the IAM bindings.
 
 ## Platform secrets
 
-Stripe, email, Firebase, VAPID, OAuth clients, the coturn shared secret, Entra,
-Sentry, database and Redis credentials live in the cloud secret manager and
-are injected at deploy. Never in the repo, in Terraform state or in a log; the
-secrets scan in CI catches one that leaks into a commit. Locally,
-`deploy/.env` (git-ignored) holds the few a laptop needs.
+The platform's own secrets (the database passwords, the object store's keys,
+the mail provider, reCAPTCHA, Stripe, Sentry and the web push key) live in
+Secret Manager and are injected at deploy
+([operations.md](operations.md#secrets)). Never in the repo, in Terraform
+state or in a log; the secrets scan in CI catches one that leaks into a
+commit. Locally, `deploy/.env` (git-ignored) holds the few a laptop needs.

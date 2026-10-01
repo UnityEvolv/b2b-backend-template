@@ -4,14 +4,14 @@ Employees sign in with their work identity through the organization's
 identity provider. The identity service runs the OpenID Connect
 authorization code flow with PKCE, records the sign-in with the user
 service, starts a session, and issues the tokens every other service
-verifies. It replaces the stub issuer.
+verifies.
 
 ## The flow
 
 1. The app sends the browser to `GET /identity/v1/sign-in/start?email=…`
-   (or `org_id=…`) with `next` (a path in the app) and `app` (account, admin,
-   platform). The domain of the address picks the organization; the
-   organization's provider is fetched (discovery); an attempt is stored with
+   (or `org_id=…`) with `next` (a path in the app) and `app` (one of
+   `APP_NAMES`: account, admin, platform by default). The domain of the
+   address picks the organization; the organization's provider is fetched (discovery); an attempt is stored with
    the PKCE verifier and nonce; a cookie binds the attempt to this browser;
    the browser is redirected to the provider.
 2. The provider sends the browser to `GET /identity/v1/sign-in/callback`.
@@ -67,11 +67,11 @@ its calls to the user and organization services.
 
 Locally (`LOCAL_SERVICE_TOKENS=true`, compose only), `POST /identity/token`
 mints service tokens for the other containers and development tokens for a
-person, exactly as the stub issuer did. Deployed, it takes a Cloud Run
+person. Deployed, it takes a Cloud Run
 identity token instead (services/identity/workload.go).
 
 ## Not here
 
-Session lifetime, the sessions list and revocation pushed over the socket:
+Session lifetime, the sessions list and revocation pushed to open sessions:
 [sessions.md](sessions.md). Local accounts, MFA, invites, the sign-in page
 itself: [local-accounts.md](local-accounts.md).

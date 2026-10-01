@@ -137,4 +137,5 @@ Revoking a session reaches its open tabs within a second or two. The
 notification service listens too, and drops a revoked session's push
 devices at once.
 
-Applies to Entra and local accounts alike: both make the same session.
+Applies to single sign-on and local accounts alike: both make the same
+session.

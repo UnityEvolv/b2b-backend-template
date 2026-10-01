@@ -3,14 +3,13 @@
 Identity is separate from membership. One person is one `users` row
 across the platform, keyed by email; each organization they belong to is one
 `memberships` row. Leaving one org touches one membership and nothing else.
-This is the wrapper's identity, and it is what the identity adapter answers
-the engine from; the open-source app has none of it.
+The user service owns both.
 
 ## How a membership comes to exist
 
 | org kind | route | endpoint |
 | --- | --- | --- |
-| Entra (or any IdP) org | anyone who authenticates through the org's provider, on first sign-in, as a User. The provider is the gate; nobody is asked for an invite | `POST /v1/internal/sign-ins` (identity service) |
+| single sign-on org ([sso.md](sso.md)) | anyone who authenticates through the org's provider, on first sign-in, as a User. The provider is the gate; nobody is asked for an invite | `POST /v1/internal/sign-ins` (identity service) |
 | local-account org | invite, bulk import, or the self-serve Owner who created the org | `POST /v1/internal/memberships` with `source` (services) |
 | guests, any org | a product service, for a collaborator from outside the org | `POST /v1/internal/memberships` with `kind: guest` |
 
@@ -57,7 +56,7 @@ back on the new terms.
 
 The fields a person controls themselves, as opposed to the
 directory attributes a provider sends: a display name, a time zone (an
-IANA name; quiet hours, digests and stats weeks follow it), working hours
+IANA name; quiet hours and digests follow it), working hours
 (`{days, start, end}` in that zone), and a photo. They are on the user,
 so the same in every organization the person belongs to. `GET /v1/me`
 carries them; `PATCH /v1/me/profile` changes the fields sent (null clears
@@ -75,13 +74,13 @@ inviting one by one: `POST /v1/organizations/{org}/imports` (the users
 permission) with a CSV or XLSX as a `file` part (first sheet, header row
 first, at most 5000 rows and 5 MB; no dependency, the XLSX is read as the
 zip of XML it is) and an optional `mapping` part naming the sheet's
-column for `email`, `name` and `role`, since customer sheets never match
-our names; without it the columns are found by those names.
+column for `email`, `name` and `role`, since a customer's sheet rarely
+uses these names; without it the columns are found by those names.
 
 Every row is checked and reported by its row number: no email, no name,
 a malformed address, a name too long, a role the caller cannot give, a
 duplicate earlier in the sheet, an address already a member, and the
-plan's user cap once the valid rows before it have used the room. With
+plan's user cap once the valid rows before it have used it up. With
 `dry_run=true` the answer says what would happen and nothing is sent.
 Otherwise the valid rows are sent invites through the identity service
 (so an imported person accepts and, in a local org, verifies and sets a
@@ -91,5 +90,15 @@ reported, nothing is silently dropped. Audited as `users.imported`.
 
 ## Not in this schema
 
-Roles and permissions (the authorization service), invite tokens and
-credentials for local accounts (the identity service), SCIM.
+Roles and permissions (the authorization service), and invite tokens and
+credentials for local accounts (the identity service).
+
+## SCIM
+
+SCIM 2.0 users and groups are in this service too, in their own tables
+(`scim_*`). A group is stored as the directory sent it and grants nothing
+by itself. What a group grants (a team, a project) is the product's, through
+the `GroupSync` hook
+([scim_sync.go](../services/user/internal/server/scim_sync.go)). The hook
+is set in the user service's `main` (`WithGroupSync`); it has no
+configuration seam yet.

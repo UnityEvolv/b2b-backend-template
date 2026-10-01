@@ -110,7 +110,9 @@ answers with an access token for the API and sets the session cookie.
 
 Billing works without Stripe: the billing page shows the plan and the
 bands, a trial moves the org to the next band, and every free action
-works. To buy a paid band in Stripe's test mode, put test keys in
+works. The billing answer's `provider_configured` is false, and adding a
+card, choosing a paid band or previewing one answers 503
+`billing.provider_not_configured`. To buy a paid band in Stripe's test mode, put test keys in
 `deploy/.env`:
 
 ```sh

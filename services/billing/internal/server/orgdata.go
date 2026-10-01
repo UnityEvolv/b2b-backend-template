@@ -186,7 +186,7 @@ func (s *Server) CloseAccount(ctx context.Context, req api.CloseAccountRequestOb
 		return api.CloseAccount204Response{}, nil
 	}
 	if s.provider == nil {
-		return api.CloseAccountdefaultJSONResponse{StatusCode: http.StatusServiceUnavailable, Body: api.Error{Code: codeNoProvider, Message: "Payments are not set up here."}}, nil
+		return api.CloseAccountdefaultJSONResponse{StatusCode: http.StatusServiceUnavailable, Body: api.Error(noProvider())}, nil
 	}
 	ref := a.SubscriptionRef.String
 	// Refused means the provider has it ended already: the account still

@@ -226,9 +226,12 @@ The plans, their caps and their labels come from the plan registry
 the moment of the action it limits, so the trial applies to the next invite
 with no sign-out.
 
-Buying a plan needs a payment provider. Without Stripe keys there are no
-prices, so **Review change** is refused. To try it in Stripe's test mode, see
-[local-dev.md](local-dev.md#billing-and-stripe).
+Buying a plan needs a payment provider. Without Stripe keys the billing
+answer says `provider_configured: false` and has no prices, and anything
+that would charge (adding a card, choosing a paid plan or previewing its
+charge) answers 503 `billing.provider_not_configured`. The trial, and
+ending it early by choosing Free, still work. To try buying in Stripe's test
+mode, see [local-dev.md](local-dev.md#billing-and-stripe).
 
 ### Revoke a session
 

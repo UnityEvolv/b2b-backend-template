@@ -56,6 +56,12 @@ paths:
                     type: string
         '403':
           $ref: '#/components/responses/Error'
+        '503':
+          description: No payment provider is configured here (`billing.provider_not_configured`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/organizations/{org_id}/billing/band:
@@ -88,6 +94,12 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '503':
+          description: No payment provider is configured here (`billing.provider_not_configured`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/organizations/{org_id}/billing/band-preview:
@@ -113,6 +125,12 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '503':
+          description: No payment provider is configured here (`billing.provider_not_configured`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/organizations/{org_id}/billing/pending:
@@ -432,7 +450,7 @@ components:
           type: string
     Billing:
       type: object
-      required: [band, state, auto_upgrade, trial_available, invoiced, bands, prices, active_members, users_cap, can_manage_auto_upgrade]
+      required: [band, state, auto_upgrade, trial_available, invoiced, bands, prices, active_members, users_cap, can_manage_auto_upgrade, provider_configured]
       properties:
         band:
           $ref: '#/components/schemas/Band'
@@ -485,6 +503,14 @@ components:
             at the organization service's GET /v1/plans.
           items:
             $ref: '#/components/schemas/Band'
+        provider_configured:
+          type: boolean
+          description: |
+            Whether a payment provider is configured here. When false, no
+            band with a price can be bought: startSetup, changeBand to any band
+            but the lowest, and band-preview of any band but the lowest answer
+            503 `billing.provider_not_configured`, and prices is empty. The
+            trial, and moving from a trial to the lowest band, still work.
         prices:
           type: object
           description: The price of each band the payment provider sells, by band. A band in bands with no entry here costs nothing.

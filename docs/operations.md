@@ -84,7 +84,8 @@ KMS master key ([sign-in.md](sign-in.md#keys-and-tokens)).
 ### Stripe
 
 Billing works without Stripe: plans, caps and trials all work, and paid
-bands cannot be bought. To sell them:
+bands cannot be bought (the billing answer says `provider_configured:
+false`, and a paid-band action answers 503 `billing.provider_not_configured`). To sell them:
 
 1. Create a product and a recurring price per paid band in Stripe.
 2. Put the secret key and the webhook signing secret in `external_secrets`

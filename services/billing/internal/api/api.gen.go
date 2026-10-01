@@ -119,10 +119,17 @@ type Billing struct {
 	PeriodEnd   *time.Time `json:"period_end,omitempty"`
 
 	// Prices The price of each band the payment provider sells, by band. A band in bands with no entry here costs nothing.
-	Prices         map[string]Price `json:"prices"`
-	State          BillingState     `json:"state"`
-	TrialAvailable bool             `json:"trial_available"`
-	TrialEndsAt    *time.Time       `json:"trial_ends_at,omitempty"`
+	Prices map[string]Price `json:"prices"`
+
+	// ProviderConfigured Whether a payment provider is configured here. When false, no
+	// band with a price can be bought: startSetup, changeBand to any band
+	// but the lowest, and band-preview of any band but the lowest answer
+	// 503 `billing.provider_not_configured`, and prices is empty. The
+	// trial, and moving from a trial to the lowest band, still work.
+	ProviderConfigured bool         `json:"provider_configured"`
+	State              BillingState `json:"state"`
+	TrialAvailable     bool         `json:"trial_available"`
+	TrialEndsAt        *time.Time   `json:"trial_ends_at,omitempty"`
 
 	// UsersCap 0 means no cap.
 	UsersCap int `json:"users_cap"`
@@ -1325,6 +1332,20 @@ func (response ChangeBand409JSONResponse) VisitChangeBandResponse(w http.Respons
 	return err
 }
 
+type ChangeBand503JSONResponse Error
+
+func (response ChangeBand503JSONResponse) VisitChangeBandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangeBanddefaultJSONResponse struct {
 	Body       Error
 	StatusCode int
@@ -1389,6 +1410,20 @@ func (response PreviewBand403JSONResponse) VisitPreviewBandResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewBand503JSONResponse Error
+
+func (response PreviewBand503JSONResponse) VisitPreviewBandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1552,6 +1587,20 @@ func (response StartSetup403JSONResponse) VisitStartSetupResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartSetup503JSONResponse Error
+
+func (response StartSetup503JSONResponse) VisitStartSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }

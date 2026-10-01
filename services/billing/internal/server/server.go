@@ -140,7 +140,7 @@ func (s *Server) Handler(mux *http.ServeMux, middlewares ...api.MiddlewareFunc) 
 
 // Stable codes.
 const (
-	codeNoProvider    = "billing.unavailable"
+	codeNoProvider    = "billing.provider_not_configured"
 	codeNoCard        = "billing.no_payment_method"
 	codeRefused       = "billing.refused"
 	codeInvoiced      = "billing.invoiced"
@@ -162,8 +162,12 @@ func (s *Server) canBill(ctx context.Context, org uuid.UUID) (authz.Grant, error
 	return authz.Require(ctx, s.authz, org.String(), authz.Billing)
 }
 
-// errNoProvider means no payment provider is configured here.
-var errNoProvider = errors.New("no payment provider")
+// noProvider is the 503 an action that needs the payment provider gets
+// where none is configured. The trial, and ending it by moving to the
+// lowest band, need none.
+func noProvider() api.ErrorJSONResponse {
+	return api.ErrorJSONResponse{Code: codeNoProvider, Message: "Paid plans are not available here: no payment provider is configured."}
+}
 
 // account is the org's account, made on first use, with a lapsed trial
 // ended at the moment it is read: nothing waits on a scheduler.
@@ -328,7 +332,7 @@ func (s *Server) view(ctx context.Context, org uuid.UUID, a store.Account, grant
 		Band: api.Band(a.Band), State: api.BillingState(a.State), AutoUpgrade: a.AutoUpgrade,
 		CanManageAutoUpgrade: grant.Role == authz.Owner, Invoiced: a.State == "invoiced",
 		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: plan.For(band).Cap(plan.Users),
-		Prices: map[string]api.Price{}, Bands: offered(),
+		Prices: map[string]api.Price{}, Bands: offered(), ProviderConfigured: s.provider != nil,
 	}
 	for b, p := range s.pricesNow(ctx) {
 		out.Prices[string(b)] = api.Price{Amount: p.Amount, Currency: p.Currency, Interval: p.Interval}
@@ -422,7 +426,7 @@ func (s *Server) StartSetup(ctx context.Context, req api.StartSetupRequestObject
 		return api.StartSetup403JSONResponse{ErrorJSONResponse: forbidden("You do not have permission to change billing.")}, nil
 	}
 	if s.provider == nil {
-		return api.StartSetupdefaultJSONResponse{StatusCode: http.StatusServiceUnavailable, Body: api.Error{Code: codeNoProvider, Message: "Payments are not set up here."}}, nil
+		return api.StartSetup503JSONResponse(noProvider()), nil
 	}
 	cus, err := s.customer(ctx, req.OrgId)
 	if err != nil {
@@ -478,9 +482,6 @@ func (s *Server) ChangeBand(ctx context.Context, req api.ChangeBandRequestObject
 	if err != nil {
 		return api.ChangeBand403JSONResponse(forbidden("You do not have permission to change the plan.")), nil
 	}
-	if s.provider == nil {
-		return api.ChangeBanddefaultJSONResponse{StatusCode: http.StatusServiceUnavailable, Body: api.Error{Code: codeNoProvider, Message: "Payments are not set up here."}}, nil
-	}
 	to, err := plan.Parse(string(req.Body.Band))
 	if err != nil || plan.Contractual(to) {
 		return api.ChangeBand400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Choose a self-serve plan."}}, nil
@@ -496,6 +497,10 @@ func (s *Server) ChangeBand(ctx context.Context, req api.ChangeBandRequestObject
 	switch {
 	case to == from && !a.PendingBand.Valid:
 		return api.ChangeBand409JSONResponse(conflict(codeSameBand, "You are on that plan already.")), nil
+	case s.provider == nil && (to != plan.Lowest() || a.SubscriptionRef.Valid):
+		// Without a provider only the lowest band is reachable, and only
+		// from a trial with no subscription behind it, which just ends.
+		return api.ChangeBand503JSONResponse(noProvider()), nil
 	case plan.Rank(to) > plan.Rank(from):
 		a, err = s.changeUp(ctx, req.OrgId, a, to, "upgrade")
 	default:
@@ -550,8 +555,11 @@ func (s *Server) PreviewBand(ctx context.Context, req api.PreviewBandRequestObje
 		return api.PreviewBand403JSONResponse(forbidden("You do not have permission to see billing.")), nil
 	}
 	to, err := plan.Parse(string(req.Params.Band))
-	if err != nil || s.provider == nil {
-		return api.PreviewBand400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Choose a band."}}, nil
+	if err != nil {
+		return api.PreviewBand400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Choose a band.", Fields: &map[string]string{"band": "Not a band this deployment has."}}}, nil
+	}
+	if s.provider == nil && to != plan.Lowest() {
+		return api.PreviewBand503JSONResponse(noProvider()), nil
 	}
 	a, err := s.account(ctx, req.OrgId)
 	if err != nil {

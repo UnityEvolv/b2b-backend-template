@@ -200,6 +200,17 @@ type fixture struct {
 
 func newAPI(t *testing.T) *fixture {
 	t.Helper()
+	return build(t, true)
+}
+
+// newAPIWithoutProvider is the API where no payment provider is configured.
+func newAPIWithoutProvider(t *testing.T) *fixture {
+	t.Helper()
+	return build(t, false)
+}
+
+func build(t *testing.T, payments bool) *fixture {
+	t.Helper()
 	url := dbtest.New(t)
 	ctx := context.Background()
 	service, _ := db.ServiceByName("billing")
@@ -219,7 +230,11 @@ func newAPI(t *testing.T) *fixture {
 	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
 	f := &fixture{issuer: issuer, grants: authz.Static{}, orgs: &orgs{bands: map[uuid.UUID]plan.Band{}}, notices: &notices{},
 		pay: &fake{subs: map[string]provider.Subscription{}}, clock: &clock{}, org: uuid.Must(uuid.NewV7())}
-	f.srv = server.New(db.SingleShard(pool), slog.New(slog.NewTextHandler(io.Discard, nil)), recorder{}, f.grants, f.orgs, f.orgs, f.notices, f.pay, "https://admin.test/billing").WithClock(f.clock.now)
+	var p provider.Provider
+	if payments {
+		p = f.pay
+	}
+	f.srv = server.New(db.SingleShard(pool), slog.New(slog.NewTextHandler(io.Discard, nil)), recorder{}, f.grants, f.orgs, f.orgs, f.notices, p, "https://admin.test/billing").WithClock(f.clock.now)
 	root := http.NewServeMux()
 	root.Handle("/", auth.Require(verifier, f.srv.Handler(httpx.NewMux())))
 	f.h = root
@@ -523,5 +538,57 @@ func TestBillingOffersTheProductsLadder(t *testing.T) {
 	_, b := f.do(t, http.MethodGet, f.path("/billing"), owner, nil)
 	if got := fmt.Sprint(b["bands"]); got != "[starter team business]" || b["band"] != "starter" || b["users_cap"] != float64(3) {
 		t.Errorf("billing: %v", b)
+	}
+}
+
+// Without a payment provider the billing page says so, every paid-band
+// action is refused with one code, and the trial and its end still work.
+func TestWithoutAPaymentProvider(t *testing.T) {
+	f := newAPIWithoutProvider(t)
+	owner := f.member(t, authz.Owner)
+	_, b := f.do(t, http.MethodGet, f.path("/billing"), owner, nil)
+	if b["provider_configured"] != false || len(b["prices"].(map[string]any)) != 0 || fmt.Sprint(b["bands"]) != "[free team business]" {
+		t.Errorf("billing: %v", b)
+	}
+	refused := func(what string, code int, out map[string]any) {
+		t.Helper()
+		if code != http.StatusServiceUnavailable || out["code"] != "billing.provider_not_configured" || out["message"] == "" {
+			t.Errorf("%s: %d %v", what, code, out)
+		}
+	}
+	code, out := f.do(t, http.MethodPost, f.path("/billing/setup"), owner, nil)
+	refused("setup", code, out)
+	code, out = f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
+	refused("change to team", code, out)
+	code, out = f.do(t, http.MethodGet, f.path("/billing/band-preview?band=business"), owner, nil)
+	refused("preview business", code, out)
+	if code, out := f.do(t, http.MethodGet, f.path("/billing/band-preview?band=nonsense"), owner, nil); code != http.StatusBadRequest || out["code"] != httpx.CodeInvalidRequest {
+		t.Errorf("preview of no band: %d %v", code, out)
+	}
+	if code, out := f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "free"}); code != http.StatusConflict || out["code"] != "billing.same_band" {
+		t.Errorf("free to free: %d %v", code, out)
+	}
+	if code, out := f.do(t, http.MethodGet, f.path("/billing/invoices"), owner, nil); code != http.StatusOK || len(out["invoices"].([]any)) != 0 {
+		t.Errorf("invoices: %d %v", code, out)
+	}
+
+	// The trial needs no provider, and neither does ending it early.
+	if code, b := f.do(t, http.MethodPost, f.path("/billing/trial"), owner, nil); code != http.StatusOK || b["state"] != "trialing" || f.orgs.bands[f.org] != plan.Band("team") {
+		t.Fatalf("trial: %d %v", code, b)
+	}
+	code, out = f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "business"})
+	refused("trial to business", code, out)
+	if code, out := f.do(t, http.MethodGet, f.path("/billing/band-preview?band=free"), owner, nil); code != http.StatusOK {
+		t.Errorf("preview free: %d %v", code, out)
+	}
+	code, b = f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "free"})
+	if code != http.StatusOK || b["state"] != "free" || b["band"] != "free" || f.orgs.bands[f.org] != plan.Band("free") {
+		t.Errorf("trial ended early: %d %v", code, b)
+	}
+
+	// With a provider, the page says so.
+	g := newAPI(t)
+	if _, b := g.do(t, http.MethodGet, g.path("/billing"), g.member(t, authz.Owner), nil); b["provider_configured"] != true {
+		t.Errorf("with a provider: %v", b)
 	}
 }

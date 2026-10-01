@@ -31,7 +31,7 @@ const maxWebhook = 1 << 20
 // snapshot of the subscription, which the provider sends whole.
 func (s *Server) Webhook(w http.ResponseWriter, r *http.Request) {
 	if s.provider == nil {
-		httpx.WriteError(w, http.StatusServiceUnavailable, codeNoProvider, "Payments are not set up here.")
+		httpx.WriteError(w, http.StatusServiceUnavailable, codeNoProvider, noProvider().Message)
 		return
 	}
 	payload, err := io.ReadAll(io.LimitReader(r.Body, maxWebhook))

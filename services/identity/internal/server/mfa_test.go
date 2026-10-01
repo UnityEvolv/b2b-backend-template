@@ -256,3 +256,73 @@ func TestMfaRequiredByTheOrganizationAndAdminReset(t *testing.T) {
 		t.Errorf("an Entra user enrolling: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// enrolled is a local account in org holding role, with a second factor.
+func enrolled(t *testing.T, f *fixture, email string, org uuid.UUID, role authz.Role) uuid.UUID {
+	t.Helper()
+	id := f.account(t, email, org, "a-long-enough-password")
+	f.users.mu.Lock()
+	for i, m := range f.users.memberships {
+		if m.User.ID == id && m.OrgID == org {
+			f.users.memberships[i].Role = string(role)
+		}
+	}
+	f.users.mu.Unlock()
+	b := f.browser()
+	code, out := signInLocal(t, b, email, "a-long-enough-password")
+	if code != http.StatusOK {
+		t.Fatalf("sign in %s: %d %v", email, code, out)
+	}
+	token := out["access_token"].(string)
+	rec := b.do(http.MethodPost, "/v1/mfa/totp", token, nil)
+	authn := appFor(t, body(t, rec))
+	if rec := b.do(http.MethodPost, "/v1/mfa/totp/confirm", token, map[string]any{"code": authn.code(0)}); rec.Code != http.StatusOK {
+		t.Fatalf("enrol %s: %d %s", email, rec.Code, rec.Body.String())
+	}
+	return id
+}
+
+// An admin's reach over another member's sessions and second factor is the
+// reach SetMembershipStatus has: an Admin acts on Users and Guests only, an
+// Owner on anyone. The refusal is the users permission's own 403.
+func TestMemberSessionsAndMfaResetNeedToManageTheMember(t *testing.T) {
+	f := newAPI(t)
+	b := f.browser()
+	owner := enrolled(t, f, "owner@acme.com", acme, authz.Owner)
+	admin := enrolled(t, f, "admin@acme.com", acme, authz.Admin)
+	user := enrolled(t, f, "user@acme.com", acme, authz.User)
+	adminToken := f.admin(t, acme)
+	ownerID := uuid.NewString()
+	f.grants[acme.String()+"/"+ownerID] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())}
+	ownerToken, _ := f.sig.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: ownerID}, time.Hour)
+
+	member := func(id uuid.UUID, what string) string {
+		return "/v1/organizations/" + acme.String() + "/members/" + id.String() + "/" + what
+	}
+	for _, c := range []struct {
+		name   string
+		token  string
+		target uuid.UUID
+		want   int
+	}{
+		{"an Admin on the Owner", adminToken, owner, http.StatusForbidden},
+		{"an Admin on an Admin", adminToken, admin, http.StatusForbidden},
+		{"the Owner on an Admin", ownerToken, admin, 0},
+		{"an Admin on a User", adminToken, user, 0},
+	} {
+		ok := c.want == 0
+		if rec := b.do(http.MethodGet, member(c.target, "sessions"), c.token, nil); (ok && rec.Code != http.StatusOK) || (!ok && (rec.Code != c.want || body(t, rec)["code"] != "forbidden")) {
+			t.Errorf("%s, listing sessions: %d %s", c.name, rec.Code, rec.Body.String())
+		}
+		if rec := b.do(http.MethodDelete, member(c.target, "sessions"), c.token, nil); (ok && rec.Code != http.StatusOK) || (!ok && (rec.Code != c.want || body(t, rec)["code"] != "forbidden")) {
+			t.Errorf("%s, ending sessions: %d %s", c.name, rec.Code, rec.Body.String())
+		}
+		if rec := b.do(http.MethodDelete, member(c.target, "mfa"), c.token, nil); (ok && rec.Code != http.StatusNoContent) || (!ok && (rec.Code != c.want || body(t, rec)["code"] != "forbidden")) {
+			t.Errorf("%s, resetting MFA: %d %s", c.name, rec.Code, rec.Body.String())
+		}
+	}
+	// The Owner's second factor is still in force.
+	if code, out := signInLocal(t, f.browser(), "owner@acme.com", "a-long-enough-password"); code != http.StatusAccepted || out["mfa"] != "challenge" {
+		t.Errorf("the Owner after an Admin's reset: %d %v", code, out)
+	}
+}

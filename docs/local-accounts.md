@@ -93,7 +93,8 @@ into memory only while a code is checked.
   and `…/mfa/confirm` take that token in place of a bearer token, and the
   person then signs in again. Nothing is issued until they do.
 - **Reset.** `DELETE /identity/v1/organizations/{org}/members/{user}/mfa`
-  (the users permission, for a member of the org) removes the
+  (the users permission, for a member of the org the caller manages: an
+  Admin resets Users and Guests only) removes the
   authenticator and the recovery codes and ends every session of theirs
   (`mfa_reset`, pushed to their open sessions); they set up a new one at
   the next sign-in. Audited as `mfa.reset`.

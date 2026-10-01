@@ -516,9 +516,11 @@ func (s *Server) DisableMfa(ctx context.Context, req api.DisableMfaRequestObject
 }
 
 // ResetMemberMfa is an admin taking a member's second factor away when
-// they lose their device: the users permission, for a member of the org.
+// they lose their device: the users permission, for a member of the org the
+// caller manages.
 func (s *Server) ResetMemberMfa(ctx context.Context, req api.ResetMemberMfaRequestObject) (api.ResetMemberMfaResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users); err != nil {
+	grant, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users)
+	if err != nil {
 		return api.ResetMemberMfa403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to reset a member's second factor."}, nil
 	}
 	all, err := s.users.ListMemberships(ctx, req.UserId)
@@ -526,10 +528,14 @@ func (s *Server) ResetMemberMfa(ctx context.Context, req api.ResetMemberMfaReque
 		return nil, err
 	}
 	member := false
+	var role authz.Role
 	for _, m := range all {
 		if m.OrgID == req.OrgId && m.Status == "active" {
-			member = true
+			member, role = true, authz.Role(m.Role)
 		}
+	}
+	if member && !authz.MayManage(grant.Role, role) {
+		return api.ResetMemberMfa403JSONResponse{Code: httpx.CodeForbidden, Message: msgOutranked}, nil
 	}
 	_, found, err := s.authenticator(ctx, req.UserId)
 	if err != nil {

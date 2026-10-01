@@ -292,33 +292,43 @@ func (s *Server) MembershipEnded(ctx context.Context, req api.MembershipEndedReq
 	return out, nil
 }
 
-// memberOf is whether a person has an active membership in an org.
-func (s *Server) memberOf(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
+// memberRole is a person's role in an org, and whether they are an active
+// member of it.
+func (s *Server) memberRole(ctx context.Context, orgID, userID uuid.UUID) (authz.Role, bool, error) {
 	all, err := s.users.ListMemberships(ctx, userID)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	for _, m := range all {
 		if m.OrgID == orgID && m.Status == "active" {
-			return true, nil
+			return authz.Role(m.Role), true, nil
 		}
 	}
-	return false, nil
+	return "", false, nil
 }
 
+// msgOutranked refuses acting on a member the caller may not manage, as
+// the user service's SetMembershipStatus does. A person acting on their
+// own sessions or second factor uses the /v1/sessions and /v1/mfa
+// endpoints.
+const msgOutranked = "An Admin manages Users and Guests only."
+
 // ListMemberSessions is a member's live sessions, for an admin with the
-// users permission.
+// users permission who manages that member.
 func (s *Server) ListMemberSessions(ctx context.Context, req api.ListMemberSessionsRequestObject) (api.ListMemberSessionsResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users); err != nil {
+	grant, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users)
+	if err != nil {
 		return api.ListMemberSessions403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to see a member's sessions."}, nil
 	}
-	if ok, err := s.memberOf(ctx, req.OrgId, req.UserId); err != nil {
+	if role, ok, err := s.memberRole(ctx, req.OrgId, req.UserId); err != nil {
 		return nil, err
 	} else if !ok {
 		return api.ListMemberSessions404JSONResponse{Code: "membership.not_found", Message: "No such member."}, nil
+	} else if !authz.MayManage(grant.Role, role) {
+		return api.ListMemberSessions403JSONResponse{Code: httpx.CodeForbidden, Message: msgOutranked}, nil
 	}
 	var rows []store.Session
-	err := s.cluster.Read(ctx, auth.PlatformOrg, func(tx pgx.Tx) error {
+	err = s.cluster.Read(ctx, auth.PlatformOrg, func(tx pgx.Tx) error {
 		var err error
 		rows, err = store.New(tx).ListLiveSessionsOfUser(ctx, req.UserId)
 		return err
@@ -336,15 +346,19 @@ func (s *Server) ListMemberSessions(ctx context.Context, req api.ListMemberSessi
 	return out, nil
 }
 
-// RevokeMemberSessions signs a member out everywhere, for an admin.
+// RevokeMemberSessions signs a member out everywhere, for an admin who
+// manages them.
 func (s *Server) RevokeMemberSessions(ctx context.Context, req api.RevokeMemberSessionsRequestObject) (api.RevokeMemberSessionsResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users); err != nil {
+	grant, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Users)
+	if err != nil {
 		return api.RevokeMemberSessions403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to sign a member out."}, nil
 	}
-	if ok, err := s.memberOf(ctx, req.OrgId, req.UserId); err != nil {
+	if role, ok, err := s.memberRole(ctx, req.OrgId, req.UserId); err != nil {
 		return nil, err
 	} else if !ok {
 		return api.RevokeMemberSessions404JSONResponse{Code: "membership.not_found", Message: "No such member."}, nil
+	} else if !authz.MayManage(grant.Role, role) {
+		return api.RevokeMemberSessions403JSONResponse{Code: httpx.CodeForbidden, Message: msgOutranked}, nil
 	}
 	c, _ := auth.CallerFrom(ctx)
 	n, err := s.revokeAll(ctx, req.UserId, pgtype.UUID{}, "revoked_by_admin", db.MembershipActor(c.MembershipID), scopeUser)

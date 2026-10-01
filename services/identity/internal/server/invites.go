@@ -288,12 +288,14 @@ func (s *Server) CreateInternalInvite(ctx context.Context, req api.CreateInterna
 }
 
 // mayManageInvite is whether the caller may resend or revoke an invite:
-// the users permission, an operator, or the member who sent it.
+// an operator; the users permission, for a role the caller manages (an
+// Admin does not revive or withdraw an Admin's invite); or the member who
+// sent it.
 func (s *Server) mayManageInvite(ctx context.Context, row store.Invite) bool {
 	if auth.RequirePlatform(ctx) == nil {
 		return true
 	}
-	if _, err := authz.Require(ctx, s.authz, row.OrgID.String(), authz.Users); err == nil {
+	if grant, err := authz.Require(ctx, s.authz, row.OrgID.String(), authz.Users); err == nil && authz.MayManage(grant.Role, authz.Role(row.Role)) {
 		return true
 	}
 	c, ok := auth.CallerFrom(ctx)

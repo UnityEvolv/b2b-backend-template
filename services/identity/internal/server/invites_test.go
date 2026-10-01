@@ -244,3 +244,46 @@ func TestOwnerAndServiceInvites(t *testing.T) {
 		t.Errorf("a person with a password: %v", out)
 	}
 }
+
+// Resending or withdrawing an invite asks what creating it asks: an Admin
+// may not revive or withdraw an invite to a role they could not have
+// given (an Admin's, a Billing Admin's), though they handle a User's; the
+// Owner handles any.
+func TestAdminResendsAndRevokesOnlyInvitesTheyCouldMake(t *testing.T) {
+	f := newAPI(t)
+	b := f.browser()
+	owner, _ := f.owner(t, acme)
+	admin := f.admin(t, acme)
+	path := "/v1/organizations/" + acme.String() + "/invites"
+	invite := func(email, role string) string {
+		rec := b.do(http.MethodPost, path, owner, map[string]any{"email": email, "role": role})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("invite %s: %d %s", email, rec.Code, rec.Body.String())
+		}
+		return body(t, rec)["invite_id"].(string)
+	}
+	adminInvite := invite("anna@example.com", "admin")
+	billingInvite := invite("bill@example.com", "billing_admin")
+	userInvite := invite("ursula@example.com", "user")
+
+	for _, id := range []string{adminInvite, billingInvite} {
+		if rec := b.do(http.MethodPost, path+"/"+id+"/resend", admin, nil); rec.Code != http.StatusForbidden || body(t, rec)["code"] != "forbidden" {
+			t.Errorf("an Admin resending %s: %d %s", id, rec.Code, rec.Body.String())
+		}
+		if rec := b.do(http.MethodDelete, path+"/"+id, admin, nil); rec.Code != http.StatusForbidden || body(t, rec)["code"] != "forbidden" {
+			t.Errorf("an Admin withdrawing %s: %d %s", id, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := b.do(http.MethodPost, path+"/"+userInvite+"/resend", admin, nil); rec.Code != http.StatusOK {
+		t.Errorf("an Admin resending a User's invite: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := b.do(http.MethodDelete, path+"/"+userInvite, admin, nil); rec.Code != http.StatusNoContent {
+		t.Errorf("an Admin withdrawing a User's invite: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := b.do(http.MethodPost, path+"/"+adminInvite+"/resend", owner, nil); rec.Code != http.StatusOK {
+		t.Errorf("the Owner resending an Admin's invite: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := b.do(http.MethodDelete, path+"/"+billingInvite, owner, nil); rec.Code != http.StatusNoContent {
+		t.Errorf("the Owner withdrawing a Billing Admin's invite: %d %s", rec.Code, rec.Body.String())
+	}
+}

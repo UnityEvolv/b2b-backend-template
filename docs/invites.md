@@ -39,6 +39,9 @@ Audited as `invite.sent` or `invite.resent`.
 - `POST …/invites/{id}/resend {expires_in_hours}`: a fresh link and
   expiry; also how an expired one is revived.
 - `DELETE …/invites/{id}`: withdrawn; the link stops working. Audited.
+- Resending and withdrawing take the users permission for a role the
+  caller may invite, as creating does (an Admin handles invites to User,
+  not to Admin or Billing Admin), or being the one who sent it.
 
 ## Accepting
 

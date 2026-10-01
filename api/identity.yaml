@@ -1417,7 +1417,7 @@ paths:
     post:
       operationId: resendInvite
       summary: Send an open invite again, with a fresh link and expiry
-      description: The users permission, or the member who sent it. Audited.
+      description: The users permission for a role the caller may invite (an Admin, Users only; 403 otherwise), or the member who sent it. Audited.
       security:
         - bearer: []
       tags: [invites]
@@ -1459,7 +1459,7 @@ paths:
     delete:
       operationId: revokeInvite
       summary: Withdraw an open invite
-      description: The users permission, or the member who sent it. The link stops working. Audited.
+      description: The users permission for a role the caller may invite (an Admin, Users only; 403 otherwise), or the member who sent it. The link stops working. Audited.
       security:
         - bearer: []
       tags: [invites]

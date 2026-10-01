@@ -1,0 +1,50 @@
+{
+  "owners": [
+    {
+      "name": "notification",
+      "export": true,
+      "purge": true,
+      "erase": true,
+      "decrypt": false
+    },
+    {
+      "name": "billing",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": false
+    },
+    {
+      "name": "authorization",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": false
+    },
+    {
+      "name": "identity",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": true
+    },
+    {
+      "name": "user",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": false
+    },
+    {
+      "name": "audit",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": false,
+      "purge_last": true
+    }
+  ],
+  "decrypting": [
+    "identity"
+  ]
+}

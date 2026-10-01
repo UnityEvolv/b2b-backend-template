@@ -56,7 +56,8 @@ with `demo-password-change-me`, or as anyone `@sso.example.test` through the
 local single sign-on provider. Invites and other emails land in
 <http://localhost:8025>. [docs/local-dev.md](docs/local-dev.md) has the
 rest: every port, the demo data, Stripe test mode, and how to work on one
-part.
+part. [deploy/terraform](deploy/terraform/README.md) deploys it to Google
+Cloud.
 
 ## Licence
 

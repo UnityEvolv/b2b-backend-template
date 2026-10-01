@@ -1,0 +1,39 @@
+# Check the Terraform configuration: formatted, and valid against the
+# providers it pins. No cloud credentials and no state: `init
+# -backend=false` touches nothing but the provider registry, so a pull
+# request from a fork runs exactly what one from a branch does.
+
+name: terraform
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'deploy/terraform/**'
+      - '.github/workflows/terraform.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TERRAFORM_IMAGE: hashicorp/terraform:1.16.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: terraform fmt
+        run: docker run --rm -v "$PWD/deploy/terraform:/tf" -w /tf "$TERRAFORM_IMAGE" fmt -check -recursive -diff
+      - name: terraform validate
+        # One container, so validate sees the providers init downloaded. The
+        # committed lock file is checked, never rewritten.
+        run: |
+          docker run --rm -v "$PWD/deploy/terraform:/tf" -w /tf --entrypoint sh "$TERRAFORM_IMAGE" -c \
+            'terraform init -backend=false -input=false -lockfile=readonly && terraform validate'

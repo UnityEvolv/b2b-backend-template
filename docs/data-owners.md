@@ -110,6 +110,11 @@ locals {
 }
 ```
 
+[deploy/terraform](../deploy/terraform/README.md) does this: the
+template's manifest is committed there as `data-owners.json` (a test in
+`cmd/dataowners` fails when it drifts from the registry), and a product
+passes its own as `data_owners_file`.
+
 URLs are left out: they are the deploy's own. A product that registers
 owners in code prints its manifest with `dataowner.Default.Manifest()` from
 a command of its own.

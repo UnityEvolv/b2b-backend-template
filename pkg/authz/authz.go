@@ -59,7 +59,8 @@ const (
 	Users   Permission = "users"   // invite, deactivate, edit, bulk import
 	Audit   Permission = "audit"   // audit log access
 	SSO     Permission = "sso"     // the org's single sign-on identity provider
-	// Settings is the org's own settings: name, domain, time zone. Admin
+	// Settings is the org's own settings: name, time zone, and reading the
+	// domain claim (claiming one is ClaimDomain, the Owner's). Admin
 	// has it and it is not a toggle; an Owner always has it.
 	Settings Permission = "settings"
 )

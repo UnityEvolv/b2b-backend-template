@@ -77,9 +77,11 @@ user service and the org's configuration from its own table. Tests use
 `authz.Static{"org/membership": grant}`.
 
 Enforced today: people, invites, sessions and MFA resets (users), the plan
-and invoices (billing), the audit log (audit), organization settings
-(settings), the identity provider, read and changed (sso), role assignment
-and permission configuration (Owner only).
+and invoices (billing), the audit log (audit), organization settings and
+reading the domain claim (settings), the identity provider, read and
+changed (sso), role assignment, permission configuration, ownership
+transfer, deleting the organization and claiming or verifying its domain
+(Owner only).
 
 ## Endpoints
 

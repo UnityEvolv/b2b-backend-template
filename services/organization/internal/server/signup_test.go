@@ -206,7 +206,7 @@ func TestDomainClaimByTXTRecord(t *testing.T) {
 	_, org := call(t, h, http.MethodPost, "/v1/organizations", operator, map[string]any{"name": "Initech", "time_zone": "UTC"})
 	orgID := org["org_id"].(string)
 	adminID := uuid.NewString()
-	grants[orgID+"/"+adminID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
+	grants[orgID+"/"+adminID] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())} // claiming is Owner only
 	admin, _ := issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: orgID, MembershipID: adminID}, 3600e9)
 	member := tokenFor(t, issuer, orgID)
 	path := "/v1/organizations/" + orgID + "/domain"
@@ -245,7 +245,7 @@ func TestDomainClaimByTXTRecord(t *testing.T) {
 	// Another org cannot claim it now, and verifying with nothing pending is not found.
 	_, other := call(t, h, http.MethodPost, "/v1/organizations", operator, map[string]any{"name": "Other", "time_zone": "UTC"})
 	otherAdmin := uuid.NewString()
-	grants[other["org_id"].(string)+"/"+otherAdmin] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
+	grants[other["org_id"].(string)+"/"+otherAdmin] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())}
 	otherToken, _ := issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: other["org_id"].(string), MembershipID: otherAdmin}, 3600e9)
 	if status, _ := call(t, h, http.MethodPut, "/v1/organizations/"+other["org_id"].(string)+"/domain", otherToken, map[string]any{"domain": "initech.com"}); status != http.StatusConflict {
 		t.Errorf("claiming a held domain: %d", status)
@@ -285,4 +285,38 @@ func contains(list []string, want string) bool {
 func call(t *testing.T, h http.Handler, method, path, token string, body any) (int, map[string]any) {
 	t.Helper()
 	return do(t, h, method, path, token, body, uuid.NewString())
+}
+
+// Claiming a domain is the Owner's alone (authz.ClaimDomain): an Admin,
+// who has the settings, reads the claim but neither starts nor verifies
+// one.
+func TestClaimingADomainIsOwnerOnly(t *testing.T) {
+	h, _, issuer, _, _ := newAPIAudited(t)
+	operator := tokenFor(t, issuer, auth.PlatformOrg)
+	_, org := call(t, h, http.MethodPost, "/v1/organizations", operator, map[string]any{"name": "Umbrella", "time_zone": "UTC"})
+	orgID := org["org_id"].(string)
+	adminID, ownerID := uuid.NewString(), uuid.NewString()
+	grants[orgID+"/"+adminID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
+	grants[orgID+"/"+ownerID] = authz.Grant{Role: authz.Owner, Permissions: authz.Effective(authz.Owner, authz.Defaults())}
+	admin, _ := issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: orgID, MembershipID: adminID}, 3600e9)
+	owner, _ := issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: orgID, MembershipID: ownerID}, 3600e9)
+	path := "/v1/organizations/" + orgID + "/domain"
+
+	if status, out := call(t, h, http.MethodPut, path, admin, map[string]any{"domain": "umbrella.com"}); status != http.StatusForbidden || out["code"] != "forbidden" {
+		t.Errorf("an Admin claiming: %d %v", status, out)
+	}
+	if status, _ := call(t, h, http.MethodGet, path, admin, nil); status != http.StatusOK {
+		t.Errorf("an Admin reading the claim: %d", status)
+	}
+	status, claim := call(t, h, http.MethodPut, path, owner, map[string]any{"domain": "umbrella.com"})
+	if status != http.StatusOK || claim["pending_domain"] != "umbrella.com" {
+		t.Fatalf("the Owner claiming: %d %v", status, claim)
+	}
+	deps.records["_b2bapp-verify.umbrella.com"] = claim["txt_value"].(string)
+	if status, out := call(t, h, http.MethodPost, path+"/verify", admin, nil); status != http.StatusForbidden || out["code"] != "forbidden" {
+		t.Errorf("an Admin verifying: %d %v", status, out)
+	}
+	if status, out := call(t, h, http.MethodPost, path+"/verify", owner, nil); status != http.StatusOK || out["domain"] != "umbrella.com" {
+		t.Errorf("the Owner verifying: %d %v", status, out)
+	}
 }

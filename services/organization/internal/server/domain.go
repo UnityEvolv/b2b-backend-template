@@ -66,10 +66,11 @@ func (s *Server) GetDomain(ctx context.Context, req api.GetDomainRequestObject) 
 	return api.GetDomain200JSONResponse(toClaim(org, s.brand)), nil
 }
 
-// SetDomain starts a claim: the domain waits for its record.
+// SetDomain starts a claim: the domain waits for its record. Claiming is
+// Owner only (authz.ClaimDomain); reading the claim is the settings.
 func (s *Server) SetDomain(ctx context.Context, req api.SetDomainRequestObject) (api.SetDomainResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Settings); err != nil {
-		return api.SetDomain403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to change the organization settings."}, nil
+	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.ClaimDomain); err != nil {
+		return api.SetDomain403JSONResponse{Code: httpx.CodeForbidden, Message: "Only the Owner may claim the organization's domain."}, nil
 	}
 	domain := normalizeDomain(req.Body.Domain)
 	if domain == "" || PublicMailDomain(domain) {
@@ -102,10 +103,11 @@ func (s *Server) SetDomain(ctx context.Context, req api.SetDomainRequestObject) 
 	return api.SetDomain200JSONResponse(toClaim(org, s.brand)), nil
 }
 
-// VerifyDomain looks for the record and claims the domain when it is there.
+// VerifyDomain looks for the record and claims the domain when it is there:
+// Owner only, as starting the claim is.
 func (s *Server) VerifyDomain(ctx context.Context, req api.VerifyDomainRequestObject) (api.VerifyDomainResponseObject, error) {
-	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.Settings); err != nil {
-		return api.VerifyDomain403JSONResponse{Code: httpx.CodeForbidden, Message: "You do not have permission to change the organization settings."}, nil
+	if _, err := authz.Require(ctx, s.authz, req.OrgId.String(), authz.ClaimDomain); err != nil {
+		return api.VerifyDomain403JSONResponse{Code: httpx.CodeForbidden, Message: "Only the Owner may claim the organization's domain."}, nil
 	}
 	org, err := s.organization(ctx, req.OrgId)
 	if err != nil {

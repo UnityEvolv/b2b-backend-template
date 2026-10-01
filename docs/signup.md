@@ -33,17 +33,17 @@ services do their parts.
 An organization without a claim (a public-mailbox signup, or one an
 operator made) proves a domain with a DNS record:
 
-- `PUT /organization/v1/organizations/{org}/domain {domain}` (the settings
-  permission) parks it as pending and answers with the record to publish:
+- `PUT /organization/v1/organizations/{org}/domain {domain}` (the Owner
+  only: `claim_domain`) parks it as pending and answers with the record to publish:
   a TXT at `_b2bapp-verify.<domain>` with value `b2bapp-verify=<token>`
   (both names are configuration: `DOMAIN_TXT_PREFIX` and
   `DOMAIN_TXT_VALUE_PREFIX`).
   Until it is found the domain counts for nothing: sign-in by address does
   not find the organization, and another organization may still claim it.
-- `POST …/domain/verify` looks the record up and claims the domain; the
+- `POST …/domain/verify` (the Owner only) looks the record up and claims the domain; the
   record not found, or the domain claimed meanwhile, is a 409. Audited as
   `organization.domain_claimed`.
-- `GET …/domain` is the state.
+- `GET …/domain` is the state (the settings permission: an Admin reads it).
 
 The organization settings no longer take a domain from an organization's
 own admins (`domain.verify_first`); a platform operator may still set one

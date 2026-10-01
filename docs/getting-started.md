@@ -72,9 +72,10 @@ every migration, so the database is ready by then. Check:
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-Every service should be `Up`; postgres, redis, s3, mailpit, the gateway and
-the three web apps also say `(healthy)`. `dbinit`, `migrate` and `s3-init`
-have exited, which is right: they run once per start.
+Sixteen containers should be `Up`. Within a few seconds postgres, redis,
+s3, mailpit, the gateway and the three web apps also say `(healthy)`.
+`dbinit`, `migrate` and `s3-init` are not listed: they ran once and exited,
+which is right.
 
 ### If a port is taken
 
@@ -216,9 +217,9 @@ too.
 ### Billing without Stripe
 
 1. Sign in to the admin app as `billing@demo.example.test` and open
-   **Billing**. Demo Co is on the Free plan, which allows 10 people.
+   **Billing**. Demo Co is on the Free plan, which allows 10 users.
 2. Choose **Start a 14-day trial**. The organization moves to Team at
-   once, and the page shows the new cap of 50.
+   once, and the page shows its cap of 50 users.
 
 The plans, their caps and their labels come from the plan registry
 ([plans.md](plans.md)); the page has none of its own. Every cap is read at

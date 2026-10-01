@@ -84,7 +84,7 @@ func TestProductPermissionGroup(t *testing.T) {
 	}
 
 	// A group nobody registered, or one the template no longer has, is refused.
-	for _, bad := range []string{"offices", "providers", "reports"} {
+	for _, bad := range []string{"dashboards", "providers", "reports"} {
 		if status, _ := f.do(http.MethodPut, "/v1/organizations/"+acme.String()+"/permissions", f.as(acme, acmeOwner),
 			map[string]any{"admin": []string{bad}, "billing_admin": []string{}}); status != http.StatusBadRequest {
 			t.Errorf("%s configured: %d", bad, status)

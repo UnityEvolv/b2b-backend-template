@@ -18,7 +18,7 @@ shapes in `pkg/orgdata`. Only the organization service calls them
   query parameters. Only their own records: never other people's messages to
   them.
 - **Forget a membership** (only where the service keeps something personal
-  under a membership: usage, calendar, notification) deletes it, for account
+  under a membership: notification in the template, and a product's own) deletes it, for account
   deletion.
 
 ```yaml
@@ -89,7 +89,7 @@ shapes in `pkg/orgdata`. Only the organization service calls them
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
-  # Only in usage, calendar and notification:
+  # Only in a service that erases (notification, and a product's own):
   /v1/internal/organizations/{org_id}/memberships/{membership_id}/data:
     delete:
       operationId: forgetMembershipData

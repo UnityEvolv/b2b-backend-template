@@ -286,7 +286,7 @@ func TestProductPurposeIsEnforced(t *testing.T) {
 		t.Errorf("html: %v", err)
 	}
 	org := uuid.Must(uuid.NewV7()).String()
-	unregistered := storage.Purpose{Name: "office-background", MaxBytes: 5 << 20}
+	unregistered := storage.Purpose{Name: "banner-image", MaxBytes: 5 << 20}
 	if _, err := storage.NewKey(org, unregistered); !errors.Is(err, storage.ErrUnknownPurpose) {
 		t.Errorf("unregistered purpose: %v", err)
 	}

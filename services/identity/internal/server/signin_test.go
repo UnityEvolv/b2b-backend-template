@@ -21,8 +21,8 @@ func TestSignInThroughTheOrgsProviderReachesAnAuthenticatedEndpoint(t *testing.T
 
 	// The identity provider is chosen by the address's domain, and the
 	// provider's tenant issuer was really fetched before being saved.
-	to := f.signIn(b, "/v1/sign-in/start?email=ada@ACME.com&next=/offices/1&app=account", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada", department: "R&D"})
-	if to != "http://account.test/offices/1" {
+	to := f.signIn(b, "/v1/sign-in/start?email=ada@ACME.com&next=/projects/1&app=account", person{sub: "oid-ada", email: "ada@acme.com", name: "Ada", department: "R&D"})
+	if to != "http://account.test/projects/1" {
 		t.Fatalf("landed at %s", to)
 	}
 	if _, ok := b.cookies[sessionName]; !ok {

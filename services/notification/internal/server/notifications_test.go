@@ -239,12 +239,12 @@ func (f *notifyFixture) outbox(t *testing.T, to uuid.UUID) []string {
 }
 
 // Categories a product registers, for the router's flags: chat is
-// batched, in the feed, pushed and in the digest; chat_room is feed only;
+// batched, in the feed, pushed and in the digest; channel_chat is feed only;
 // ping is push only, to phones, never held for quiet hours.
 const (
-	chat     = "chat"
-	chatRoom = "chat_room"
-	ping     = "ping"
+	chat        = "chat"
+	chatChannel = "channel_chat"
+	ping        = "ping"
 )
 
 // testCategories is the template's categories and the test product's.
@@ -253,11 +253,11 @@ func testCategories() *notifycat.Registry {
 	r.Register(notifycat.Category{ID: chat, Label: "Chat", Audience: notifycat.Member, QuietHours: true, Batched: true,
 		Default: notifycat.Channels{InApp: true, Push: true, Digest: true},
 		Copy:    map[string]notifycat.Copy{"message": {Title: "{by|Someone} wrote in {where|a conversation}", Line: "Open the conversation to reply.", Many: "{count} new messages in {where|a conversation}"}}})
-	r.Register(notifycat.Category{ID: chatRoom, Label: "Room chat", Audience: notifycat.Member, QuietHours: true, Batched: true,
+	r.Register(notifycat.Category{ID: chatChannel, Label: "Channel chat", Audience: notifycat.Member, QuietHours: true, Batched: true,
 		Default: notifycat.Channels{InApp: true}})
 	r.Register(notifycat.Category{ID: ping, Label: "Pings", Audience: notifycat.Member,
 		Default: notifycat.Channels{Push: true}, Channels: []notifycat.Channel{notifycat.Push}, Platforms: []string{"android", "ios"},
-		Copy: map[string]notifycat.Copy{"ping": {Title: "{by|Someone} is pinging you", Line: "At {room|your desk}."}}})
+		Copy: map[string]notifycat.Copy{"ping": {Title: "{by|Someone} is pinging you", Line: "In {where|a project}."}}})
 	return r
 }
 
@@ -348,15 +348,15 @@ func TestPushOnlyCategoryToPhones(t *testing.T) {
 	f.device(t, token, "web")
 	f.looking(t, id, "")
 	later := time.Now().Add(30 * time.Second)
-	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", Group: "desk:d", ExpiresAt: &later, Data: map[string]any{"by": "Ben", "room": "Design"}})
-	if got := f.pushed.take("android"); len(got) != 1 || got[0].Expires.IsZero() || got[0].Title != "Ben is pinging you" || got[0].Body != "At Design." {
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/projects/p", Group: "project:p", ExpiresAt: &later, Data: map[string]any{"by": "Ben", "where": "Design"}})
+	if got := f.pushed.take("android"); len(got) != 1 || got[0].Expires.IsZero() || got[0].Title != "Ben is pinging you" || got[0].Body != "In Design." {
 		t.Errorf("ping push: %v", got)
 	}
 	if got := f.pushed.take("web"); len(got) != 0 {
 		t.Errorf("a ping went to a browser: %v", got)
 	}
 	earlier := time.Now().Add(-time.Second)
-	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", ExpiresAt: &earlier})
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/projects/p", ExpiresAt: &earlier})
 	if got := f.pushed.take("android"); len(got) != 0 {
 		t.Errorf("an expired ping: %v", got)
 	}
@@ -365,7 +365,7 @@ func TestPushOnlyCategoryToPhones(t *testing.T) {
 		"channels": map[string]any{ping: map[string]any{"in_app": true, "push": true, "email": true, "digest": true}}, "push_previews": true, "muted": []string{},
 		"quiet_hours": map[string]any{"enabled": false, "start_minute": 0, "end_minute": 0, "days": []int{}},
 	})
-	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/desks/d", ExpiresAt: &later})
+	f.emit(t, notify.Event{Kind: "ping", Category: ping, Recipients: []uuid.UUID{id}, Link: "/projects/p", ExpiresAt: &later})
 	if got := f.pushed.take("android"); len(got) != 1 {
 		t.Errorf("ping push with every channel asked for: %v", got)
 	}
@@ -465,7 +465,7 @@ func TestPreferencesAndDevices(t *testing.T) {
 	f := newNotify(t)
 	id, token := f.person(t, authz.User)
 	code, prefs := f.do(t, http.MethodGet, f.path("/notification-preferences"), token, nil)
-	if code != http.StatusOK || !prefs["channels"].(map[string]any)[chat].(map[string]any)["push"].(bool) || prefs["channels"].(map[string]any)[chatRoom].(map[string]any)["push"].(bool) ||
+	if code != http.StatusOK || !prefs["channels"].(map[string]any)[chat].(map[string]any)["push"].(bool) || prefs["channels"].(map[string]any)[chatChannel].(map[string]any)["push"].(bool) ||
 		!prefs["channels"].(map[string]any)[notifycat.Security].(map[string]any)["email"].(bool) {
 		t.Fatalf("defaults: %d %v", code, prefs)
 	}
@@ -475,17 +475,17 @@ func TestPreferencesAndDevices(t *testing.T) {
 	}); code != http.StatusBadRequest {
 		t.Errorf("an unknown category: %d", code)
 	}
-	// Push off for room chat stops it there; chat still arrives.
+	// Push off for channel chat stops it there; chat still arrives.
 	f.device(t, token, "android")
 	f.do(t, http.MethodPut, f.path("/notification-preferences"), token, map[string]any{
-		"channels": map[string]any{chatRoom: map[string]any{"in_app": true, "push": false, "email": false, "digest": false}}, "push_previews": true, "muted": []string{},
+		"channels": map[string]any{chatChannel: map[string]any{"in_app": true, "push": false, "email": false, "digest": false}}, "push_previews": true, "muted": []string{},
 		"quiet_hours": map[string]any{"enabled": false, "start_minute": 0, "end_minute": 0, "days": []int{}},
 	})
 	f.looking(t, id, "-")
 	conv := uuid.NewString()
-	f.emit(t, notify.Event{Kind: "message", Category: chatRoom, Recipients: []uuid.UUID{id}, Link: "/chat/" + conv, Group: "conv:x" + conv})
+	f.emit(t, notify.Event{Kind: "message", Category: chatChannel, Recipients: []uuid.UUID{id}, Link: "/chat/" + conv, Group: "conv:x" + conv})
 	if got := f.pushed.take("android"); len(got) != 0 {
-		t.Errorf("room message pushed with push off: %v", got)
+		t.Errorf("channel message pushed with push off: %v", got)
 	}
 	f.emit(t, mention(id, conv))
 	if got := f.pushed.take("android"); len(got) != 1 {

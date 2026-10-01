@@ -32,14 +32,14 @@ func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
 	}
 
 	browser := f.browser()
-	to := f.signIn(browser, "/v1/sign-in/start?email=ada@acme.com&next=/offices/1&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge,
+	to := f.signIn(browser, "/v1/sign-in/start?email=ada@acme.com&next=/projects/1&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge,
 		person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"})
 	u, err := url.Parse(to)
 	if err != nil || u.Scheme != "b2bapp" || u.Host != "auth" || u.Path != "/callback" {
 		t.Fatalf("handed back to %s", to)
 	}
 	code := u.Query().Get("code")
-	if code == "" || u.Query().Get("next") != "/offices/1" || u.Query().Get("error") != "" {
+	if code == "" || u.Query().Get("next") != "/projects/1" || u.Query().Get("error") != "" {
 		t.Fatalf("hand-back: %s", to)
 	}
 	// The system browser holds no session.
@@ -57,7 +57,7 @@ func TestDesktopSignInHandsTheSessionToTheApp(t *testing.T) {
 	}
 
 	// A fresh sign-in, exchanged by the app that started it.
-	to = f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&next=/offices/1&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge,
+	to = f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&next=/projects/1&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge,
 		person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"})
 	u, _ = url.Parse(to)
 	rec := app.do(http.MethodPost, "/v1/sign-in/exchange", "", map[string]any{"code": u.Query().Get("code"), "code_verifier": verifier})
@@ -94,7 +94,7 @@ func TestDesktopSignInRefusalGoesBackToTheApp(t *testing.T) {
 	sum := sha256.Sum256([]byte(strings.Repeat("x", 50)))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
 	b := f.browser()
-	rec := b.do(http.MethodGet, "/v1/sign-in/start?email=ada@acme.com&next=/offices&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge, "", nil)
+	rec := b.do(http.MethodGet, "/v1/sign-in/start?email=ada@acme.com&next=/projects&app=account&client=desktop&code_challenge_method=S256&code_challenge="+challenge, "", nil)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("start: %d", rec.Code)
 	}
@@ -122,7 +122,7 @@ func TestMobileSignInUsesTheSameHandOff(t *testing.T) {
 	verifier := strings.Repeat("m", 48)
 	sum := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
-	to := f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&next=/offices&app=account&client=mobile&code_challenge_method=S256&code_challenge="+challenge,
+	to := f.signIn(f.browser(), "/v1/sign-in/start?email=ada@acme.com&next=/projects&app=account&client=mobile&code_challenge_method=S256&code_challenge="+challenge,
 		person{sub: "oid-ada", email: "ada@acme.com", name: "Ada"})
 	u, err := url.Parse(to)
 	if err != nil || u.Scheme != "b2bapp" || u.Query().Get("code") == "" {

@@ -1,8 +1,8 @@
 // Package ratelimit is the one rate limiter every service uses.
 //
 // A Rule is "limit requests per window", enforced in Redis so every node
-// shares the count. The realtime service runs the same Lua script, so a limit
-// means the same thing on a socket as over HTTP.
+// shares the count. The script is gcra.lua; a service written in another
+// language that loads the same script counts in the same buckets.
 package ratelimit
 
 import (

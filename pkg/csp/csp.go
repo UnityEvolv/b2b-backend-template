@@ -1,10 +1,12 @@
 // Package csp assembles the Content Security Policy for the web apps.
 //
-// The apps are served with a fixed base policy plus, per org, the origins each
-// provider plugin the org has configured declares. Nothing else. A free org on
-// the built-in providers gets no external origin at all, so a fixed policy
-// that named every provider would be both too loose for the free org and too
-// tight for the org that needs one.
+// The apps are served with a fixed base policy plus the origins each
+// third-party integration in use declares: in the template, the CAPTCHA
+// widget (pkg/captcha); in a product, any embed or SDK host one of its
+// features adds, per org when only some orgs turn it on. Nothing else. An org
+// that uses none gets no external origin at all, so a fixed policy naming
+// every integration would be both too loose for that org and too tight for
+// the one that needs it.
 package csp
 
 import (
@@ -15,26 +17,26 @@ import (
 	"strings"
 )
 
-// Origins is what one provider needs the browser to be allowed to reach. A
-// provider plugin declares exactly the origins its client adapter connects to.
+// Origins is what one integration needs the browser to be allowed to reach:
+// exactly the origins its client code connects to.
 type Origins struct {
 	// Connect: API and socket endpoints (connect-src). wss:// origins go here.
 	Connect []string
-	// Media: where audio and video are fetched from (media-src), for providers
-	// that serve recordings or streams over HTTP.
+	// Media: where audio and video are fetched from (media-src).
 	Media []string
-	// Worker: origins a provider loads workers from (worker-src).
+	// Worker: origins workers are loaded from (worker-src).
 	Worker []string
-	// Frame: origins a provider embeds in an iframe (frame-src). Rare, and a
-	// reason to look twice at the provider.
+	// Frame: origins embedded in an iframe (frame-src). Rare, and a reason to
+	// look twice at the integration.
 	Frame []string
-	// Script: origins a provider loads a script from (script-src). Rarer
-	// still: an RTC or messaging SDK is bundled, never loaded at runtime.
-	// The CAPTCHA widget is the one platform-wide case.
+	// Script: origins a script is loaded from (script-src). Rarer still: an
+	// SDK is bundled, never loaded at runtime. The CAPTCHA widget is the
+	// template's one case.
 	Script []string
 }
 
-// Declarer is a provider plugin that declares its CSP origins.
+// Declarer is an integration that declares its CSP origins (the CAPTCHA
+// verifier is one).
 type Declarer interface {
 	CSPOrigins() Origins
 }
@@ -45,7 +47,7 @@ type Policy struct {
 }
 
 // Base is the policy every web app starts from. selfOrigins are the product's
-// own hosts a page must reach beyond itself: the API and the realtime socket.
+// own hosts a page must reach beyond itself, such as the API host.
 // scriptHashes allows the named inline scripts (the first-paint theme script)
 // without allowing inline scripts in general.
 func Base(selfOrigins []string, scriptHashes []string) Policy {
@@ -70,11 +72,11 @@ func Base(selfOrigins []string, scriptHashes []string) Policy {
 	return p
 }
 
-// Assemble is base plus the origins of every provider the org has configured.
-// Passing no providers returns base unchanged: the free org's policy.
-func Assemble(base Policy, providers ...Origins) Policy {
+// Assemble is base plus the origins of every integration in use. Passing none
+// returns base unchanged.
+func Assemble(base Policy, integrations ...Origins) Policy {
 	p := base.clone()
-	for _, o := range providers {
+	for _, o := range integrations {
 		p.add("connect-src", o.Connect...)
 		p.add("media-src", o.Media...)
 		p.add("worker-src", o.Worker...)

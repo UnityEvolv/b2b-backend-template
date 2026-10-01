@@ -55,7 +55,7 @@ func TestCategoriesAreRegistered(t *testing.T) {
 		byID[c["id"].(string)] = c
 		order = append(order, c["id"].(string))
 	}
-	want := []string{"security", "membership", "billing", "admin_notices", chat, chatRoom, ping}
+	want := []string{"security", "membership", "billing", "admin_notices", chat, chatChannel, ping}
 	if len(order) != len(want) {
 		t.Fatalf("categories %v, want %v", order, want)
 	}
@@ -91,7 +91,7 @@ func TestCategoriesAreRegistered(t *testing.T) {
 	if code, out := f.do(t, http.MethodPost, "/v1/internal/events", service, body); code != http.StatusAccepted {
 		t.Errorf("a registered category: %d %v", code, out)
 	}
-	if err := f.router.Handle(context.Background(), notify.Event{ID: "x", OrgID: f.org, Kind: "x", Category: "knock", Recipients: []uuid.UUID{id}, Link: "/"}); err == nil {
+	if err := f.router.Handle(context.Background(), notify.Event{ID: "x", OrgID: f.org, Kind: "x", Category: "reminder", Recipients: []uuid.UUID{id}, Link: "/"}); err == nil {
 		t.Error("the router routed an unregistered category")
 	}
 }

@@ -221,7 +221,7 @@ func TestPagesWithCursorsAndFilters(t *testing.T) {
 	for i := range 7 {
 		action := "member.invited"
 		if i%2 == 0 {
-			action = "office.created"
+			action = "project.created"
 		}
 		if err := rec.Record(asRequest(actor), audit.Event{OrgID: orgA, Action: action, TargetType: "thing", TargetID: string(rune('a' + i))}); err != nil {
 			t.Fatal(err)
@@ -258,7 +258,7 @@ func TestPagesWithCursorsAndFilters(t *testing.T) {
 		t.Fatalf("last page: %d %v", status, page3)
 	}
 
-	status, filtered := f.list(t, orgA, token, "?action=office.")
+	status, filtered := f.list(t, orgA, token, "?action=project.")
 	if status != http.StatusOK || len(filtered["events"].([]any)) != 4 {
 		t.Fatalf("action filter: %d %v", status, filtered)
 	}

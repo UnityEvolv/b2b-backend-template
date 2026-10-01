@@ -140,7 +140,7 @@ func TestProductRegistersAGroup(t *testing.T) {
 	if err := r.Validate(authz.Config{Admin: []authz.Permission{"projects"}}); err != nil {
 		t.Errorf("product group refused: %v", err)
 	}
-	if err := r.Validate(authz.Config{Admin: []authz.Permission{"offices"}}); err == nil {
+	if err := r.Validate(authz.Config{Admin: []authz.Permission{"dashboards"}}); err == nil {
 		t.Error("an unregistered group was accepted")
 	}
 	d := r.Defaults()
@@ -152,10 +152,10 @@ func TestProductRegistersAGroup(t *testing.T) {
 	}
 
 	// Saved before "reports" existed, with projects off for Admin and a
-	// group since removed ("offices").
-	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, "projects", "offices"}
+	// group since removed ("dashboards").
+	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, "projects", "dashboards"}
 	r.Register(authz.Group{Key: "reports", Label: "Reports", Default: []authz.Role{authz.Admin}})
-	c := r.Stored([]authz.Permission{authz.Users, "offices"}, []authz.Permission{authz.Billing, "projects"}, known)
+	c := r.Stored([]authz.Permission{authz.Users, "dashboards"}, []authz.Permission{authz.Billing, "projects"}, known)
 	if !slices.Equal(c.Admin, []authz.Permission{authz.Users, "reports"}) || !slices.Equal(c.BillingAdmin, []authz.Permission{authz.Billing, "projects"}) {
 		t.Errorf("stored: %+v", c)
 	}

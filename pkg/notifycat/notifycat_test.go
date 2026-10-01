@@ -17,7 +17,7 @@ func registry() *notifycat.Registry {
 // the category may not use; a stored category no longer registered is gone.
 func TestResolve(t *testing.T) {
 	got := registry().Resolve(
-		[]byte(`{"chat":{"in_app":true,"push":false,"email":true},"ping":{"in_app":true,"push":false,"email":true,"digest":true},"knock":{"push":true}}`),
+		[]byte(`{"chat":{"in_app":true,"push":false,"email":true},"ping":{"in_app":true,"push":false,"email":true,"digest":true},"reminder":{"push":true}}`),
 		[]byte(`{"security":{"in_app":true,"push":false,"email":false,"digest":true}}`))
 	if c := got["chat"]; c.Push || !c.Email {
 		t.Errorf("the person's choice: %+v", c)
@@ -31,7 +31,7 @@ func TestResolve(t *testing.T) {
 	if b := got[notifycat.Billing]; !b.Email || !b.InApp || b.Push {
 		t.Errorf("the category's default: %+v", b)
 	}
-	if _, ok := got["knock"]; ok {
+	if _, ok := got["reminder"]; ok {
 		t.Error("an unregistered category resolved")
 	}
 }

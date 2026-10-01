@@ -8,24 +8,24 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/csp"
 )
 
-// What two bring-your-own providers would declare, as a product built on
-// the template would; the shape is what matters here.
+// What two integrations a product adds would declare; the shape is what
+// matters here.
 var (
-	livekit = csp.Origins{Connect: []string{"wss://acme.livekit.cloud", "https://acme.livekit.cloud"}}
-	ably    = csp.Origins{Connect: []string{"wss://realtime.ably.io", "https://rest.ably.io"}}
-	frames  = csp.Origins{Frame: []string{"https://embed.example"}}
+	media  = csp.Origins{Connect: []string{"wss://media.vendor-one.example", "https://media.vendor-one.example"}}
+	chat   = csp.Origins{Connect: []string{"wss://socket.vendor-two.example", "https://api.vendor-two.example"}}
+	frames = csp.Origins{Frame: []string{"https://embed.example"}}
 )
 
 func base() csp.Policy {
 	return csp.Base([]string{"https://api.b2bapp.example", "wss://live.b2bapp.example"}, []string{csp.ScriptHash("console.log(1)")})
 }
 
-func TestFreeOrgPolicyNamesNoProvider(t *testing.T) {
+func TestPolicyWithoutIntegrationsNamesNone(t *testing.T) {
 	p := csp.Assemble(base())
 	s := p.String()
-	for _, forbidden := range []string{"livekit", "ably", "daily", "agora"} {
+	for _, forbidden := range []string{"vendor-one", "vendor-two", "vendor-three"} {
 		if strings.Contains(s, forbidden) {
-			t.Errorf("free org policy names %s: %s", forbidden, s)
+			t.Errorf("policy names %s: %s", forbidden, s)
 		}
 	}
 	if !slices.Equal(p.Sources("connect-src"), []string{"'self'", "https://api.b2bapp.example", "wss://live.b2bapp.example"}) {
@@ -33,19 +33,19 @@ func TestFreeOrgPolicyNamesNoProvider(t *testing.T) {
 	}
 }
 
-func TestOrgWithProvidersGetsExactlyTheirOrigins(t *testing.T) {
-	p := csp.Assemble(base(), livekit, ably)
+func TestIntegrationsGetExactlyTheirOrigins(t *testing.T) {
+	p := csp.Assemble(base(), media, chat)
 	connect := p.Sources("connect-src")
-	for _, o := range append(livekit.Connect, ably.Connect...) {
+	for _, o := range append(media.Connect, chat.Connect...) {
 		if !slices.Contains(connect, o) {
 			t.Errorf("connect-src lacks %s: %v", o, connect)
 		}
 	}
-	if strings.Contains(p.String(), "daily") {
-		t.Errorf("a provider the org did not configure appears: %s", p.String())
+	if strings.Contains(p.String(), "vendor-three") {
+		t.Errorf("an integration not in use appears: %s", p.String())
 	}
 	// Assembling for one org never changes the base another org starts from.
-	if s := csp.Assemble(base()).String(); strings.Contains(s, "livekit") {
+	if s := csp.Assemble(base()).String(); strings.Contains(s, "vendor-one") {
 		t.Errorf("base policy was mutated: %s", s)
 	}
 }
@@ -89,9 +89,9 @@ func TestScriptHashMatchesTheBrowser(t *testing.T) {
 	}
 }
 
-// The one platform-wide runtime script, the CAPTCHA widget, is declared like
-// a provider and lands in script-src and frame-src; the free org's policy
-// without it names no external script.
+// The template's one runtime script, the CAPTCHA widget, is declared like
+// any integration and lands in script-src and frame-src; the policy without
+// it names no external script.
 func TestScriptOriginsAreDeclaredNotAssumed(t *testing.T) {
 	widget := csp.Origins{Script: []string{"https://captcha.example/api/"}, Frame: []string{"https://captcha.example/"}}
 	p := csp.Assemble(base(), widget)

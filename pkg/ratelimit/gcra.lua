@@ -2,9 +2,8 @@
 -- `limit` allowed. One key per bucket holding the theoretical arrival time.
 -- Atomic, and on Redis's clock, so every node sees the same answer.
 --
--- Shared, byte for byte, by the Go services (pkg/ratelimit) and the realtime
--- service (services/realtime/src/gcra.lua). internal/repocheck fails if the
--- two copies differ.
+-- Loaded by every Go service through pkg/ratelimit. A service in another
+-- language that runs this same script shares its buckets.
 --
 -- KEYS[1]  the bucket
 -- ARGV[1]  limit      requests per window

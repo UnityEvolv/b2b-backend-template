@@ -83,15 +83,16 @@ type Directory interface {
 	OrgName(ctx context.Context, org uuid.UUID) (string, error)
 }
 
-// Live tells a person's open apps about a new feed entry, over the realtime
-// service's sockets.
+// Live tells a person's open apps about a new feed entry, on the
+// per-person live channel (config.Redis.ToMembers), for whatever holds their
+// open connections.
 type Live interface {
 	Feed(ctx context.Context, org uuid.UUID, recipients []uuid.UUID) error
 }
 
 // Links make the absolute links an email carries.
 type Links struct {
-	// App is the employee app's origin; Admin the admin app's.
+	// App is the main app's origin (config.Apps.Main); Admin the admin app's.
 	App, Admin string
 	// API is this service's public base, where the one-click unsubscribe
 	// endpoint is: behind the load balancer's /notification, or its own port

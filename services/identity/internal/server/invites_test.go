@@ -201,7 +201,7 @@ func TestOwnerAndServiceInvites(t *testing.T) {
 	}
 	rec = b.do(http.MethodPost, "/v1/internal/invites", f.service("user"), internal)
 	inv := body(t, rec)
-	if rec.Code != http.StatusCreated || inv["role"] != "user" || inv["kind"] != nil || inv["room_id"] != nil {
+	if rec.Code != http.StatusCreated || inv["role"] != "user" || inv["kind"] != nil {
 		t.Fatalf("internal invite: %d %v", rec.Code, inv)
 	}
 	msg, gusToken := f.lastLink(t)

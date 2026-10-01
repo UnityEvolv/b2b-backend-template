@@ -78,7 +78,9 @@ column for `email`, `name` and `role`, since a customer's sheet rarely
 uses these names; without it the columns are found by those names.
 
 Every row is checked and reported by its row number: no email, no name,
-a malformed address, a name too long, a role the caller cannot give, a
+a malformed address, a name too long, a role the caller cannot give (a
+blank role is a User, checked like any other: a Billing Admin granted
+users may not import anyone), a
 duplicate earlier in the sheet, an address already a member, and the
 plan's user cap once the valid rows before it have used it up. With
 `dry_run=true` the answer says what would happen and nothing is sent.

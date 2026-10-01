@@ -198,3 +198,35 @@ func TestImportColumnsReadTheHeaderAndASample(t *testing.T) {
 		t.Errorf("rows %v, sample %d", out["rows"], len(out["sample"].([]any)))
 	}
 }
+
+// Every row is checked against what the importer may invite, the defaulted
+// role included: a Billing Admin granted users manages nobody, so a row with
+// no role (a User) is refused as one naming user would be, and nothing is
+// sent. An Admin may still import Users with the role left blank.
+func TestImportChecksTheDefaultedRoleToo(t *testing.T) {
+	f := newAPI(t)
+	billingID, adminID := uuid.NewString(), uuid.NewString()
+	f.grants[acme.String()+"/"+billingID] = authz.Grant{Role: authz.BillingAdmin, Permissions: []authz.Permission{authz.Billing, authz.Users}}
+	f.grants[acme.String()+"/"+adminID] = authz.Grant{Role: authz.Admin, Permissions: authz.Effective(authz.Admin, authz.Defaults())}
+	billing, _ := f.issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: billingID}, 3600e9)
+	admin, _ := f.issuer.Issue(auth.Caller{UserID: uuid.NewString(), OrgID: acme.String(), MembershipID: adminID}, 3600e9)
+
+	sheet := "email,name,role\nnorole@example.com,No Role,\nuser@example.com,Named User,user\n"
+	status, out := importSheet(t, f, billing, acme.String(), sheet, "", false)
+	if status != http.StatusOK {
+		t.Fatalf("import: %d %v", status, out)
+	}
+	rows := rowsByNumber(out)
+	if firstError(rows[2]) != "role_invalid" || firstError(rows[3]) != "role_invalid" || rows[2]["status"] != "failed" {
+		t.Errorf("a Billing Admin's rows: %v %v", rows[2], rows[3])
+	}
+	if len(f.sessions.invites) != 0 {
+		t.Fatalf("a Billing Admin's import sent invites: %+v", f.sessions.invites)
+	}
+
+	status, out = importSheet(t, f, admin, acme.String(), sheet, "", false)
+	rows = rowsByNumber(out)
+	if status != http.StatusOK || rows[2]["status"] != "invited" || rows[2]["role"] != "user" || rows[3]["status"] != "invited" {
+		t.Errorf("an Admin's import: %d %v", status, out)
+	}
+}

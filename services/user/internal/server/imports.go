@@ -195,13 +195,20 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 		case len(name) > 200:
 			r.Errors = append(r.Errors, rowError("name_too_long", "The name is longer than 200 characters."))
 		}
+		// A blank cell is a User. Whatever the role, the importer must be
+		// one who may invite it, as the identity service's own invite
+		// checks; the internal invite it sends checks nothing.
 		role := authz.User
-		if roleText != "" {
-			parsed, err := authz.ParseRole(roleText)
-			if err != nil || parsed == authz.Guest || parsed == authz.Owner || !authz.MayManage(grant.Role, parsed) {
-				r.Errors = append(r.Errors, rowError("role_invalid", "Not a role you can give: user, admin or billing_admin."))
-			} else {
+		parsed, perr := authz.ParseRole(roleText)
+		switch {
+		case roleText != "" && (perr != nil || parsed == authz.Guest || parsed == authz.Owner):
+			r.Errors = append(r.Errors, rowError("role_invalid", "Not a role you can give: user, admin or billing_admin."))
+		default:
+			if roleText != "" {
 				role = parsed
+			}
+			if !authz.MayManage(grant.Role, role) {
+				r.Errors = append(r.Errors, rowError("role_invalid", "You may not invite a "+strings.ReplaceAll(string(role), "_", " ")+"."))
 			}
 		}
 		roleName := string(role)

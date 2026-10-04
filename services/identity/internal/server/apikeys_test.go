@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -292,18 +293,53 @@ func TestKeysAreResolvedAndRateLimitedPerKey(t *testing.T) {
 	if !f.limited() {
 		t.Skip("TEST_REDIS_URL is not set: the limit is not counted")
 	}
-	// Spent until refused: the allowance refills as the loop runs, so the
-	// count is not exact on a slow machine.
-	limited := false
-	for range 2 * ratelimit.APIKey.Limit {
-		rec := f.browser().do(http.MethodPost, resolve, service, map[string]any{"token": token})
-		if rec.Code == http.StatusTooManyRequests {
-			limited = rec.Header().Get("Retry-After") != ""
-			break
-		}
+	// Spent until refused, by several callers at once: the allowance
+	// refills (one request every 100ms) as the burst runs, and one caller on
+	// a machine loaded by the whole suite can be slower than that, so it
+	// could never drain it. Eight together outpace the refill by far. What
+	// is proved is unchanged: the whole allowance gets through (refills only
+	// add to it), and past it the key is refused with Retry-After.
+	var (
+		mu               sync.Mutex
+		allowed, refused int
+		retryAfter       string
+		wg               sync.WaitGroup
+	)
+	budget := 4 * ratelimit.APIKey.Limit
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				mu.Lock()
+				done := refused > 0 || allowed+refused >= budget
+				mu.Unlock()
+				if done {
+					return
+				}
+				rec := f.browser().do(http.MethodPost, resolve, service, map[string]any{"token": token})
+				mu.Lock()
+				switch rec.Code {
+				case http.StatusOK:
+					allowed++
+				case http.StatusTooManyRequests:
+					refused++
+					retryAfter = rec.Header().Get("Retry-After")
+				default:
+					t.Errorf("resolve during the burst: %d", rec.Code)
+					refused++
+				}
+				mu.Unlock()
+			}
+		}()
 	}
-	if !limited {
-		t.Fatal("the key was never limited")
+	wg.Wait()
+	if refused == 0 || retryAfter == "" {
+		t.Fatalf("the key was never limited: %d allowed", allowed)
+	}
+	// One was allowed before the burst; the rest of the allowance in it.
+	if allowed+1 < ratelimit.APIKey.Limit {
+		t.Fatalf("refused after %d, before the allowance of %d was spent", allowed+1, ratelimit.APIKey.Limit)
 	}
 	rec := f.browser().do(http.MethodGet, "/v1/organizations/"+acme.String()+"/invites", token, nil)
 	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" || body(t, rec)["code"] != httpx.CodeRateLimited {

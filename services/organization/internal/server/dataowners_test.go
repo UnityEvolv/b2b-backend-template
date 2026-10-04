@@ -98,7 +98,7 @@ func TestOffboardingWithTheTemplatesOwnersOnly(t *testing.T) {
 	if err := srv.RunPurges(t.Context()); err != nil {
 		t.Fatalf("purge: %v", err)
 	}
-	wantOrder := []string{"notification", "billing", "authorization", "identity", "user", "audit"}
+	wantOrder := []string{"notification", "billing", "authorization", "identity", "user", "webhooks", "audit"}
 	if !slices.Equal(fakes.purgeLog, wantOrder) {
 		t.Errorf("purged %v, want %v", fakes.purgeLog, wantOrder)
 	}

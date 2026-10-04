@@ -26,6 +26,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 	"github.com/UnityEvolv/b2b-backend-template/services/audit/internal/server"
 )
 
@@ -66,6 +67,9 @@ func run() error {
 		// The identity service, which says what an API key or a personal
 		// access token is on every request that brings one. Unset refuses keys.
 		identityURL = env.String("IDENTITY_URL", "")
+		// Where the core's webhook events go: the membership changes this
+		// log records are forwarded to the webhooks service. Unset, none are.
+		webhooksURL = env.String("WEBHOOKS_URL", "")
 		sentryDSN   = env.String("SENTRY_DSN", "")
 		environment = env.String("ENVIRONMENT", "local")
 		// The one base hostname every product host derives from (empty on a
@@ -140,6 +144,11 @@ func run() error {
 	// A support session's every request is recorded (docs/impersonation.md);
 	// here, straight into the log.
 	verifier.WithImpersonationAudit(audit.Impersonation(srv, name))
+	if webhooksURL != "" {
+		srv.WithWebhooks(webhook.NewClient(webhooksURL, tokens, nil))
+	} else {
+		logger.Warn("WEBHOOKS_URL is not set: membership events are not sent to webhooks")
+	}
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// Health is public, for the load balancer. Everything else needs a token.

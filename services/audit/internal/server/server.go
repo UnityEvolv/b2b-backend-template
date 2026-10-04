@@ -21,15 +21,17 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 	"github.com/UnityEvolv/b2b-backend-template/services/audit/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/audit/internal/store"
 )
 
 // Server answers the audit API.
 type Server struct {
-	cluster *db.Cluster
-	logger  *slog.Logger
-	authz   authz.Checker
+	cluster  *db.Cluster
+	logger   *slog.Logger
+	authz    authz.Checker
+	webhooks webhook.Emitter
 }
 
 var _ api.StrictServerInterface = (*Server)(nil)
@@ -39,6 +41,11 @@ var _ api.StrictServerInterface = (*Server)(nil)
 func New(cluster *db.Cluster, logger *slog.Logger, checker authz.Checker) *Server {
 	return &Server{cluster: cluster, logger: logger, authz: checker}
 }
+
+// WithWebhooks forwards the entries that are the core's webhook events
+// (pkg/webhook.FromAudit: a member added or removed, a role changed) to
+// the webhooks service once each is written. Without it, none are.
+func (s *Server) WithWebhooks(e webhook.Emitter) { s.webhooks = e }
 
 // Limits is this API's rate limits, one line per endpoint. Recording is done
 // by services, which are not limited; reading is a per-membership read.
@@ -159,6 +166,7 @@ func (s *Server) RecordAuditEvent(ctx context.Context, req api.RecordAuditEventR
 	if err != nil {
 		return nil, err
 	}
+	s.forward(ctx, row.OrgID.String(), row.ID.String(), occurred, in, details)
 	return api.RecordAuditEvent201JSONResponse(toAPI(row.OrgID, row.ID, row.OccurredAt, row.Actor, row.Action, row.TargetType, row.TargetID, row.SourceIp, row.RequestID, row.Details)), nil
 }
 
@@ -176,4 +184,31 @@ func toAPI(orgID, id uuid.UUID, at time.Time, actor, action, targetType, targetI
 		ev.RequestId = &requestID.String
 	}
 	return ev
+}
+
+// forwardTimeout bounds the call to the webhooks service, so a slow one
+// slows an audited action by no more than this.
+const forwardTimeout = 3 * time.Second
+
+// forward sends an entry that is one of the core's webhook events to the
+// webhooks service, once it is written, with the entry's id as the
+// message id: a retried forward is the same event. The webhooks service
+// records a delivery per endpoint before it answers, so once this returns
+// nothing is lost to a restart. A failure is logged, never the action's:
+// the entry is recorded, and an org's webhooks are not the audit log.
+func (s *Server) forward(ctx context.Context, org, id string, occurred time.Time, in *api.NewAuditEvent, raw []byte) {
+	if s.webhooks == nil || org == auth.PlatformOrg {
+		return
+	}
+	details := map[string]any{}
+	_ = json.Unmarshal(raw, &details)
+	typ, data, ok := webhook.FromAudit(webhook.AuditEntry{Action: in.Action, TargetID: in.TargetId, Actor: in.Actor, Details: details})
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), forwardTimeout)
+	defer cancel()
+	if err := s.webhooks.Emit(ctx, org, webhook.Message{ID: id, Type: typ, OccurredAt: occurred, Data: data}); err != nil {
+		s.logger.Warn("webhook event not forwarded", "org_id", org, "audit_id", id, "type", typ, "error", err, "alert", true)
+	}
 }

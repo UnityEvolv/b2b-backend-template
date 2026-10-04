@@ -53,6 +53,8 @@ const (
 	// tokens: made only while the plan has it, and each use checked against
 	// it.
 	APIAccess Feature = "api_access"
+	// Webhooks is outbound webhooks to the org's own endpoints.
+	Webhooks Feature = "webhooks"
 )
 
 // BandSpec is one band: its name, what it caps and what it allows.
@@ -142,6 +144,7 @@ func New() *Registry {
 	r.RegisterFeature(FeatureSpec{Key: AuditExport, Label: "audit export", LostCode: "audit_export_stops", LostMessage: "Audit export is no longer available; the log itself is kept."})
 	r.RegisterFeature(FeatureSpec{Key: CustomerHostedDataPlane, Label: "a customer-hosted data plane", LostCode: "data_plane_contractual", LostMessage: "The customer-hosted data plane is contractual; talk to us before changing this."})
 	r.RegisterFeature(FeatureSpec{Key: APIAccess, Label: "API access", LostCode: "api_access_stops", LostMessage: "API keys and personal access tokens stop working; they are kept, and work again on a plan with API access."})
+	r.RegisterFeature(FeatureSpec{Key: Webhooks, Label: "webhooks", LostCode: "webhooks_stop", LostMessage: "Webhook deliveries stop and no endpoint can be added; the endpoints and their history are kept."})
 	return r
 }
 
@@ -150,9 +153,9 @@ func New() *Registry {
 func DefaultBands() []BandSpec {
 	return []BandSpec{
 		{Name: "free", Limits: map[Limit]int{Users: 10}},
-		{Name: "team", Limits: map[Limit]int{Users: 50}, Features: []Feature{APIAccess}},
-		{Name: "business", Limits: map[Limit]int{Users: 200}, Features: []Feature{APIAccess}},
-		{Name: "enterprise", Contractual: true, Features: []Feature{SCIM, AuditExport, CustomerHostedDataPlane, APIAccess}},
+		{Name: "team", Limits: map[Limit]int{Users: 50}, Features: []Feature{APIAccess, Webhooks}},
+		{Name: "business", Limits: map[Limit]int{Users: 200}, Features: []Feature{APIAccess, Webhooks}},
+		{Name: "enterprise", Contractual: true, Features: []Feature{SCIM, AuditExport, CustomerHostedDataPlane, APIAccess, Webhooks}},
 	}
 }
 

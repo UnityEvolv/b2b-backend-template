@@ -8,9 +8,9 @@
 # scan runs on a fork's PR too.
 #
 # Accepted risks live in .trivyignore.yaml and must name a reason and an
-# expiry. An accepted secret finding (a key already rotated) would go in
-# .gitleaksignore with a comment saying why; there are none, so there is no
-# such file. Licence exceptions are the --ignore flags of the licence check,
+# expiry. An accepted secret finding (a key already rotated, or a published
+# test vector) goes in .gitleaksignore with a comment saying why. Licence
+# exceptions are the --ignore flags of the licence check,
 # each with its reason beside it.
 
 name: security

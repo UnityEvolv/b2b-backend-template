@@ -23,7 +23,7 @@ Every service that owns a schema is registered in `pkg/db`: its name, its
 schema and its migrations. Being registered is what gives it a schema and a
 login role (`dbinit`, `pkg/db.Bootstrap`), grants that role nothing outside
 its own schema, and runs its migrations (`migrate`). `db.Default` holds the
-template's seven; a product adds its own without editing any of them.
+template's eight; a product adds its own without editing any of them.
 
 1. Copy `services/organization/` to `services/<name>/`. Change `const name` in
    `main.go`, the paths in `sqlc.yaml`, and the package imports.
@@ -74,9 +74,10 @@ or schema registered twice panics at start.
 | Every endpoint is rate limited, one line each | `server.Limits` + `ratelimit.Routes`; `PerAddress` in front of auth |
 | Admin actions are audited: one call, ids only, fails rather than drops | `audit.Recorder` passed to `server.New`; the audit service owns the append-only store |
 | A service calls another service with its own token | `auth.IssuerTokenSource` + `auth.Authorize`; `auth.RequireService` on internal endpoints |
-| A customer secret is encrypted under that org's key; only the data owners registered with `decrypt` (identity in the template) decrypt | `envelope.Keyring` over `envelope.OrgKeys` + KMS; see [docs/encryption.md](../docs/encryption.md) |
+| A customer secret is encrypted under that org's key; only the data owners registered with `decrypt` (identity and webhooks in the template) decrypt | `envelope.Keyring` over `envelope.OrgKeys` + KMS; see [docs/encryption.md](../docs/encryption.md) |
 | Email goes through the notification service's outbox: one call, retried, never silently dropped | `email.Sender` (`email.NewClient`); templates in `pkg/email`; bounces mark the address |
 | Every response carries the security headers; only the app origins may call from a browser | `httpx.SecurityHeaders` and `httpx.CORS` outermost in `main.go`, origins from `config.AppOrigins` |
+| A URL a customer or an admin chose is fetched on a public address only | `pkg/egress`, in the identity service's OIDC client and the webhooks service |
 
 ## Rate limits
 
@@ -119,16 +120,18 @@ configuration:
 
 | setting | read by | what |
 |---|---|---|
-| `PLANS` | organization, user, billing, identity | the product's plan ladder, limits and features, JSON ([docs/plans.md](../docs/plans.md)) |
+| `PLANS` | organization, user, billing, identity, webhooks | the product's plan ladder, limits and features, JSON ([docs/plans.md](../docs/plans.md)) |
 | `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
 | `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
 | `NOTIFICATION_CATEGORIES` | notification | the product's notification categories, JSON ([docs/notifications.md](../docs/notifications.md)) |
-| `ONBOARDING_STEPS` | organization | the product's onboarding checklist steps, JSON, each asked of its service at `<SERVICE>_URL` ([docs/onboarding.md](../docs/onboarding.md)) |
+| `WEBHOOK_EVENTS` | webhooks | the product's webhook event types, JSON ([docs/webhooks.md](../docs/webhooks.md)) |
+| `WEBHOOKS_URL` | audit, organization, a product's services | the webhooks service: where the audit service forwards the core's events and a product sends its own; on the organization service, as a data owner's URL |
 | `SCIM_GROUP_SYNC` | user | the data owner that carries a SCIM group to what it grants: its name in `DATA_OWNERS` ([docs/users.md](../docs/users.md#scim)). Unset, groups grant nothing |
 | `IDENTITY_URL` | every service | where API keys and personal access tokens are resolved, on every request that brings one ([docs/api-keys.md](../docs/api-keys.md)); unset, a service refuses keys. Required by organization and user already |
 | `API_KEY_PREFIX`, `PAT_PREFIX` | identity | what API keys and personal access tokens start with: `<PRODUCT_ID>_ak_` and `<PRODUCT_ID>_pat_` by default ([docs/rebranding.md](../docs/rebranding.md)) |
+| `ONBOARDING_STEPS` | organization | the product's onboarding checklist steps, JSON, each asked of its service at `<SERVICE>_URL` ([docs/onboarding.md](../docs/onboarding.md)) |
 | `AUDIT_URL` | every service | the audit service: admin actions, and every request of a support session ([docs/impersonation.md](../docs/impersonation.md)); required |
-| `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `AUDIT_URL`) are these |
+| `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `WEBHOOKS_URL`, `AUDIT_URL`) are these |
 
 The organization service needs the URL of every owner that exports or
 purges, and the user service of every owner that erases (so

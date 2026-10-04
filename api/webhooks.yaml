@@ -1,0 +1,724 @@
+openapi: 3.0.3
+info:
+  title: webhooks
+  version: 1.0.0
+  description: |
+    The webhooks service: an org's outbound webhook endpoints, and every
+    event delivered to them, signed, with an idempotency id. Whoever holds
+    the org's webhooks permission (Admins by default) manages the endpoints
+    and sees and resends deliveries, on a plan with the webhooks feature.
+    Services send events through the internal endpoint with their own
+    token: the audit service the core's membership events, a product its
+    own registered types.
+
+    There is no queue: a delivery is attempted when its event arrives, and
+    one that fails is retried by the service's own housekeeping, with
+    backoff, until it succeeds or has been tried six times.
+    docs/webhooks.md has the delivery format and how a receiver verifies it.
+
+    Every error is the same envelope, `{ code, message, fields? }`.
+servers:
+  - url: /webhooks
+security:
+  - bearer: []
+paths:
+  /v1/organizations/{org_id}/webhook-event-types:
+    get:
+      operationId: listWebhookEventTypes
+      summary: The event types an endpoint may subscribe to, and whether the org's plan has webhooks
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The registered types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-endpoints:
+    get:
+      operationId: listWebhookEndpoints
+      summary: The org's endpoints, oldest first
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Every endpoint
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [endpoints]
+                properties:
+                  endpoints:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Endpoint'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createWebhookEndpoint
+      summary: Add an endpoint; its signing secret is in the answer, and only there
+      description: |
+        The URL is https on a public address. Refused with
+        `plan.limit_reached` (403) when the org's plan does not have the
+        webhooks feature, and with `webhooks.endpoint_limit` (409) at 20
+        endpoints.
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewEndpoint'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointWithSecret'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-endpoints/{endpoint_id}:
+    get:
+      operationId: getWebhookEndpoint
+      summary: One endpoint
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '200':
+          description: The endpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoint'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateWebhookEndpoint
+      summary: Change an endpoint's URL, description, event types, or turn it on or off
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointUpdate'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoint'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteWebhookEndpoint
+      summary: Remove an endpoint and its deliveries
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-endpoints/{endpoint_id}/rotate-secret:
+    post:
+      operationId: rotateWebhookSecret
+      summary: Replace an endpoint's signing secret; the new one is in the answer, and only there
+      description: |
+        For the overlap (24 hours unless asked otherwise, at most 7 days)
+        every delivery is signed with both the new secret and the one it
+        replaced, so the receiver can switch over without dropping one.
+        Rotating again during an overlap ends the oldest secret at once.
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                overlap_hours:
+                  type: integer
+                  minimum: 0
+                  maximum: 168
+                  default: 24
+                  description: How long the old secret keeps signing. 0 ends it now.
+      responses:
+        '200':
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointWithSecret'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-endpoints/{endpoint_id}/test:
+    post:
+      operationId: sendWebhookTest
+      summary: Send a webhook.test event to this endpoint now, and answer with how it went
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '200':
+          description: Attempted; the delivery says whether it succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetail'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: The org's deliveries, newest first
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: endpoint_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Only this endpoint's.
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DeliveryStatus'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: From the previous page's next_cursor. Omit for the first page.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-deliveries/{delivery_id}:
+    get:
+      operationId: getWebhookDelivery
+      summary: One delivery, with the body sent and every attempt
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/DeliveryId'
+      responses:
+        '200':
+          description: The delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetail'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/webhook-deliveries/{delivery_id}/resend:
+    post:
+      operationId: resendWebhookDelivery
+      summary: Attempt a delivery again now, whatever its status, and answer with how it went
+      description: |
+        The same message, with the same webhook-id, signed afresh. A
+        delivery that fails again stays failed, or pending with its retries
+        left.
+      tags: [webhooks]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/DeliveryId'
+      responses:
+        '200':
+          description: Attempted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetail'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/events:
+    post:
+      operationId: emitWebhookEvent
+      summary: Send an event to the org's endpoints that subscribe to it (services only)
+      description: |
+        A delivery is recorded for each subscribed, enabled endpoint before
+        this answers, and attempted at once. The type must be registered;
+        data carries ids, never a name or an email. Sending the same id
+        twice is one event. Nothing is sent, and 202 still answered, when
+        the org has no endpoint for the type or its plan has no webhooks.
+        Over the org's cap, 429.
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewEvent'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventAccepted'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/data:
+    get:
+      operationId: exportOrgData
+      summary: Everything this service keeps for an org, for its export (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: This service's part of the export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: purgeOrgData
+      summary: Delete everything this service keeps for an org, and count what is left (the organization service only)
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Purged; remaining is zero when nothing of the org is left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPurged'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/users/{user_id}/data:
+    get:
+      operationId: exportUserData
+      summary: What this service keeps about one person, for their own export (the organization service only)
+      description: Nothing is kept about a person; the part says so.
+      tags: [internal]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: membership
+          in: query
+          description: Each of the person's memberships, as org_id:membership_id.
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: This service's part of the person's export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPart'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EndpointId:
+      name: endpoint_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeliveryId:
+      name: delivery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: The error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    EventType:
+      type: object
+      required: [type, description]
+      properties:
+        type:
+          type: string
+          example: member.added
+        description:
+          type: string
+    EventTypeList:
+      type: object
+      required: [available, event_types]
+      properties:
+        available:
+          type: boolean
+          description: Whether the org's plan has webhooks now. When false, endpoints cannot be added and nothing is delivered.
+        required_plan:
+          type: string
+          description: The lowest plan with webhooks, when the org's has none.
+        event_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventType'
+    Endpoint:
+      type: object
+      required: [id, org_id, url, description, event_types, enabled, created_at, last_modified_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        description:
+          type: string
+        event_types:
+          type: array
+          description: The types it receives; empty is every type.
+          items:
+            type: string
+        enabled:
+          type: boolean
+        secret_rotated_at:
+          type: string
+          format: date-time
+          description: When its secret was last rotated, if ever.
+        previous_secret_expires_at:
+          type: string
+          format: date-time
+          description: While a rotation overlaps, when the old secret stops signing.
+        created_at:
+          type: string
+          format: date-time
+        last_modified_at:
+          type: string
+          format: date-time
+    EndpointWithSecret:
+      type: object
+      required: [endpoint, secret]
+      properties:
+        endpoint:
+          $ref: '#/components/schemas/Endpoint'
+        secret:
+          type: string
+          description: The signing secret, whsec_ and base64. Shown this once; it cannot be read again.
+    NewEndpoint:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: https, on a public address.
+        description:
+          type: string
+          maxLength: 500
+        event_types:
+          type: array
+          description: Registered types only; empty or left out is every type.
+          items:
+            type: string
+        enabled:
+          type: boolean
+          default: true
+    EndpointUpdate:
+      type: object
+      properties:
+        url:
+          type: string
+        description:
+          type: string
+          maxLength: 500
+        event_types:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+    DeliveryStatus:
+      type: string
+      enum: [pending, succeeded, failed]
+      description: pending until an attempt succeeds; failed once it has been tried six times, or its endpoint is turned off.
+    Delivery:
+      type: object
+      required: [id, endpoint_id, message_id, event_type, status, attempts, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpoint_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+          description: The webhook-id header, the same on every attempt.
+        event_type:
+          type: string
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        attempts:
+          type: integer
+        next_attempt_at:
+          type: string
+          format: date-time
+          description: When a pending delivery is tried again.
+        last_attempt_at:
+          type: string
+          format: date-time
+        last_status_code:
+          type: integer
+          description: The endpoint's HTTP status on the last attempt; absent when it could not be reached.
+        last_latency_ms:
+          type: integer
+        last_error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Attempt:
+      type: object
+      required: [id, attempted_at, manual, latency_ms]
+      properties:
+        id:
+          type: string
+          format: uuid
+        attempted_at:
+          type: string
+          format: date-time
+        manual:
+          type: boolean
+          description: Sent by an admin (a resend or a test).
+        status_code:
+          type: integer
+        latency_ms:
+          type: integer
+        error:
+          type: string
+    DeliveryDetail:
+      allOf:
+        - $ref: '#/components/schemas/Delivery'
+        - type: object
+          required: [payload, attempt_log]
+          properties:
+            payload:
+              type: object
+              additionalProperties: true
+              description: The body every attempt sends.
+            attempt_log:
+              type: array
+              description: Every attempt, oldest first.
+              items:
+                $ref: '#/components/schemas/Attempt'
+    DeliveryPage:
+      type: object
+      required: [deliveries]
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Delivery'
+        next_cursor:
+          type: string
+          description: Present when there is another page.
+    NewEvent:
+      type: object
+      required: [type, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Makes the send idempotent; the same id twice is one event.
+        type:
+          type: string
+          example: project.created
+        occurred_at:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: true
+          description: Ids and values only, never a name or an email. At most 16 KB.
+    EventAccepted:
+      type: object
+      required: [id, deliveries]
+      properties:
+        id:
+          type: string
+          format: uuid
+        deliveries:
+          type: integer
+          description: How many endpoints it is being delivered to.
+    DataPart:
+      type: object
+      required: [service, data, files]
+      properties:
+        service:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        files:
+          type: array
+          items:
+            type: object
+            required: [key, name]
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+    DataPurged:
+      type: object
+      required: [remaining]
+      properties:
+        remaining:
+          type: integer
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string

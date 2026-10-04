@@ -19,6 +19,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 // What a deployment sets on the template's services is exactly what the
@@ -38,6 +39,10 @@ func TestTheEnvIsTheCode(t *testing.T) {
 	owners, err := dataowner.Parse(env["DATA_OWNERS"])
 	if err != nil || len(owners) != 1 || owners[0] != product.Owner {
 		t.Errorf("DATA_OWNERS parses to %+v (%v), want %+v", owners, err, product.Owner)
+	}
+	events, err := webhook.Parse(env["WEBHOOK_EVENTS"])
+	if err != nil || len(events) != 1 || events[0] != product.CreatedEventType {
+		t.Errorf("WEBHOOK_EVENTS parses to %+v (%v), want %+v", events, err, product.CreatedEventType)
 	}
 	plans, err := plan.ParseConfig(env["PLANS"])
 	if err != nil || !reflect.DeepEqual(plans, product.Plans()) {

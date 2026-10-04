@@ -27,6 +27,7 @@ ships a ladder so it runs out of the box:
 | | free | team | business | enterprise |
 | --- | --- | --- | --- | --- |
 | Users (active memberships; deactivated and guests do not count) | 10 | 50 | 200 | contractual |
+| Webhooks ([webhooks.md](webhooks.md)) | no | yes | yes | yes |
 | SCIM, audit export, customer-hosted data plane | no | no | no | yes |
 | API access: API keys and personal access tokens ([api-keys.md](api-keys.md)) | no | yes | yes | yes |
 | Everything else | every plan | | | |
@@ -64,8 +65,10 @@ PLANS='{"limits":[{"key":"projects","label":"projects"}],
 
 - `limits` (`key`, `label`) and `features` (`key`, `label`, `lost_code`,
   `lost_message`) are registered beside the template's own (`users`; `scim`,
-  `audit_export`, `customer_hosted_data_plane`, `api_access`), replacing one
-  with the same key.
+  `audit_export`, `customer_hosted_data_plane`, `api_access`, `webhooks`),
+  replacing one with the same key. A ladder given in `PLANS` names
+  `webhooks` on the bands that have it; one that does not turns webhooks
+  off everywhere.
 - `bands` (`name`, `label`, `contractual`, `limits` by key, `features`),
   lowest first, replaces the ladder. Without it the template's ladder stays,
   and a new limit is unlimited on every band. A ladder of its own lists

@@ -1,0 +1,7 @@
+# Accepted gitleaks findings, one fingerprint per line, each with the reason
+# above it.
+
+# The Standard Webhooks specification's published test vector: a secret the
+# spec prints so every implementation can check its signatures against the
+# same expected value. It signs nothing real.
+b77e48c209ed70c13fc2be5722085079aac658a9:pkg/webhook/webhook_test.go:generic-api-key:20

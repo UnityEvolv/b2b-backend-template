@@ -9,7 +9,7 @@ active membership and their org's configuration; nothing is cached.
 | role | has |
 | --- | --- |
 | Owner | everything, always; not configurable, transferable; at least one active Owner must exist |
-| Admin | the org's settings, plus the groups the Owner grants (default: users, audit, sso, api_keys, and any product group that defaults to Admin) |
+| Admin | the org's settings, plus the groups the Owner grants (default: users, audit, sso, api_keys, webhooks, and any product group that defaults to Admin) |
 | Billing Admin | the groups the Owner grants (default: billing) |
 | User | no admin permissions |
 | Guest | a limited collaborator from outside the org: no admin permissions, finds only themselves in the directory, and does not count toward the plan's user cap |
@@ -42,6 +42,7 @@ service read. The template registers:
 | `audit` | Audit log | reading the audit log | Admin |
 | `sso` | Single sign-on | the org's identity provider | Admin |
 | `api_keys` | API keys | make the org's API keys, granted only groups the maker holds; list and revoke every key and personal access token ([api-keys.md](api-keys.md)) | Admin |
+| `webhooks` | Webhooks | the org's outbound webhook endpoints, their secrets, and seeing and resending deliveries ([webhooks.md](webhooks.md)) | Admin |
 
 A product adds its own, each with the roles that hold it by default, in the
 authorization service's `main` before serving:
@@ -88,10 +89,11 @@ Enforced today: people, invites, sessions and MFA resets (users), the plan
 and invoices (billing), the audit log (audit), organization settings, the
 onboarding checklist and its dismissals, reading the domain claim, and
 reading support access, consents and who looked (settings), the identity
-provider, read and changed (sso), the org's API keys (api_keys), role
-assignment, permission configuration, ownership transfer, deleting the
-organization, claiming or verifying its domain, consenting to support
-impersonation and turning standing support access on (Owner only).
+provider, read and changed (sso), the org's API keys (api_keys), webhook
+endpoints and deliveries (webhooks), role assignment, permission
+configuration, ownership transfer, deleting the organization, claiming or
+verifying its domain, consenting to support impersonation and turning
+standing support access on (Owner only).
 
 ## API keys and personal access tokens
 

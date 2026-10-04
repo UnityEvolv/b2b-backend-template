@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 // The example product through every seam, against the template's services
@@ -267,6 +269,80 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 		}
 	})
 
+	t.Run("webhooks: the product's event type, sent through the template's webhooks service, beside the core's", func(t *testing.T) {
+		got := make(chan webhookDelivery, 16)
+		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			got <- webhookDelivery{header: r.Header.Clone(), body: body}
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer receiver.Close()
+
+		hooks := s.url("webhooks") + "/v1/organizations/" + acme.String()
+		types := s.call(http.MethodGet, hooks+"/webhook-event-types", owner.token, nil)
+		if types.status != http.StatusOK || types.body["available"] != true || !strings.Contains(string(types.raw), `"type":"project.created"`) {
+			t.Fatalf("event types from WEBHOOK_EVENTS: %s", types)
+		}
+		created := s.call(http.MethodPost, hooks+"/webhook-endpoints", owner.token,
+			map[string]any{"url": receiver.URL, "event_types": []string{"project.created", "member.added"}})
+		if created.status != http.StatusCreated {
+			t.Fatalf("endpoint: %s", created)
+		}
+		secret := created.str("secret")
+		// A User may not manage webhooks, and nor may this org's Admin: the
+		// Owner saved the Admin's groups without it in the permissions step.
+		for _, p := range []*person{colleague, admin} {
+			if r := s.call(http.MethodGet, hooks+"/webhook-endpoints", p.token, nil); r.status != http.StatusForbidden {
+				t.Errorf("listed endpoints without the webhooks group: %s", r)
+			}
+		}
+
+		wait := func(want string) webhook.Payload {
+			t.Helper()
+			select {
+			case d := <-got:
+				if err := webhook.Verify(secret, d.header, d.body, time.Now()); err != nil {
+					t.Errorf("%s: %v", want, err)
+				}
+				var p webhook.Payload
+				_ = json.Unmarshal(d.body, &p)
+				if string(p.Type) != want || p.OrgID != acme.String() || d.header.Get("webhook-id") != p.ID {
+					t.Errorf("delivered %s, want %s: %s", p.Type, want, d.body)
+				}
+				return p
+			case <-time.After(30 * time.Second):
+				t.Fatalf("no %s delivery", want)
+			}
+			return webhook.Payload{}
+		}
+		// The product's own event, from the projects service.
+		r := create(owner, "Webhook probe", "owner-webhooks")
+		if r.status != http.StatusCreated {
+			t.Fatalf("create: %s", r)
+		}
+		if p := wait("project.created"); p.ID != r.str("id") || p.Data["project_id"] != r.str("id") {
+			t.Errorf("project.created %+v", p)
+		}
+		// The core's, from the audit log: a member added by the user service.
+		joined := s.member(acme, "webhooks@acme.test", "user")
+		p := wait("member.added")
+		if p.Data["membership_id"] != joined.membership.String() || strings.Contains(fmt.Sprint(p.Data), "@") {
+			t.Errorf("member.added %+v", p)
+		}
+		deliveries := s.call(http.MethodGet, hooks+"/webhook-deliveries", owner.token, nil)
+		if deliveries.status != http.StatusOK || strings.Count(string(deliveries.raw), `"status":"succeeded"`) != 2 {
+			t.Errorf("deliveries: %s", deliveries)
+		}
+		// The org keeps the projects the later steps count, and sends nothing
+		// to a receiver that is about to close.
+		if r := s.call(http.MethodDelete, hooks+"/webhook-endpoints/"+created.body["endpoint"].(map[string]any)["id"].(string), owner.token, nil); r.status != http.StatusNoContent {
+			t.Errorf("delete the endpoint: %s", r)
+		}
+		if r := s.call(http.MethodDelete, projects+"/"+r.str("id"), owner.token, nil); r.status != http.StatusNoContent {
+			t.Fatalf("delete the probe: %s", r)
+		}
+	})
+
 	t.Run("audit: create, update and delete in the org's audit log", func(t *testing.T) {
 		if r := s.call(http.MethodPatch, projects+"/"+shared, owner.token, map[string]any{"name": "Gemini II"}); r.status != http.StatusOK || r.str("name") != "Gemini II" {
 			t.Fatalf("rename: %s", r)
@@ -495,7 +571,7 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 		}
 
 		files := archive(org+acme.String()+"/exports", owner)
-		for _, o := range []string{"notification", "billing", "authorization", "identity", "user", "audit", product.Name} {
+		for _, o := range []string{"notification", "billing", "authorization", "identity", "user", "webhooks", "audit", product.Name} {
 			if _, ok := files[o+"/data.json"]; !ok {
 				t.Errorf("the org export has no %s/data.json", o)
 			}
@@ -792,4 +868,10 @@ func unzip(t *testing.T, url string) map[string][]byte {
 		r.Close()
 	}
 	return out
+}
+
+// webhookDelivery is one request the test's endpoint received.
+type webhookDelivery struct {
+	header http.Header
+	body   []byte
 }

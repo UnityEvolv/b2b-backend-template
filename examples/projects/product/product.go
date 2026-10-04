@@ -1,15 +1,16 @@
 // Package product is everything the example product declares to the
 // template, in one place: its service and schema, its plan limit, its
 // permission group, its notification category, its data owner entry, its
-// live event type, its storage purpose, its rate-limit rule and its
-// onboarding step.
+// live event type, its webhook event type, its storage purpose, its
+// rate-limit rule and its onboarding step.
 //
 // Some of it is registered in this product's own processes (Register, and
 // the package variables below). The rest is for the template's services,
 // which run unchanged and learn it from their configuration: Env renders
-// PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, DATA_OWNERS and
-// ONBOARDING_STEPS from the same values, so what a deployment sets is
-// exactly what the code declares. A product that builds its own copy of one of those services registers the
+// PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, DATA_OWNERS,
+// ONBOARDING_STEPS and WEBHOOK_EVENTS from the same values, so what a
+// deployment sets is exactly what the code declares. A product that builds
+// its own copy of one of those services registers the
 // same values in code instead (authz.Default.Register(PermissionGroup), and
 // so on).
 package product
@@ -29,6 +30,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 // Name is the service's name: its schema, its role (svc_projects), the name
@@ -88,6 +90,14 @@ var Owner = dataowner.Owner{Name: Name, Export: true, Purge: true, Erase: true}
 // SharedEvent is the live-session event its open sessions get when a
 // project is shared with someone.
 const SharedEvent livebus.Type = "project.shared"
+
+// CreatedEvent is the webhook event an org's endpoints get when a project
+// is created: the project's id and who created it, ids only.
+const CreatedEvent webhook.Type = "project.created"
+
+// CreatedEventType is the event as the webhooks service lists it to an
+// admin choosing what an endpoint receives.
+var CreatedEventType = webhook.EventType{Type: CreatedEvent, Description: "A project was created."}
 
 // CoverImage is the storage purpose of a project's cover.
 var CoverImage = storage.Default.Register(storage.Purpose{Name: "project-cover",
@@ -164,6 +174,7 @@ func Env() map[string]string {
 		"NOTIFICATION_CATEGORIES": mustJSON([]any{category}),
 		"DATA_OWNERS":             mustJSON([]dataowner.Owner{Owner}),
 		"ONBOARDING_STEPS":        mustJSON([]onboarding.Step{OnboardingStep}),
+		"WEBHOOK_EVENTS":          mustJSON([]webhook.EventType{CreatedEventType}),
 	}
 }
 

@@ -112,14 +112,14 @@ func TestRequireIsPerMembership(t *testing.T) {
 	}
 }
 
-// The template's groups: billing for Billing Admin; users, audit, sso and
-// api_keys for Admin. Nothing of the product's.
+// The template's groups: billing for Billing Admin; users, audit, sso,
+// api_keys and webhooks for Admin. Nothing of the product's.
 func TestTemplateGroups(t *testing.T) {
-	if got := authz.New().Configurable(); !slices.Equal(got, []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys}) {
+	if got := authz.New().Configurable(); !slices.Equal(got, []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks}) {
 		t.Errorf("groups: %v", got)
 	}
 	d := authz.New().Defaults()
-	if !slices.Equal(d.Admin, []authz.Permission{authz.Users, authz.Audit, authz.SSO, authz.APIKeys}) || !slices.Equal(d.BillingAdmin, []authz.Permission{authz.Billing}) {
+	if !slices.Equal(d.Admin, []authz.Permission{authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks}) || !slices.Equal(d.BillingAdmin, []authz.Permission{authz.Billing}) {
 		t.Errorf("defaults: %+v", d)
 	}
 	// Settings is always the Admin's, and is not a toggle.
@@ -153,14 +153,14 @@ func TestProductRegistersAGroup(t *testing.T) {
 
 	// Saved before "reports" existed, with projects off for Admin and a
 	// group since removed ("dashboards").
-	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys, "projects", "dashboards"}
+	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks, "projects", "dashboards"}
 	r.Register(authz.Group{Key: "reports", Label: "Reports", Default: []authz.Role{authz.Admin}})
 	c := r.Stored([]authz.Permission{authz.Users, authz.APIKeys, "dashboards"}, []authz.Permission{authz.Billing, "projects"}, known)
 	if !slices.Equal(c.Admin, []authz.Permission{authz.Users, authz.APIKeys, "reports"}) || !slices.Equal(c.BillingAdmin, []authz.Permission{authz.Billing, "projects"}) {
 		t.Errorf("stored: %+v", c)
 	}
-	if w := r.Warnings(c); len(w) != 2 {
-		t.Errorf("warnings (audit, sso): %v", w)
+	if w := r.Warnings(c); len(w) != 3 {
+		t.Errorf("warnings (audit, sso, webhooks): %v", w)
 	}
 }
 

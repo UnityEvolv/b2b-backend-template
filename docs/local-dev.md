@@ -5,7 +5,7 @@ signed in, step by step. This page is the reference for the local stack.
 
 The whole product runs on a laptop with Docker: Postgres, Redis, a mail
 catcher (Mailpit), an S3 emulator (RustFS), the stub OpenID provider, the
-seven services, a gateway in front of them, and the three web apps. Nothing
+eight services, a gateway in front of them, and the three web apps. Nothing
 here talks to a cloud, and nothing needs an account anywhere.
 
 ## What you need
@@ -56,7 +56,7 @@ or through the stub issuer as anyone@sso.example.test (no password).
 | the admin app | <http://localhost:5174> |
 | the platform app | <http://localhost:5175> |
 | the API, every service under its name | <http://localhost:8000> (`/identity/...`, `/organization/...`, ...) |
-| each service directly | identity 8093, organization 8081, audit 8082, notification 8083, user 8084, authorization 8086, billing 8089 |
+| each service directly | identity 8093, organization 8081, audit 8082, notification 8083, user 8084, authorization 8086, webhooks 8087, billing 8089 |
 | the mail catcher (invites, verification, notices) | <http://localhost:8025> |
 | the stub OpenID provider's sign-in page | <http://localhost:8090> |
 | the object store console | <http://localhost:9001/rustfs/console/> (`b2bapp` / `b2bapp-local`) |

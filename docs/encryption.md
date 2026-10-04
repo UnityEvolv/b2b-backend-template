@@ -15,7 +15,7 @@ cannot be decrypted with another's key, and no human has a path to the plaintext
                               │ GET /v1/internal/.../data-keys/{current|n}
                               │ (service token; the decrypting data owners only)
                               ▼
-   identity, and any data owner registered with decrypt
+   identity, webhooks, and any data owner registered with decrypt
    ┌──────────────────────────────────────────┐
    │ envelope.Keyring                          │
    │   wrapped key ──KMS decrypt──► data key   │ ← KMS IAM: only the decrypting owners
@@ -55,7 +55,7 @@ that a value is set, not the value.
 | Service identity | KMS permission | Why |
 |---|---|---|
 | organization | encrypt | the custodian: wraps new keys, never unwraps one |
-| the decrypting data owners: identity, and a product's own registered with `decrypt` | decrypt | the services that read secrets |
+| the decrypting data owners: identity, webhooks, and a product's own registered with `decrypt` | decrypt | the services that read secrets |
 | everything else | none | a service that holds no secret cannot decrypt a credential even if its code tried |
 
 The organization service also refuses to hand a wrapped key to any service

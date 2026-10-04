@@ -36,6 +36,13 @@
       "decrypt": false
     },
     {
+      "name": "webhooks",
+      "export": true,
+      "purge": true,
+      "erase": false,
+      "decrypt": true
+    },
+    {
       "name": "audit",
       "export": true,
       "purge": true,
@@ -45,6 +52,7 @@
     }
   ],
   "decrypting": [
-    "identity"
+    "identity",
+    "webhooks"
   ]
 }

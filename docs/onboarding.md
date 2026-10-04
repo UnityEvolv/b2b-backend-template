@@ -23,6 +23,11 @@ serves it.
 | `set_up_sso` | Set up single sign-on | `/sso` | the org's identity provider is saved (which needs a passing test) and active ([sso.md](sso.md)) | identity |
 | `choose_plan` | Choose a plan | `/billing` | the org is on a band above the ladder's lowest **now**: a paid band, a contractual one, or a trial (a trial moves the org to the band it tries). Back on the lowest band, at the end of a trial or a downgrade, it is not done: an org that chooses the lowest band on purpose dismisses the step | organization, from its own row |
 
+Webhooks are not a step: an org that integrates by webhook does so when it
+needs to, and a checklist of the core's first-run setup would nag every
+other org. A product for which webhooks are part of setting up
+registers a step of its own, answered by a service of its own.
+
 Then the product's, in the order registered. The example product adds
 `create_project`, "Create your first project", at `/projects/new` in its own
 web app, done while the org has at least one project.

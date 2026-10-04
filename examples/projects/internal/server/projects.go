@@ -20,6 +20,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 const (
@@ -164,6 +165,7 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 	var (
 		out     api.Project
 		refused api.CreateProjectResponseObject
+		created bool
 	)
 	err = s.cluster.Tx(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
@@ -204,6 +206,7 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 			return err
 		}
 		out = s.toAPI(ctx, p, 0)
+		created = true
 		return nil
 	})
 	if err != nil {
@@ -211,6 +214,14 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 	}
 	if refused != nil {
 		return refused, nil
+	}
+	if created {
+		// To the org's webhook endpoints, after the commit: the project's
+		// id is the message id, so a retried send is one event. Ids only.
+		if err := s.deps.Webhooks.Emit(ctx, req.OrgId.String(), webhook.Message{ID: id.String(), Type: product.CreatedEvent,
+			Data: map[string]any{"project_id": id.String(), "created_by": string(actor)}}); err != nil {
+			s.logger.Warn("webhook event not sent", "org_id", req.OrgId.String(), "project_id", id.String(), "error", err)
+		}
 	}
 	return api.CreateProject201JSONResponse(out), nil
 }

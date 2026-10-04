@@ -35,6 +35,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 func main() {
@@ -81,7 +82,9 @@ func run() error {
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		organizationURL  = env.Required("ORGANIZATION_URL")
 		userURL          = env.Required("USER_URL")
-		notificationURL  = env.Required("NOTIFICATION_URL")
+		// Where its webhook events go; unset, none are sent.
+		webhooksURL     = env.String("WEBHOOKS_URL", "")
+		notificationURL = env.Required("NOTIFICATION_URL")
 		// Covers, in the one bucket.
 		s3 = storage.Config{
 			Endpoint: env.String("S3_ENDPOINT", ""), Region: env.String("S3_REGION", ""),
@@ -161,6 +164,7 @@ func run() error {
 		Notifier: server.NewNotificationService(notificationURL, tokens),
 		Live:     livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger),
 		Files:    files,
+		Webhooks: webhooksFor(webhooksURL, tokens),
 	})
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
@@ -186,4 +190,12 @@ func migrateOwn(ctx context.Context, pool *pgxpool.Pool, service db.Service) err
 	}
 	_, err = migrator.Up(ctx)
 	return err
+}
+
+// webhooksFor is the client for the template's webhooks service, or none.
+func webhooksFor(url string, tokens auth.TokenSource) webhook.Emitter {
+	if url == "" {
+		return webhook.Discard{}
+	}
+	return webhook.NewClient(url, tokens, nil)
 }

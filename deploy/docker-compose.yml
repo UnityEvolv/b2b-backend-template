@@ -4,7 +4,7 @@
 #   docker compose -f deploy/docker-compose.yml --profile seed run --rm seed
 #
 # docs/local-dev.md walks through it. Postgres, Redis, a mail catcher, an S3
-# emulator, the stub OpenID provider, the seven services, a gateway that
+# emulator, the stub OpenID provider, the eight services, a gateway that
 # routes /<service>/ to each as the deployed load balancer does, and the
 # three web apps built from the sibling b2b-frontend-template checkout
 # (FRONTEND_DIR).
@@ -39,6 +39,7 @@ x-service-env: &service-env
   NOTIFICATION_URL: http://notification:8080
   ORGANIZATION_URL: http://organization:8080
   USER_URL: http://user:8080
+  WEBHOOKS_URL: http://webhooks:8080
   # Where each web app is; links in emails and sign-in redirects open these.
   APP_ORIGIN_ACCOUNT: http://localhost:${ACCOUNT_PORT:-5173}
   APP_ORIGIN_ADMIN: http://localhost:${ADMIN_PORT:-5174}
@@ -53,6 +54,7 @@ x-service-env: &service-env
   DATA_OWNERS: ${DATA_OWNERS:-}
   NOTIFICATION_CATEGORIES: ${NOTIFICATION_CATEGORIES:-}
   ONBOARDING_STEPS: ${ONBOARDING_STEPS:-}
+  WEBHOOK_EVENTS: ${WEBHOOK_EVENTS:-}
   # The data owner that carries SCIM groups to what they grant (user).
   SCIM_GROUP_SYNC: ${SCIM_GROUP_SYNC:-}
 
@@ -350,6 +352,25 @@ services:
       - '${BILLING_PORT:-8089}:8080'
     depends_on: *service-depends
 
+  # Outbound webhooks: an org's endpoints and the signed deliveries of
+  # its events, retried by its own sweep. Locally an endpoint may be plain
+  # http on a private address (a receiver on this machine).
+  webhooks:
+    build:
+      <<: *service-build
+      args:
+        SERVICE: webhooks
+    environment:
+      <<: *service-env
+      KMS_PROVIDER: file
+      KMS_FILE: /kms/master.json
+      WEBHOOKS_LOCAL_TARGETS: 'true'
+    volumes:
+      - kms:/kms
+    ports:
+      - '${WEBHOOKS_PORT:-8087}:8080'
+    depends_on: *service-depends
+
   # One origin for the API, as deployed: /identity/... to the identity
   # service with the prefix stripped, and so on for each. The web apps call
   # it; the services' own ports stay open for a dev server or curl.
@@ -367,6 +388,7 @@ services:
       - audit
       - notification
       - billing
+      - webhooks
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
       interval: 5s

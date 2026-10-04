@@ -75,7 +75,7 @@ the platform org.
 | --- | --- |
 | `GET`, `HEAD`, `OPTIONS` | yes, each one audited |
 | any other method | refused, 403 `impersonation.read_only`, and audited as refused |
-| a write on security settings, billing, plans, ownership, the org's existence or the person's account | refused even if a future write mode allows writes ([neverWhileImpersonating](../pkg/auth/impersonation.go)) |
+| a write on security settings (including webhook endpoints, their secrets and deliveries), billing, plans, ownership, the org's existence or the person's account | refused even if a future write mode allows writes ([neverWhileImpersonating](../pkg/auth/impersonation.go)) |
 | making an API key or personal access token | refused, by the middleware and again by the handler |
 | starting another impersonation | refused: it is never a platform operator |
 | the platform app's endpoints | refused (`auth.RequirePlatform`) |

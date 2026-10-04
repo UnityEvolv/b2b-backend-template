@@ -23,6 +23,7 @@ registers its own:
 | authorization | yes | yes | | |
 | identity | yes | yes | | yes |
 | user | yes | yes | | |
+| webhooks | yes | yes | | yes |
 | audit | yes | yes, last | | |
 
 The organization service holds its own data and handles it in place.
@@ -99,7 +100,7 @@ DATA_OWNERS='[…]' go run ./cmd/dataowners > data-owners.json
     …
     {"name": "audit", "export": true, "purge": true, "erase": false, "decrypt": false, "purge_last": true}
   ],
-  "decrypting": ["identity"]
+  "decrypting": ["identity", "webhooks"]
 }
 ```
 

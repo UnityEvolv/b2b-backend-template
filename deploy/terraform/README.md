@@ -1,7 +1,7 @@
 # Deploying to Google Cloud
 
 Everything the core services run on, as code, in one Google Cloud project:
-the seven services, the web apps, Postgres, Redis, the master key, the
+the eight services, the web apps, Postgres, Redis, the master key, the
 secrets, the images, the load balancer and the deploy identity. Nothing in
 it names a product: every name derives from `name_prefix`, every hostname
 from `base_hostname`, and the list of services from the data-owner
@@ -90,7 +90,7 @@ whose DNS you can delegate a subdomain of.
    REGISTRY=$(terraform output -raw image_registry)
    gcloud auth configure-docker "${REGISTRY%%/*}"
    cd ../..
-   for s in organization identity user authorization audit notification billing; do
+   for s in organization identity user authorization audit notification billing webhooks; do
      docker build --build-arg SERVICE=$s -f deploy/service.Dockerfile -t "$REGISTRY/$s:latest" . && docker push "$REGISTRY/$s:latest"
    done
    docker build --target tools -f deploy/service.Dockerfile -t "$REGISTRY/tools:latest" . && docker push "$REGISTRY/tools:latest"

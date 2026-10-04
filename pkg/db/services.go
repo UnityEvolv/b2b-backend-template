@@ -58,6 +58,7 @@ func New() *Registry {
 		{Name: "audit", Schema: "audit"},
 		{Name: "notification", Schema: "notification"},
 		{Name: "billing", Schema: "billing"},
+		{Name: "webhooks", Schema: "webhooks"},
 	} {
 		s.Migrations = Dir(migrations.FS, s.Schema)
 		r.Register(s)

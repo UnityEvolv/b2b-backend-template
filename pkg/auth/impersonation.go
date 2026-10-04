@@ -143,12 +143,14 @@ var impersonationWrites []impersonatedWrite
 // neverWhileImpersonating is the path segments of writes refused to an
 // impersonation session even when impersonationWrites names them: security
 // settings (roles, permissions, single sign-on, sessions, second factors,
-// keys, SCIM, support access itself), billing and plans, ownership and the
+// keys, SCIM, webhook endpoints that send the org's events out, support
+// access itself), billing and plans, ownership and the
 // org's existence, and the person's own account.
 var neverWhileImpersonating = []string{
 	// Security settings.
 	"permissions", "role", "identity-provider", "session-policy", "sessions", "mfa",
 	"api-keys", "personal-access-tokens", "scim", "support-access",
+	"webhook-endpoints", "webhook-deliveries", "rotate-secret",
 	"impersonation-grants", "impersonations", "domain", "data-keys", "retention",
 	// Billing and plans.
 	"billing", "plan", "plan-change", "plan-overrides",

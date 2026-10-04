@@ -2,11 +2,12 @@
 // services so they know the example product, from the values the product
 // declares in code (package product):
 //
-//	PLANS                    on the organization, user, billing and identity services
+//	PLANS                    on the organization, user, billing, identity and webhooks services
 //	PERMISSION_GROUPS        on the authorization service
 //	NOTIFICATION_CATEGORIES  on the notification service
 //	DATA_OWNERS              on every template service
 //	ONBOARDING_STEPS         on the organization service
+//	WEBHOOK_EVENTS           on the webhooks service
 //
 // as NAME='value' lines a shell or an env file reads. PROJECTS_URL, where
 // the service runs, is the deployment's own and is set beside them on the

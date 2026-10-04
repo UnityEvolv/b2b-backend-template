@@ -1,7 +1,7 @@
 # Getting started
 
 From a clean machine to signed in as an organization's Owner, with the whole
-template running on your laptop: the seven services, the three web apps,
+template running on your laptop: the eight services, the three web apps,
 Postgres, Redis, a mail catcher, an object store and a stand-in identity
 provider. Nothing here talks to a cloud or needs an account anywhere.
 
@@ -59,7 +59,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 The first run builds every image: it compiles the Go module once for all
-seven services and the tools, and runs `npm ci` and a production build for
+eight services and the tools, and runs `npm ci` and a production build for
 each web app. Expect about five minutes on a laptop with a good connection,
 more if Docker has none of the base images yet; later starts reuse the
 images and take seconds.

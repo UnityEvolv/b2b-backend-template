@@ -35,12 +35,13 @@ template's services, rendered from the same values by `product.Env()`.
 | seam | what the product declares | where | how the template learns it |
 | --- | --- | --- | --- |
 | its own service, schema and role | `projects`, schema `projects`, role `svc_projects`, its own migrations | `product.Service`, `migrations/` | `product.Register()` puts it in `pkg/db.Default`; `cmd/projects-migrate` runs `pkg/db/dbcmd` over it |
-| plan limit | `projects`: 3 on free, 25 on team, 100 on business, none on enterprise | `product.ProjectsLimit`, `product.Caps`, `product.Plans()` | `PLANS` on the organization, user, billing and identity services; `product.Register()` in its own process, checked in `CreateProject` |
+| plan limit | `projects`: 3 on free, 25 on team, 100 on business, none on enterprise | `product.ProjectsLimit`, `product.Caps`, `product.Plans()` | `PLANS` on the organization, user, billing, identity and webhooks services; `product.Register()` in its own process, checked in `CreateProject` |
 | permission group | `projects`, held by Admins by default | `product.PermissionGroup` | `PERMISSION_GROUPS` on the authorization service |
 | notification category | `project_shared`, to the feed and push, held for quiet hours | `product.SharedCategory` | `NOTIFICATION_CATEGORIES` on the notification service |
 | data owner | export, purge and erase | `product.Owner` | `DATA_OWNERS` on every template service, and `PROJECTS_URL` |
 | service tokens | calls and is called by the template's services | `product.Owner` | being in `DATA_OWNERS` makes `projects` a known service |
 | live-session event | `project.shared` | `product.SharedEvent` | registered in its own process; listeners pass on any type |
+| webhook event | `project.created`, sent when a project is created | `product.CreatedEventType` | `WEBHOOK_EVENTS` on the webhooks service; sent with `pkg/webhook`'s client to `WEBHOOKS_URL` |
 | storage purpose | `project-cover`: JPEG, PNG or WebP, at most 2 MB | `product.CoverImage` | a package variable, in `storage.Default` |
 | rate-limit rule | `project-create`: 20 a minute per membership | `product.CreateRule` | a package variable, in `ratelimit.Default`, bound in `server.Limits` |
 | audit | `project.created`, `.updated`, `.deleted`, `.member_added`, `.member_removed`, `.cover_set`, `.cover_removed` | `internal/server` (`Server.record`) | `pkg/audit`, to the audit service with its own token |
@@ -218,17 +219,19 @@ are the four every owner answers ([api/README-orgdata.md](../../api/README-orgda
 
 ## The tests
 
-[e2e/](e2e/) builds the template's seven services and this one from the
+[e2e/](e2e/) builds the template's eight services and this one from the
 repository, runs each as a process against a fresh database, a Redis and the
 bucket, configured as a deployment configures them, and takes the product
 through every seam: its schema from its own migrate command, tokens both
 ways, the permission group configured per org, the plan cap and an upgrade, the
 cap and the downgrade checklist as the organization service shows them,
 idempotent creates, paging, the audit log, the notification in the member's
-feed and the event on the live bus, the cover upload, the rate limit, the org
-and personal exports, the purge of a closed org, the erasure of a deleted
-member, API keys, and its step on the onboarding checklist (done once a
-project exists, unknown while the product is down). The template's services are not imported: their packages are
+feed and the event on the live bus, its webhook event and the core's
+member.added reaching an endpoint, signed, the cover upload, the rate limit,
+the org and personal exports, the purge of a closed org, the erasure of a
+deleted member, API keys, and its step on the onboarding checklist (done
+once a project exists, unknown while the product is down). The template's
+services are not imported: their packages are
 internal to them, and a product never imports a service. Only the clock is
 stood in for: the purge's thirty days and the deletion's fourteen are moved
 back in the database before the service's own daily pass runs.

@@ -69,7 +69,7 @@ func TestBandsParseAndOrder(t *testing.T) {
 		t.Error("unknown band is not treated as the lowest")
 	}
 	d := plan.Describe("enterprise")
-	if d.Limits["users"] != plan.Unlimited || len(d.Features) != 4 || !d.Contractual {
+	if d.Limits["users"] != plan.Unlimited || len(d.Features) != 5 || !d.Contractual {
 		t.Errorf("described: %+v", d)
 	}
 }
@@ -299,7 +299,7 @@ func TestOverridesResolveAfterTheBand(t *testing.T) {
 		t.Errorf("an ended grant still applies: %+v", r)
 	}
 	d := deal.Describe()
-	if d.Limits["users"] != 75 || strings.Join(d.Features, ",") != "api_access,scim" || len(d.Overrides) != 2 {
+	if d.Limits["users"] != 75 || strings.Join(d.Features, ",") != "api_access,scim,webhooks" || len(d.Overrides) != 2 {
 		t.Errorf("described: %+v", d)
 	}
 

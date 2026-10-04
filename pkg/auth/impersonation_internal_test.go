@@ -20,6 +20,8 @@ func TestSecurityBillingAndOwnershipWritesAreRefusedEvenWhenAllowed(t *testing.T
 		org + "/scim/tokens", org + "/support-access", org + "/impersonation-grants", org + "/domain/verify",
 		org + "/billing/band", org + "/plan-change", org + "/plan-overrides/limit/seats",
 		org + "/ownership-transfers", org + "/close", org + "/memberships/01922b5e-0000-7000-8000-0000000000d3/status",
+		org + "/webhook-endpoints", org + "/webhook-endpoints/01922b5e-0000-7000-8000-0000000000d4/rotate-secret",
+		org + "/webhook-deliveries/01922b5e-0000-7000-8000-0000000000d5/resend",
 		"/v1/mfa/totp", "/v1/me/email", "/v1/local/password", "/v1/sessions",
 	} {
 		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {

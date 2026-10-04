@@ -13,7 +13,7 @@
 //   - Decrypt: fetching an org's wrapped data key to decrypt its secrets,
 //     which KMS IAM must also allow (docs/encryption.md).
 //
-// The template registers its own six. A product adds its services in code
+// The template registers its own seven. A product adds its services in code
 // with Default.Register, or, running the template's services unchanged,
 // through DATA_OWNERS (Parse), which every service reads at start: the
 // organization service to export and purge them, the user service to erase
@@ -69,8 +69,8 @@ type Registry struct {
 var name = regexp.MustCompile(`^[a-z][a-z0-9-]{0,50}$`)
 
 // New is a registry with the template's own owners. Every one exports and
-// purges; notification also forgets a member; identity decrypts; audit is
-// purged last, because the other purges are audited.
+// purges; notification also forgets a member; identity and webhooks
+// decrypt; audit is purged last, because the other purges are audited.
 func New() *Registry {
 	r := &Registry{}
 	for _, o := range []Owner{
@@ -79,6 +79,7 @@ func New() *Registry {
 		{Name: "authorization", Export: true, Purge: true},
 		{Name: "identity", Export: true, Purge: true, Decrypt: true},
 		{Name: "user", Export: true, Purge: true},
+		{Name: "webhooks", Export: true, Purge: true, Decrypt: true},
 		{Name: "audit", Export: true, Purge: true, PurgeLast: true},
 	} {
 		r.Register(o)

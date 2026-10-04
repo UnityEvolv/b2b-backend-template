@@ -74,6 +74,7 @@ template service to add to it.
 | notification categories, with their copy and default channels | `pkg/notifycat.Default` | `NOTIFICATION_CATEGORIES` |
 | what a SCIM group grants | `WithGroupSync` (user service) | `SCIM_GROUP_SYNC`, naming a data owner ([docs/users.md](docs/users.md#scim)) |
 | live-session event types | `pkg/livebus.Default` | |
+| webhook event types an org's endpoints subscribe to | `pkg/webhook.Default` | `WEBHOOK_EVENTS` ([docs/webhooks.md](docs/webhooks.md)) |
 | storage purposes and rate-limit rules | `pkg/storage`, `pkg/ratelimit.Default` | |
 | its name, id, hostnames, apps, cookies and Redis prefix | | `PRODUCT_NAME`, `PRODUCT_ID`, `BASE_HOSTNAME`, `APP_NAMES`, `COOKIE_PREFIX`, `REDIS_PREFIX` (`pkg/config`) |
 

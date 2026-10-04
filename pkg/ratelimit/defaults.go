@@ -46,6 +46,14 @@ var (
 
 	// Incoming webhooks from the billing and email providers, per address.
 	Webhook = Rule{Name: "webhook", Limit: 3000, Window: time.Minute}
+
+	// Outbound webhooks an admin sends by hand (a test event, a resend),
+	// per membership: each is a request to the customer's own server.
+	WebhookSend = Rule{Name: "webhook-send", Limit: 30, Window: time.Minute}
+	// Events sent to an org's webhook endpoints, per org: the cap on how
+	// much one org's activity may make the platform send. Over it, the
+	// event is refused and the sender told so.
+	WebhookEvents = Rule{Name: "webhook-events", Limit: 600, Window: time.Minute}
 )
 
 // Per is what a registered rule counts by.
@@ -102,6 +110,7 @@ func NewRegistry() *Registry {
 		{FailedSignIn, PerCaller}, {PasswordReset, PerCaller},
 		{InviteSend, PerMembership}, {SCIM, PerOrg}, {Webhook, PerIP},
 		{APIKey, PerCaller},
+		{WebhookSend, PerMembership}, {WebhookEvents, PerOrg},
 	} {
 		r.add(x)
 	}

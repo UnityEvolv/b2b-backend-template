@@ -3,7 +3,8 @@
 // configured the way a deployment configures it: the product's permission
 // group in PERMISSION_GROUPS, its notification category in
 // NOTIFICATION_CATEGORIES, its data owner entry in DATA_OWNERS, its plan
-// limit and ladder in PLANS, all rendered from package product. Nothing is
+// limit and ladder in PLANS, its webhook event type in WEBHOOK_EVENTS, all
+// rendered from package product. Nothing is
 // faked: a seam that did not hold would fail here.
 //
 // The template's services cannot be imported from here (their packages
@@ -40,7 +41,7 @@ import (
 
 // The template's services, and the product's.
 var (
-	core     = []string{"identity", "organization", "user", "authorization", "audit", "notification", "billing"}
+	core     = []string{"identity", "organization", "user", "authorization", "audit", "notification", "billing", "webhooks"}
 	services = append(append([]string{}, core...), product.Name)
 )
 
@@ -159,7 +160,8 @@ func newStack(t *testing.T) *stack {
 	// What a deployment sets for the product, from the product's own
 	// declarations: DATA_OWNERS on every service, the permission group on the
 	// authorization service, the category on the notification service, the
-	// ladder with its projects caps on every service that reads plans.
+	// ladder with its projects caps on every service that reads plans, the
+	// webhook event type on the webhooks service.
 	productEnv := product.Env()
 	env["DATA_OWNERS"] = productEnv["DATA_OWNERS"]
 	for _, p := range s.procs {
@@ -171,6 +173,12 @@ func newStack(t *testing.T) *stack {
 			mine["NOTIFICATION_CATEGORIES"] = productEnv["NOTIFICATION_CATEGORIES"]
 		case "organization", "user", "billing", "identity":
 			mine["PLANS"] = productEnv["PLANS"]
+		case "webhooks":
+			// Its ladder says which bands have webhooks; its event types
+			// add the product's. The test's receiver is on this machine.
+			mine["PLANS"] = productEnv["PLANS"]
+			mine["WEBHOOK_EVENTS"] = productEnv["WEBHOOK_EVENTS"]
+			mine["WEBHOOKS_LOCAL_TARGETS"] = "true"
 		}
 		p.env = os.Environ()
 		for k, v := range env {

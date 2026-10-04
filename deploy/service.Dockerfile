@@ -6,7 +6,7 @@
 #   docker build --target tools -f deploy/service.Dockerfile .    # cmd/*: dbinit, migrate, seed, ...
 #
 # The build stage compiles every service and command at once and names no
-# service, so building several images (the compose stack builds seven
+# service, so building several images (the compose stack builds eight
 # services and the tools at the same time) compiles the module once: the
 # stage is the same for all of them and BuildKit shares it.
 

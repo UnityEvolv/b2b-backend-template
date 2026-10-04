@@ -25,6 +25,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db/dbtest"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 	"github.com/UnityEvolv/b2b-backend-template/services/audit/internal/server"
 )
 
@@ -42,7 +43,7 @@ type fixture struct {
 }
 
 // The whole path against a real Postgres, wired as main.go wires it.
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T, forward ...webhook.Emitter) *fixture {
 	t.Helper()
 	url := dbtest.New(t)
 	ctx := context.Background()
@@ -77,7 +78,11 @@ func newFixture(t *testing.T) *fixture {
 	root := http.NewServeMux()
 	httpx.Health(root, httpx.Check{Name: "database", Check: cluster.Ping})
 	grants := authz.Static{}
-	root.Handle("/", auth.Require(verifier, server.New(cluster, logger, grants).Handler(httpx.NewMux())))
+	audited := server.New(cluster, logger, grants)
+	for _, e := range forward {
+		audited.WithWebhooks(e)
+	}
+	root.Handle("/", auth.Require(verifier, audited.Handler(httpx.NewMux())))
 	srv := httptest.NewServer(httpx.Logged(logger, root))
 	t.Cleanup(srv.Close)
 	return &fixture{url: url, pool: pool, issuer: issuer, server: srv, grants: grants}

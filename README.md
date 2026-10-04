@@ -31,20 +31,23 @@ frontend half, with the account, admin and platform web apps, is
 - **Audit and notifications:** an append-only audit log; email through an
   outbox with retries, web and mobile push, an in-app feed, and a daily
   digest, each by category and the person's choices.
+- **Webhooks:** signed outbound deliveries of membership and product
+  events to each organisation's own endpoints, with retries, secret
+  rotation and a delivery log.
 - **Platform:** per-organisation envelope encryption, rate limiting,
   security headers, object storage with signed URLs, structured logs,
   metrics, tracing and error tracking.
 - **Running it:** a Docker Compose stack for a laptop, Terraform for Google
   Cloud, and an example product that uses every extension point.
 
-Seven Go services, each owning its own Postgres schema, behind one API
+Eight Go services, each owning its own Postgres schema, behind one API
 origin. [docs/architecture.md](docs/architecture.md) shows how they fit.
 
 ## What makes it different
 
 - **Registries, not forks.** A product adds its plan limits, permission
-  groups, notification categories, storage purposes, rate-limit rules, live
-  events and whole services through registries, and runs the template's
+  groups, notification categories, webhook event types, storage purposes,
+  rate-limit rules, live events and whole services through registries, and runs the template's
   services unchanged. It never edits the template's code, so it can take
   the template's fixes. [examples/projects](examples/projects/README.md)
   proves it, and CI proves the template still works with the example deleted.

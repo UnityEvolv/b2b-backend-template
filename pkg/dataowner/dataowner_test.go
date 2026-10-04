@@ -16,17 +16,17 @@ func names(owners []dataowner.Owner) []string {
 	return out
 }
 
-// The template's owners: all six export and purge, audit last; only
-// notification erases and only identity decrypts.
+// The template's owners: all seven export and purge, audit last; only
+// notification erases, and identity and webhooks decrypt.
 func TestTheTemplatesOwners(t *testing.T) {
 	r := dataowner.New()
-	if got := names(r.Exporters()); !slices.Equal(got, []string{"notification", "billing", "authorization", "identity", "user", "audit"}) {
+	if got := names(r.Exporters()); !slices.Equal(got, []string{"notification", "billing", "authorization", "identity", "user", "webhooks", "audit"}) {
 		t.Errorf("exporters %v", got)
 	}
 	if got := names(r.Erasers()); !slices.Equal(got, []string{"notification"}) {
 		t.Errorf("erasers %v", got)
 	}
-	if got := r.Decrypting(); !slices.Equal(got, []string{"identity"}) {
+	if got := r.Decrypting(); !slices.Equal(got, []string{"identity", "webhooks"}) {
 		t.Errorf("decrypting %v", got)
 	}
 }
@@ -39,20 +39,20 @@ func TestAProductsOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := names(r.Purgers()); !slices.Equal(got, []string{"notification", "billing", "authorization", "identity", "user", "projects", "audit"}) {
+	if got := names(r.Purgers()); !slices.Equal(got, []string{"notification", "billing", "authorization", "identity", "user", "webhooks", "projects", "audit"}) {
 		t.Errorf("purge order %v", got)
 	}
 	if got := names(r.Erasers()); !slices.Equal(got, []string{"notification", "projects"}) {
 		t.Errorf("erasers %v", got)
 	}
-	if got := r.Decrypting(); !slices.Equal(got, []string{"identity", "projects"}) {
+	if got := r.Decrypting(); !slices.Equal(got, []string{"identity", "webhooks", "projects"}) {
 		t.Errorf("decrypting %v", got)
 	}
 	if !r.Known("reports") || slices.Contains(names(r.Exporters()), "reports") || r.Known("documents") {
 		t.Error("a caller-only entry")
 	}
 	m := r.Manifest()
-	if len(m.Owners) != 8 || m.Owners[6].URL != "" || !slices.Equal(m.Decrypting, []string{"identity", "projects"}) {
+	if len(m.Owners) != 9 || m.Owners[7].URL != "" || !slices.Equal(m.Decrypting, []string{"identity", "webhooks", "projects"}) {
 		t.Errorf("manifest %+v", m)
 	}
 	for _, bad := range []string{`[{"name":"Projects"}]`, `[{"name":""}]`, `[{"name":"x","exports":true}]`, `{`} {
@@ -69,7 +69,8 @@ func TestLocate(t *testing.T) {
 	r.Register(dataowner.Owner{Name: "project-files", Export: true, Purge: true})
 	r.Register(dataowner.Owner{Name: "reports"})
 	env := map[string]string{"NOTIFICATION_URL": "http://notification:8080", "BILLING_URL": "http://billing:8080",
-		"AUTHORIZATION_URL": "http://authorization:8080", "IDENTITY_URL": "http://identity:8080", "USER_URL": "http://user:8080"}
+		"AUTHORIZATION_URL": "http://authorization:8080", "IDENTITY_URL": "http://identity:8080", "USER_URL": "http://user:8080",
+		"WEBHOOKS_URL": "http://webhooks:8080"}
 	lookup := func(k string) string { return env[k] }
 	err := r.Locate(lookup, dataowner.Owner.HoldsOrgData)
 	if err == nil || !strings.Contains(err.Error(), "AUDIT_URL") || !strings.Contains(err.Error(), "PROJECT_FILES_URL") || strings.Contains(err.Error(), "REPORTS_URL") {

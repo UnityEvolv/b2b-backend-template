@@ -34,6 +34,24 @@ func (e AccessTokenTokenType) Valid() bool {
 	}
 }
 
+// Defines values for ApiKeyKind.
+const (
+	ApiKeyKindOrg      ApiKeyKind = "org"
+	ApiKeyKindPersonal ApiKeyKind = "personal"
+)
+
+// Valid indicates whether the value is a known member of the ApiKeyKind enum.
+func (e ApiKeyKind) Valid() bool {
+	switch e {
+	case ApiKeyKindOrg:
+		return true
+	case ApiKeyKindPersonal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IdentityProviderStatus.
 const (
 	Active   IdentityProviderStatus = "active"
@@ -109,6 +127,24 @@ func (e MfaChallengeMfa) Valid() bool {
 	case Challenge:
 		return true
 	case Enroll:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolvedApiKeyKind.
+const (
+	ResolvedApiKeyKindOrg      ResolvedApiKeyKind = "org"
+	ResolvedApiKeyKindPersonal ResolvedApiKeyKind = "personal"
+)
+
+// Valid indicates whether the value is a known member of the ResolvedApiKeyKind enum.
+func (e ResolvedApiKeyKind) Valid() bool {
+	switch e {
+	case ResolvedApiKeyKindOrg:
+		return true
+	case ResolvedApiKeyKindPersonal:
 		return true
 	default:
 		return false
@@ -249,6 +285,49 @@ type AccessToken struct {
 
 // AccessTokenTokenType defines model for AccessToken.TokenType.
 type AccessTokenTokenType string
+
+// ApiKey defines model for ApiKey.
+type ApiKey struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// CreatedBy The actor who made it, such as membership:<uuid>.
+	CreatedBy string             `json:"created_by"`
+	ExpiresAt *time.Time         `json:"expires_at,omitempty"`
+	Groups    []string           `json:"groups"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Kind org, the organization's key; personal, a person's own token.
+	Kind ApiKeyKind `json:"kind"`
+
+	// LastUsedAt To the minute.
+	LastUsedAt   *time.Time          `json:"last_used_at,omitempty"`
+	MembershipId *openapi_types.UUID `json:"membership_id,omitempty"`
+	Name         string              `json:"name"`
+	OrgId        openapi_types.UUID  `json:"org_id"`
+
+	// Prefix The token's first characters, to tell keys apart. The token itself is never shown again.
+	Prefix    string     `json:"prefix"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+
+	// UserId Whose personal access token it is.
+	UserId *openapi_types.UUID `json:"user_id,omitempty"`
+}
+
+// ApiKeyKind org, the organization's key; personal, a person's own token.
+type ApiKeyKind string
+
+// ApiKeyCreated defines model for ApiKeyCreated.
+type ApiKeyCreated struct {
+	Key ApiKey `json:"key"`
+
+	// Token The bearer token, shown this once. It starts with the product's prefix for its kind.
+	Token string `json:"token"`
+}
+
+// ApiKeyList defines model for ApiKeyList.
+type ApiKeyList struct {
+	Keys []ApiKey `json:"keys"`
+}
 
 // DataPart defines model for DataPart.
 type DataPart struct {
@@ -451,6 +530,18 @@ type MfaStatus struct {
 	Required bool `json:"required"`
 }
 
+// NewApiKey defines model for NewApiKey.
+type NewApiKey struct {
+	// ExpiresAt When it stops working, in the future; none when absent.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Groups Permission groups, keys of the authorization service's registry (GET /authorization/v1/permission-groups), each one the caller holds.
+	Groups []string `json:"groups"`
+
+	// Name What a person calls it, such as nightly export.
+	Name string `json:"name"`
+}
+
 // NewIdentityProvider An OpenID Connect provider. The preset fills in what is left out:
 // see `GET /v1/identity-provider-presets` and docs/sso.md.
 type NewIdentityProvider struct {
@@ -517,6 +608,19 @@ type RecoveryCodes struct {
 	// RecoveryCodes Each works once. Shown once; keep them somewhere safe.
 	RecoveryCodes []string `json:"recovery_codes"`
 }
+
+// ResolvedApiKey defines model for ResolvedApiKey.
+type ResolvedApiKey struct {
+	Groups       []string            `json:"groups"`
+	Id           openapi_types.UUID  `json:"id"`
+	Kind         ResolvedApiKeyKind  `json:"kind"`
+	MembershipId *openapi_types.UUID `json:"membership_id,omitempty"`
+	OrgId        openapi_types.UUID  `json:"org_id"`
+	UserId       *openapi_types.UUID `json:"user_id,omitempty"`
+}
+
+// ResolvedApiKeyKind defines model for ResolvedApiKey.Kind.
+type ResolvedApiKeyKind string
 
 // Session defines model for Session.
 type Session struct {
@@ -603,6 +707,9 @@ type InviteId = openapi_types.UUID
 // InviteToken defines model for InviteToken.
 type InviteToken = string
 
+// KeyId defines model for KeyId.
+type KeyId = openapi_types.UUID
+
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
 
@@ -615,6 +722,11 @@ type ResendVerificationJSONBody struct {
 
 // VerifyEmailJSONBody defines parameters for VerifyEmail.
 type VerifyEmailJSONBody struct {
+	Token string `json:"token"`
+}
+
+// ResolveApiKeyJSONBody defines parameters for ResolveApiKey.
+type ResolveApiKeyJSONBody struct {
 	Token string `json:"token"`
 }
 
@@ -817,6 +929,9 @@ type ResendVerificationJSONRequestBody ResendVerificationJSONBody
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody VerifyEmailJSONBody
 
+// ResolveApiKeyJSONRequestBody defines body for ResolveApiKey for application/json ContentType.
+type ResolveApiKeyJSONRequestBody ResolveApiKeyJSONBody
+
 // CreateInternalInviteJSONRequestBody defines body for CreateInternalInvite for application/json ContentType.
 type CreateInternalInviteJSONRequestBody = NewInternalInvite
 
@@ -853,6 +968,9 @@ type RegenerateRecoveryCodesJSONRequestBody RegenerateRecoveryCodesJSONBody
 // ConfirmTotpJSONRequestBody defines body for ConfirmTotp for application/json ContentType.
 type ConfirmTotpJSONRequestBody ConfirmTotpJSONBody
 
+// CreateApiKeyJSONRequestBody defines body for CreateApiKey for application/json ContentType.
+type CreateApiKeyJSONRequestBody = NewApiKey
+
 // SetIdentityProviderJSONRequestBody defines body for SetIdentityProvider for application/json ContentType.
 type SetIdentityProviderJSONRequestBody = NewIdentityProvider
 
@@ -864,6 +982,9 @@ type CreateInviteJSONRequestBody = NewInvite
 
 // ResendInviteJSONRequestBody defines body for ResendInvite for application/json ContentType.
 type ResendInviteJSONRequestBody ResendInviteJSONBody
+
+// CreatePersonalAccessTokenJSONRequestBody defines body for CreatePersonalAccessToken for application/json ContentType.
+type CreatePersonalAccessTokenJSONRequestBody = NewApiKey
 
 // SetSessionPolicyJSONRequestBody defines body for SetSessionPolicy for application/json ContentType.
 type SetSessionPolicyJSONRequestBody = SessionPolicyUpdate
@@ -903,6 +1024,9 @@ type ServerInterface interface {
 	// ListIdentityProviderPresets The presets a provider is filled in from
 	// (GET /v1/identity-provider-presets)
 	ListIdentityProviderPresets(w http.ResponseWriter, r *http.Request)
+	// ResolveApiKey What an API key or personal access token is, now (services only)
+	// (POST /v1/internal/api-keys/resolve)
+	ResolveApiKey(w http.ResponseWriter, r *http.Request)
 	// CreateInternalInvite An invite made by another service (services only)
 	// (POST /v1/internal/invites)
 	CreateInternalInvite(w http.ResponseWriter, r *http.Request, params CreateInternalInviteParams)
@@ -966,6 +1090,15 @@ type ServerInterface interface {
 	// ConfirmTotp Confirm the authenticator with a code from it
 	// (POST /v1/mfa/totp/confirm)
 	ConfirmTotp(w http.ResponseWriter, r *http.Request)
+	// ListApiKeys Every API key and personal access token in the organization (the api_keys permission)
+	// (GET /v1/organizations/{org_id}/api-keys)
+	ListApiKeys(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// CreateApiKey Make an API key for the organization (the api_keys permission)
+	// (POST /v1/organizations/{org_id}/api-keys)
+	CreateApiKey(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RevokeApiKey Revoke any API key or personal access token in the organization (the api_keys permission)
+	// (DELETE /v1/organizations/{org_id}/api-keys/{key_id})
+	RevokeApiKey(w http.ResponseWriter, r *http.Request, orgId OrgId, keyId KeyId)
 	// GetIdentityProvider The organization's identity provider, without its secret
 	// (GET /v1/organizations/{org_id}/identity-provider)
 	GetIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -996,6 +1129,15 @@ type ServerInterface interface {
 	// ListMemberSessions A member's live sessions, for an admin
 	// (GET /v1/organizations/{org_id}/members/{user_id}/sessions)
 	ListMemberSessions(w http.ResponseWriter, r *http.Request, orgId OrgId, userId openapi_types.UUID)
+	// ListPersonalAccessTokens Your own personal access tokens in the organization
+	// (GET /v1/organizations/{org_id}/personal-access-tokens)
+	ListPersonalAccessTokens(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// CreatePersonalAccessToken Make a personal access token for yourself in the organization
+	// (POST /v1/organizations/{org_id}/personal-access-tokens)
+	CreatePersonalAccessToken(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RevokePersonalAccessToken Revoke one of your own personal access tokens
+	// (DELETE /v1/organizations/{org_id}/personal-access-tokens/{key_id})
+	RevokePersonalAccessToken(w http.ResponseWriter, r *http.Request, orgId OrgId, keyId KeyId)
 	// GetSessionPolicy How long the organization's sessions last
 	// (GET /v1/organizations/{org_id}/session-policy)
 	GetSessionPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1119,6 +1261,20 @@ func (siw *ServerInterfaceWrapper) ListIdentityProviderPresets(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIdentityProviderPresets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveApiKey operation middleware
+func (siw *ServerInterfaceWrapper) ResolveApiKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveApiKey(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1573,6 +1729,93 @@ func (siw *ServerInterfaceWrapper) ConfirmTotp(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListApiKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListApiKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApiKeys(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateApiKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateApiKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateApiKey(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeApiKey operation middleware
+func (siw *ServerInterfaceWrapper) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key_id" -------------
+	var keyId KeyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key_id", r.PathValue("key_id"), &keyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeApiKey(w, r, orgId, keyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetIdentityProvider operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentityProvider(w http.ResponseWriter, r *http.Request) {
 
@@ -1948,6 +2191,93 @@ func (siw *ServerInterfaceWrapper) ListMemberSessions(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMemberSessions(w, r, orgId, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPersonalAccessTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListPersonalAccessTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPersonalAccessTokens(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePersonalAccessToken operation middleware
+func (siw *ServerInterfaceWrapper) CreatePersonalAccessToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePersonalAccessToken(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokePersonalAccessToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokePersonalAccessToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key_id" -------------
+	var keyId KeyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key_id", r.PathValue("key_id"), &keyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokePersonalAccessToken(w, r, orgId, keyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2578,6 +2908,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/email", wrapper.RequestEmailChange)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/email-change/confirm", wrapper.ConfirmEmailChange)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/email-change/undo", wrapper.UndoEmailChange)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/api-keys", wrapper.ListApiKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/api-keys", wrapper.CreateApiKey)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/api-keys/{key_id}", wrapper.RevokeApiKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/personal-access-tokens", wrapper.ListPersonalAccessTokens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/personal-access-tokens", wrapper.CreatePersonalAccessToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/personal-access-tokens/{key_id}", wrapper.RevokePersonalAccessToken)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/internal/api-keys/resolve", wrapper.ResolveApiKey)
 
 	return m
 }
@@ -2870,6 +3207,97 @@ type ListIdentityProviderPresetsdefaultJSONResponse struct {
 }
 
 func (response ListIdentityProviderPresetsdefaultJSONResponse) VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveApiKeyRequestObject struct {
+	Body *ResolveApiKeyJSONRequestBody
+}
+
+type ResolveApiKeyResponseObject interface {
+	VisitResolveApiKeyResponse(w http.ResponseWriter) error
+}
+
+type ResolveApiKey200JSONResponse ResolvedApiKey
+
+func (response ResolveApiKey200JSONResponse) VisitResolveApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveApiKey401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ResolveApiKey401JSONResponse) VisitResolveApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveApiKey403JSONResponse Error
+
+func (response ResolveApiKey403JSONResponse) VisitResolveApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveApiKey429ResponseHeaders struct {
+	RetryAfter *int
+}
+
+type ResolveApiKey429JSONResponse struct {
+	Body    Error
+	Headers ResolveApiKey429ResponseHeaders
+}
+
+func (response ResolveApiKey429JSONResponse) VisitResolveApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveApiKeydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ResolveApiKeydefaultJSONResponse) VisitResolveApiKeyResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4314,6 +4742,231 @@ func (response ConfirmTotpdefaultJSONResponse) VisitConfirmTotpResponse(w http.R
 	return err
 }
 
+type ListApiKeysRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type ListApiKeysResponseObject interface {
+	VisitListApiKeysResponse(w http.ResponseWriter) error
+}
+
+type ListApiKeys200JSONResponse ApiKeyList
+
+func (response ListApiKeys200JSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApiKeys401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListApiKeys401JSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApiKeys403JSONResponse Error
+
+func (response ListApiKeys403JSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListApiKeysdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListApiKeysdefaultJSONResponse) VisitListApiKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKeyRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *CreateApiKeyJSONRequestBody
+}
+
+type CreateApiKeyResponseObject interface {
+	VisitCreateApiKeyResponse(w http.ResponseWriter) error
+}
+
+type CreateApiKey201JSONResponse ApiKeyCreated
+
+func (response CreateApiKey201JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKey400JSONResponse struct{ ErrorJSONResponse }
+
+func (response CreateApiKey400JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKey401JSONResponse Error
+
+func (response CreateApiKey401JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKey403JSONResponse Error
+
+func (response CreateApiKey403JSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateApiKeydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateApiKeydefaultJSONResponse) VisitCreateApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKeyRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	KeyId KeyId `json:"key_id"`
+}
+
+type RevokeApiKeyResponseObject interface {
+	VisitRevokeApiKeyResponse(w http.ResponseWriter) error
+}
+
+type RevokeApiKey204Response struct {
+}
+
+func (response RevokeApiKey204Response) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeApiKey401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RevokeApiKey401JSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKey403JSONResponse Error
+
+func (response RevokeApiKey403JSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKey404JSONResponse Error
+
+func (response RevokeApiKey404JSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeApiKeydefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RevokeApiKeydefaultJSONResponse) VisitRevokeApiKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetIdentityProviderRequestObject struct {
 	OrgId OrgId `json:"org_id"`
 }
@@ -5158,6 +5811,231 @@ type ListMemberSessionsdefaultJSONResponse struct {
 }
 
 func (response ListMemberSessionsdefaultJSONResponse) VisitListMemberSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPersonalAccessTokensRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type ListPersonalAccessTokensResponseObject interface {
+	VisitListPersonalAccessTokensResponse(w http.ResponseWriter) error
+}
+
+type ListPersonalAccessTokens200JSONResponse ApiKeyList
+
+func (response ListPersonalAccessTokens200JSONResponse) VisitListPersonalAccessTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPersonalAccessTokens401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListPersonalAccessTokens401JSONResponse) VisitListPersonalAccessTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPersonalAccessTokens403JSONResponse Error
+
+func (response ListPersonalAccessTokens403JSONResponse) VisitListPersonalAccessTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPersonalAccessTokensdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListPersonalAccessTokensdefaultJSONResponse) VisitListPersonalAccessTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePersonalAccessTokenRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *CreatePersonalAccessTokenJSONRequestBody
+}
+
+type CreatePersonalAccessTokenResponseObject interface {
+	VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error
+}
+
+type CreatePersonalAccessToken201JSONResponse ApiKeyCreated
+
+func (response CreatePersonalAccessToken201JSONResponse) VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePersonalAccessToken400JSONResponse struct{ ErrorJSONResponse }
+
+func (response CreatePersonalAccessToken400JSONResponse) VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePersonalAccessToken401JSONResponse Error
+
+func (response CreatePersonalAccessToken401JSONResponse) VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePersonalAccessToken403JSONResponse Error
+
+func (response CreatePersonalAccessToken403JSONResponse) VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePersonalAccessTokendefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreatePersonalAccessTokendefaultJSONResponse) VisitCreatePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePersonalAccessTokenRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	KeyId KeyId `json:"key_id"`
+}
+
+type RevokePersonalAccessTokenResponseObject interface {
+	VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokePersonalAccessToken204Response struct {
+}
+
+func (response RevokePersonalAccessToken204Response) VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokePersonalAccessToken401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RevokePersonalAccessToken401JSONResponse) VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePersonalAccessToken403JSONResponse Error
+
+func (response RevokePersonalAccessToken403JSONResponse) VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePersonalAccessToken404JSONResponse Error
+
+func (response RevokePersonalAccessToken404JSONResponse) VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePersonalAccessTokendefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RevokePersonalAccessTokendefaultJSONResponse) VisitRevokePersonalAccessTokenResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6251,6 +7129,9 @@ type StrictServerInterface interface {
 	// ListIdentityProviderPresets The presets a provider is filled in from
 	// (GET /v1/identity-provider-presets)
 	ListIdentityProviderPresets(ctx context.Context, request ListIdentityProviderPresetsRequestObject) (ListIdentityProviderPresetsResponseObject, error)
+	// ResolveApiKey What an API key or personal access token is, now (services only)
+	// (POST /v1/internal/api-keys/resolve)
+	ResolveApiKey(ctx context.Context, request ResolveApiKeyRequestObject) (ResolveApiKeyResponseObject, error)
 	// CreateInternalInvite An invite made by another service (services only)
 	// (POST /v1/internal/invites)
 	CreateInternalInvite(ctx context.Context, request CreateInternalInviteRequestObject) (CreateInternalInviteResponseObject, error)
@@ -6314,6 +7195,15 @@ type StrictServerInterface interface {
 	// ConfirmTotp Confirm the authenticator with a code from it
 	// (POST /v1/mfa/totp/confirm)
 	ConfirmTotp(ctx context.Context, request ConfirmTotpRequestObject) (ConfirmTotpResponseObject, error)
+	// ListApiKeys Every API key and personal access token in the organization (the api_keys permission)
+	// (GET /v1/organizations/{org_id}/api-keys)
+	ListApiKeys(ctx context.Context, request ListApiKeysRequestObject) (ListApiKeysResponseObject, error)
+	// CreateApiKey Make an API key for the organization (the api_keys permission)
+	// (POST /v1/organizations/{org_id}/api-keys)
+	CreateApiKey(ctx context.Context, request CreateApiKeyRequestObject) (CreateApiKeyResponseObject, error)
+	// RevokeApiKey Revoke any API key or personal access token in the organization (the api_keys permission)
+	// (DELETE /v1/organizations/{org_id}/api-keys/{key_id})
+	RevokeApiKey(ctx context.Context, request RevokeApiKeyRequestObject) (RevokeApiKeyResponseObject, error)
 	// GetIdentityProvider The organization's identity provider, without its secret
 	// (GET /v1/organizations/{org_id}/identity-provider)
 	GetIdentityProvider(ctx context.Context, request GetIdentityProviderRequestObject) (GetIdentityProviderResponseObject, error)
@@ -6344,6 +7234,15 @@ type StrictServerInterface interface {
 	// ListMemberSessions A member's live sessions, for an admin
 	// (GET /v1/organizations/{org_id}/members/{user_id}/sessions)
 	ListMemberSessions(ctx context.Context, request ListMemberSessionsRequestObject) (ListMemberSessionsResponseObject, error)
+	// ListPersonalAccessTokens Your own personal access tokens in the organization
+	// (GET /v1/organizations/{org_id}/personal-access-tokens)
+	ListPersonalAccessTokens(ctx context.Context, request ListPersonalAccessTokensRequestObject) (ListPersonalAccessTokensResponseObject, error)
+	// CreatePersonalAccessToken Make a personal access token for yourself in the organization
+	// (POST /v1/organizations/{org_id}/personal-access-tokens)
+	CreatePersonalAccessToken(ctx context.Context, request CreatePersonalAccessTokenRequestObject) (CreatePersonalAccessTokenResponseObject, error)
+	// RevokePersonalAccessToken Revoke one of your own personal access tokens
+	// (DELETE /v1/organizations/{org_id}/personal-access-tokens/{key_id})
+	RevokePersonalAccessToken(ctx context.Context, request RevokePersonalAccessTokenRequestObject) (RevokePersonalAccessTokenResponseObject, error)
 	// GetSessionPolicy How long the organization's sessions last
 	// (GET /v1/organizations/{org_id}/session-policy)
 	GetSessionPolicy(ctx context.Context, request GetSessionPolicyRequestObject) (GetSessionPolicyResponseObject, error)
@@ -6577,6 +7476,37 @@ func (sh *strictHandler) ListIdentityProviderPresets(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListIdentityProviderPresetsResponseObject); ok {
 		if err := validResponse.VisitListIdentityProviderPresetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveApiKey operation middleware
+func (sh *strictHandler) ResolveApiKey(w http.ResponseWriter, r *http.Request) {
+	var request ResolveApiKeyRequestObject
+
+	var body ResolveApiKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveApiKey(ctx, request.(ResolveApiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveApiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveApiKeyResponseObject); ok {
+		if err := validResponse.VisitResolveApiKeyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7196,6 +8126,92 @@ func (sh *strictHandler) ConfirmTotp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListApiKeys operation middleware
+func (sh *strictHandler) ListApiKeys(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request ListApiKeysRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListApiKeys(ctx, request.(ListApiKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListApiKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListApiKeysResponseObject); ok {
+		if err := validResponse.VisitListApiKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateApiKey operation middleware
+func (sh *strictHandler) CreateApiKey(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request CreateApiKeyRequestObject
+
+	request.OrgId = orgId
+
+	var body CreateApiKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateApiKey(ctx, request.(CreateApiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateApiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateApiKeyResponseObject); ok {
+		if err := validResponse.VisitCreateApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeApiKey operation middleware
+func (sh *strictHandler) RevokeApiKey(w http.ResponseWriter, r *http.Request, orgId OrgId, keyId KeyId) {
+	var request RevokeApiKeyRequestObject
+
+	request.OrgId = orgId
+	request.KeyId = keyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeApiKey(ctx, request.(RevokeApiKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeApiKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeApiKeyResponseObject); ok {
+		if err := validResponse.VisitRevokeApiKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetIdentityProvider operation middleware
 func (sh *strictHandler) GetIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId) {
 	var request GetIdentityProviderRequestObject
@@ -7487,6 +8503,92 @@ func (sh *strictHandler) ListMemberSessions(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMemberSessionsResponseObject); ok {
 		if err := validResponse.VisitListMemberSessionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPersonalAccessTokens operation middleware
+func (sh *strictHandler) ListPersonalAccessTokens(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request ListPersonalAccessTokensRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPersonalAccessTokens(ctx, request.(ListPersonalAccessTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPersonalAccessTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPersonalAccessTokensResponseObject); ok {
+		if err := validResponse.VisitListPersonalAccessTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePersonalAccessToken operation middleware
+func (sh *strictHandler) CreatePersonalAccessToken(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request CreatePersonalAccessTokenRequestObject
+
+	request.OrgId = orgId
+
+	var body CreatePersonalAccessTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePersonalAccessToken(ctx, request.(CreatePersonalAccessTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePersonalAccessToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePersonalAccessTokenResponseObject); ok {
+		if err := validResponse.VisitCreatePersonalAccessTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokePersonalAccessToken operation middleware
+func (sh *strictHandler) RevokePersonalAccessToken(w http.ResponseWriter, r *http.Request, orgId OrgId, keyId KeyId) {
+	var request RevokePersonalAccessTokenRequestObject
+
+	request.OrgId = orgId
+	request.KeyId = keyId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokePersonalAccessToken(ctx, request.(RevokePersonalAccessTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokePersonalAccessToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokePersonalAccessTokenResponseObject); ok {
+		if err := validResponse.VisitRevokePersonalAccessTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

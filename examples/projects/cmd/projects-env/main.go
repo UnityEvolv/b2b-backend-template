@@ -2,7 +2,7 @@
 // services so they know the example product, from the values the product
 // declares in code (package product):
 //
-//	PLANS                    on the organization, user and billing services
+//	PLANS                    on the organization, user, billing and identity services
 //	PERMISSION_GROUPS        on the authorization service
 //	NOTIFICATION_CATEGORIES  on the notification service
 //	DATA_OWNERS              on every template service

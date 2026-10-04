@@ -360,8 +360,8 @@ func (s *Server) RevokeMemberSessions(ctx context.Context, req api.RevokeMemberS
 	} else if !authz.MayManage(grant.Role, role) {
 		return api.RevokeMemberSessions403JSONResponse{Code: httpx.CodeForbidden, Message: msgOutranked}, nil
 	}
-	c, _ := auth.CallerFrom(ctx)
-	n, err := s.revokeAll(ctx, req.UserId, pgtype.UUID{}, "revoked_by_admin", db.MembershipActor(c.MembershipID), scopeUser)
+	actor, _ := db.ActorFrom(ctx)
+	n, err := s.revokeAll(ctx, req.UserId, pgtype.UUID{}, "revoked_by_admin", actor, scopeUser)
 	if err != nil {
 		return nil, err
 	}

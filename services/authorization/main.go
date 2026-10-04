@@ -66,6 +66,9 @@ func run() error {
 		auditURL    = env.Required("AUDIT_URL")
 		userURL     = env.Required("USER_URL")
 		tokenURL    = env.Required("SERVICE_TOKEN_URL")
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
 		// Ownership transfers email both parties on the org's behalf and
 		// link into the admin app.
 		notificationURL = env.Required("NOTIFICATION_URL")
@@ -139,6 +142,11 @@ func run() error {
 	limiter := ratelimit.New(rdb, logger)
 
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	cluster := db.SingleShard(pool)
 	srv := server.New(cluster, logger, audit.NewClient(auditURL, tokens, nil), server.NewMemberships(userURL, tokens, nil),
 		server.Transfer{Email: email.NewClient(notificationURL, tokens, nil), Orgs: server.NewOrganizations(organizationURL, tokens, nil), Apps: map[string]string{"admin": adminOrigin}})

@@ -373,7 +373,8 @@ SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = @org_id)
      + (SELECT count(*) FROM invites v WHERE v.org_id = @org_id)
      + (SELECT count(*) FROM email_verifications e WHERE e.org_id = @org_id)
      + (SELECT count(*) FROM mfa_challenges c WHERE c.signed_in_org_id = @org_id OR c.active_org_id = @org_id)
-     + (SELECT count(*) FROM sessions s WHERE s.signed_in_org_id = @org_id OR s.active_org_id = @org_id))::bigint AS remaining;
+     + (SELECT count(*) FROM sessions s WHERE s.signed_in_org_id = @org_id OR s.active_org_id = @org_id)
+     + (SELECT count(*) FROM api_keys k WHERE k.org_id = @org_id))::bigint AS remaining;
 
 -- name: RevokeSessionsOfOrg :many
 -- Every live session working in an org, ended with a reason: the org is

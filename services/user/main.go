@@ -163,6 +163,11 @@ func run() error {
 	limiter := ratelimit.New(rdb, logger)
 
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	recorder := audit.NewClient(auditURL, tokens, nil)
 	plans := plan.Client(organizationURL, tokens, nil)
 

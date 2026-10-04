@@ -169,7 +169,7 @@ func newStack(t *testing.T) *stack {
 			mine["PERMISSION_GROUPS"] = productEnv["PERMISSION_GROUPS"]
 		case "notification":
 			mine["NOTIFICATION_CATEGORIES"] = productEnv["NOTIFICATION_CATEGORIES"]
-		case "organization", "user", "billing":
+		case "organization", "user", "billing", "identity":
 			mine["PLANS"] = productEnv["PLANS"]
 		}
 		p.env = os.Environ()

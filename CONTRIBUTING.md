@@ -74,6 +74,7 @@ template service to add to it.
 | notification categories, with their copy and default channels | `pkg/notifycat.Default` | `NOTIFICATION_CATEGORIES` |
 | what a SCIM group grants | `WithGroupSync` (user service) | `SCIM_GROUP_SYNC`, naming a data owner ([docs/users.md](docs/users.md#scim)) |
 | live-session event types | `pkg/livebus.Default` | |
+| onboarding checklist steps, with the service that answers each | `pkg/onboarding.Default` | `ONBOARDING_STEPS` ([docs/onboarding.md](docs/onboarding.md)) |
 | storage purposes and rate-limit rules | `pkg/storage`, `pkg/ratelimit.Default` | |
 | its name, id, hostnames, apps, cookies and Redis prefix | | `PRODUCT_NAME`, `PRODUCT_ID`, `BASE_HOSTNAME`, `APP_NAMES`, `COOKIE_PREFIX`, `REDIS_PREFIX` (`pkg/config`) |
 

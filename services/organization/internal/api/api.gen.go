@@ -337,6 +337,37 @@ type NewSignup struct {
 	TimeZone TimeZone `json:"time_zone"`
 }
 
+// Onboarding defines model for Onboarding.
+type Onboarding struct {
+	// Complete Every step is done or dismissed, and none is unknown.
+	Complete bool `json:"complete"`
+
+	// Dismissed The whole checklist is hidden for the organization.
+	Dismissed bool               `json:"dismissed"`
+	OrgId     openapi_types.UUID `json:"org_id"`
+	Steps     []OnboardingStep   `json:"steps"`
+}
+
+// OnboardingStep defines model for OnboardingStep.
+type OnboardingStep struct {
+	// App The web app href is in, by name (admin unless the step says otherwise).
+	App       string `json:"app"`
+	Dismissed bool   `json:"dismissed"`
+
+	// Done Derived now from the organization's data. False when unknown.
+	Done bool `json:"done"`
+
+	// Href Where the step is done, a path in app.
+	Href string `json:"href"`
+
+	// Id Stable; the core's are verify_domain, invite_teammates, set_up_sso and choose_plan, and a product adds its own. Not an enum.
+	Id    string `json:"id"`
+	Label string `json:"label"`
+
+	// Unknown The service that knows did not answer in time; done is not known.
+	Unknown bool `json:"unknown"`
+}
+
 // Organization defines model for Organization.
 type Organization struct {
 	// ClosingAt When it was closed; present while it is closing.
@@ -608,6 +639,9 @@ type OverrideKey = string
 // OverrideKind defines model for OverrideKind.
 type OverrideKind string
 
+// StepId defines model for StepId.
+type StepId = string
+
 // SetPlanInternalJSONBody defines parameters for SetPlanInternal.
 type SetPlanInternalJSONBody struct {
 	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
@@ -813,6 +847,21 @@ type ServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(w http.ResponseWriter, r *http.Request, orgId OrgId, params CreateOrgExportParams)
+	// GetOnboarding The organization's first-run checklist, as it stands now
+	// (GET /v1/organizations/{org_id}/onboarding)
+	GetOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RestoreOnboarding Show the checklist again
+	// (DELETE /v1/organizations/{org_id}/onboarding/dismissal)
+	RestoreOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// DismissOnboarding Hide the whole checklist for the organization
+	// (POST /v1/organizations/{org_id}/onboarding/dismissal)
+	DismissOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RestoreOnboardingStep Show one step again
+	// (DELETE /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal)
+	RestoreOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId StepId)
+	// DismissOnboardingStep Hide one step for the organization
+	// (POST /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal)
+	DismissOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId StepId)
 	// GetOrganizationPlan The org's plan, what it allows, and what the org uses now (its members, platform operators)
 	// (GET /v1/organizations/{org_id}/plan)
 	GetOrganizationPlan(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1508,6 +1557,154 @@ func (siw *ServerInterfaceWrapper) CreateOrgExport(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetOnboarding operation middleware
+func (siw *ServerInterfaceWrapper) GetOnboarding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOnboarding(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreOnboarding operation middleware
+func (siw *ServerInterfaceWrapper) RestoreOnboarding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreOnboarding(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissOnboarding operation middleware
+func (siw *ServerInterfaceWrapper) DismissOnboarding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissOnboarding(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreOnboardingStep operation middleware
+func (siw *ServerInterfaceWrapper) RestoreOnboardingStep(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "step_id" -------------
+	var stepId StepId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "step_id", r.PathValue("step_id"), &stepId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "step_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreOnboardingStep(w, r, orgId, stepId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissOnboardingStep operation middleware
+func (siw *ServerInterfaceWrapper) DismissOnboardingStep(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "step_id" -------------
+	var stepId StepId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "step_id", r.PathValue("step_id"), &stepId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "step_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissOnboardingStep(w, r, orgId, stepId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOrganizationPlan operation middleware
 func (siw *ServerInterfaceWrapper) GetOrganizationPlan(w http.ResponseWriter, r *http.Request) {
 
@@ -2041,6 +2238,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/data-keys/current", wrapper.GetCurrentDataKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/data-keys/{version}", wrapper.GetDataKeyVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/data-keys/rotate", wrapper.RotateDataKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/onboarding", wrapper.GetOnboarding)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/onboarding/dismissal", wrapper.RestoreOnboarding)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/onboarding/dismissal", wrapper.DismissOnboarding)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal", wrapper.RestoreOnboardingStep)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal", wrapper.DismissOnboardingStep)
 
 	return m
 }
@@ -3718,6 +3920,361 @@ func (response CreateOrgExportdefaultJSONResponse) VisitCreateOrgExportResponse(
 	return err
 }
 
+type GetOnboardingRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type GetOnboardingResponseObject interface {
+	VisitGetOnboardingResponse(w http.ResponseWriter) error
+}
+
+type GetOnboarding200JSONResponse Onboarding
+
+func (response GetOnboarding200JSONResponse) VisitGetOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboarding401JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetOnboarding401JSONResponse) VisitGetOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboarding403JSONResponse Error
+
+func (response GetOnboarding403JSONResponse) VisitGetOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboarding404JSONResponse Error
+
+func (response GetOnboarding404JSONResponse) VisitGetOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetOnboardingdefaultJSONResponse) VisitGetOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type RestoreOnboardingResponseObject interface {
+	VisitRestoreOnboardingResponse(w http.ResponseWriter) error
+}
+
+type RestoreOnboarding204Response struct {
+}
+
+func (response RestoreOnboarding204Response) VisitRestoreOnboardingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RestoreOnboarding401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RestoreOnboarding401JSONResponse) VisitRestoreOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboarding403JSONResponse Error
+
+func (response RestoreOnboarding403JSONResponse) VisitRestoreOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RestoreOnboardingdefaultJSONResponse) VisitRestoreOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type DismissOnboardingResponseObject interface {
+	VisitDismissOnboardingResponse(w http.ResponseWriter) error
+}
+
+type DismissOnboarding204Response struct {
+}
+
+func (response DismissOnboarding204Response) VisitDismissOnboardingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DismissOnboarding401JSONResponse struct{ ErrorJSONResponse }
+
+func (response DismissOnboarding401JSONResponse) VisitDismissOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboarding403JSONResponse Error
+
+func (response DismissOnboarding403JSONResponse) VisitDismissOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DismissOnboardingdefaultJSONResponse) VisitDismissOnboardingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingStepRequestObject struct {
+	OrgId  OrgId  `json:"org_id"`
+	StepId StepId `json:"step_id"`
+}
+
+type RestoreOnboardingStepResponseObject interface {
+	VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error
+}
+
+type RestoreOnboardingStep204Response struct {
+}
+
+func (response RestoreOnboardingStep204Response) VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RestoreOnboardingStep401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RestoreOnboardingStep401JSONResponse) VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingStep403JSONResponse Error
+
+func (response RestoreOnboardingStep403JSONResponse) VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingStep404JSONResponse Error
+
+func (response RestoreOnboardingStep404JSONResponse) VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreOnboardingStepdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RestoreOnboardingStepdefaultJSONResponse) VisitRestoreOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingStepRequestObject struct {
+	OrgId  OrgId  `json:"org_id"`
+	StepId StepId `json:"step_id"`
+}
+
+type DismissOnboardingStepResponseObject interface {
+	VisitDismissOnboardingStepResponse(w http.ResponseWriter) error
+}
+
+type DismissOnboardingStep204Response struct {
+}
+
+func (response DismissOnboardingStep204Response) VisitDismissOnboardingStepResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DismissOnboardingStep401JSONResponse struct{ ErrorJSONResponse }
+
+func (response DismissOnboardingStep401JSONResponse) VisitDismissOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingStep403JSONResponse Error
+
+func (response DismissOnboardingStep403JSONResponse) VisitDismissOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingStep404JSONResponse Error
+
+func (response DismissOnboardingStep404JSONResponse) VisitDismissOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissOnboardingStepdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response DismissOnboardingStepdefaultJSONResponse) VisitDismissOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOrganizationPlanRequestObject struct {
 	OrgId OrgId `json:"org_id"`
 }
@@ -4891,6 +5448,21 @@ type StrictServerInterface interface {
 	// CreateOrgExport Ask for an export of everything the organization has (Owners)
 	// (POST /v1/organizations/{org_id}/exports)
 	CreateOrgExport(ctx context.Context, request CreateOrgExportRequestObject) (CreateOrgExportResponseObject, error)
+	// GetOnboarding The organization's first-run checklist, as it stands now
+	// (GET /v1/organizations/{org_id}/onboarding)
+	GetOnboarding(ctx context.Context, request GetOnboardingRequestObject) (GetOnboardingResponseObject, error)
+	// RestoreOnboarding Show the checklist again
+	// (DELETE /v1/organizations/{org_id}/onboarding/dismissal)
+	RestoreOnboarding(ctx context.Context, request RestoreOnboardingRequestObject) (RestoreOnboardingResponseObject, error)
+	// DismissOnboarding Hide the whole checklist for the organization
+	// (POST /v1/organizations/{org_id}/onboarding/dismissal)
+	DismissOnboarding(ctx context.Context, request DismissOnboardingRequestObject) (DismissOnboardingResponseObject, error)
+	// RestoreOnboardingStep Show one step again
+	// (DELETE /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal)
+	RestoreOnboardingStep(ctx context.Context, request RestoreOnboardingStepRequestObject) (RestoreOnboardingStepResponseObject, error)
+	// DismissOnboardingStep Hide one step for the organization
+	// (POST /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal)
+	DismissOnboardingStep(ctx context.Context, request DismissOnboardingStepRequestObject) (DismissOnboardingStepResponseObject, error)
 	// GetOrganizationPlan The org's plan, what it allows, and what the org uses now (its members, platform operators)
 	// (GET /v1/organizations/{org_id}/plan)
 	GetOrganizationPlan(ctx context.Context, request GetOrganizationPlanRequestObject) (GetOrganizationPlanResponseObject, error)
@@ -5496,6 +6068,138 @@ func (sh *strictHandler) CreateOrgExport(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateOrgExportResponseObject); ok {
 		if err := validResponse.VisitCreateOrgExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOnboarding operation middleware
+func (sh *strictHandler) GetOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetOnboardingRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOnboarding(ctx, request.(GetOnboardingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOnboarding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOnboardingResponseObject); ok {
+		if err := validResponse.VisitGetOnboardingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreOnboarding operation middleware
+func (sh *strictHandler) RestoreOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request RestoreOnboardingRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreOnboarding(ctx, request.(RestoreOnboardingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreOnboarding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreOnboardingResponseObject); ok {
+		if err := validResponse.VisitRestoreOnboardingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DismissOnboarding operation middleware
+func (sh *strictHandler) DismissOnboarding(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request DismissOnboardingRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DismissOnboarding(ctx, request.(DismissOnboardingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DismissOnboarding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DismissOnboardingResponseObject); ok {
+		if err := validResponse.VisitDismissOnboardingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreOnboardingStep operation middleware
+func (sh *strictHandler) RestoreOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId StepId) {
+	var request RestoreOnboardingStepRequestObject
+
+	request.OrgId = orgId
+	request.StepId = stepId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreOnboardingStep(ctx, request.(RestoreOnboardingStepRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreOnboardingStep")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreOnboardingStepResponseObject); ok {
+		if err := validResponse.VisitRestoreOnboardingStepResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DismissOnboardingStep operation middleware
+func (sh *strictHandler) DismissOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId StepId) {
+	var request DismissOnboardingStepRequestObject
+
+	request.OrgId = orgId
+	request.StepId = stepId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DismissOnboardingStep(ctx, request.(DismissOnboardingStepRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DismissOnboardingStep")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DismissOnboardingStepResponseObject); ok {
+		if err := validResponse.VisitDismissOnboardingStepResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

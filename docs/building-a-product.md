@@ -205,9 +205,24 @@ A failed audit write fails the change. The example records
 `.member_removed`, `.cover_set` and `.cover_removed`; they appear in the
 admin app's audit log with no other change.
 
-## 9. Configure the template's services
+## 9. An onboarding step
 
-The template's services learn the product from four settings.
+```go
+var OnboardingStep = onboarding.Step{ID: "create_project", Label: "Create your first project",
+    Href: "/projects/new", App: "projects", Service: "projects"}
+```
+
+The organization service learns it from `ONBOARDING_STEPS` and lists it on
+the org's checklist after the core's steps. Whether it is done is never
+stored: the organization service asks the product, at
+`GET /v1/internal/organizations/{org_id}/onboarding/create_project` with
+its own token, every time the checklist is read, and the product counts its
+projects ([onboarding.md](onboarding.md)). The product down, the step shows
+as unknown and the rest of the checklist still answers.
+
+## 10. Configure the template's services
+
+The template's services learn the product from five settings.
 `cmd/projects-env` prints them from the code, so a deployment sets exactly
 what the code declares:
 
@@ -221,13 +236,14 @@ go run ./examples/projects/cmd/projects-env
 | `PERMISSION_GROUPS` | authorization |
 | `NOTIFICATION_CATEGORIES` | notification |
 | `DATA_OWNERS` | every template service |
+| `ONBOARDING_STEPS` | organization |
 | `PROJECTS_URL` | organization, user |
 
 Locally they go in `deploy/.env`, which the compose stack passes to every
 service. Deployed, they go in Terraform's `service_env`, and the data-owner
 manifest in `data_owners_file` ([operations.md](operations.md#a-products-own-services)).
 
-## 10. The frontend app
+## 11. The frontend app
 
 The web half is in the frontend repository:
 [b2b-frontend-template/examples/projects](https://github.com/UnityEvolv/b2b-frontend-template/blob/main/examples/projects/README.md).
@@ -270,7 +286,7 @@ When your product is under way, delete the example:
 3. Optionally delete the `without-examples` job in
    `.github/workflows/go.yml` and `scripts/without-examples.sh`.
 4. Remove the example's settings (`PLANS`, `PERMISSION_GROUPS`,
-   `NOTIFICATION_CATEGORIES`, `DATA_OWNERS`, `PROJECTS_URL`) from
+   `NOTIFICATION_CATEGORIES`, `DATA_OWNERS`, `ONBOARDING_STEPS`, `PROJECTS_URL`) from
    `deploy/.env` if you added them.
 
 Nothing else in the template refers to it. `scripts/without-examples.sh`

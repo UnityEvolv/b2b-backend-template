@@ -29,6 +29,15 @@ type DataExport struct {
 	LastModifiedAt time.Time
 }
 
+type OnboardingDismissal struct {
+	OrgID          uuid.UUID
+	StepID         string
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
 type OrgDataKey struct {
 	OrgID          uuid.UUID
 	ID             uuid.UUID

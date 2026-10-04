@@ -411,3 +411,8 @@ UPDATE local_accounts SET email = @email, email_verified_at = now() WHERE user_i
 -- name: DeleteSessionsOfUser :execrows
 -- global: a person's sessions, deleted with them once each end was pushed.
 DELETE FROM sessions WHERE user_id = @user_id;
+
+-- name: CountInvitesOfOrg :one
+-- Every invite the org ever sent, whatever became of it: whether it has
+-- invited anyone, for its onboarding checklist.
+SELECT count(*) FROM invites WHERE org_id = @org_id;

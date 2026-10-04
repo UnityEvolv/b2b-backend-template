@@ -2406,6 +2406,40 @@ paths:
           description: Ended
         default:
           $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/onboarding/{step_id}:
+    get:
+      operationId: getOnboardingStep
+      summary: Whether one of this service's onboarding steps is done (the organization service only)
+      description: |
+        Derived now, never stored (docs/onboarding.md). invite_teammates:
+        the organization has sent at least one invite, whatever became of
+        it, or has a second active member. set_up_sso: its identity
+        provider is saved and active. Any other step is not this service's
+        (404).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: step_id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 51
+      responses:
+        '200':
+          description: Whether it is done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStatus'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearer:
@@ -3267,3 +3301,9 @@ components:
         read_only:
           type: boolean
           description: Always true in the template; every write is refused with impersonation.read_only.
+    OnboardingStatus:
+      type: object
+      required: [done]
+      properties:
+        done:
+          type: boolean

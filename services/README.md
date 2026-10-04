@@ -123,6 +123,7 @@ configuration:
 | `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
 | `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
 | `NOTIFICATION_CATEGORIES` | notification | the product's notification categories, JSON ([docs/notifications.md](../docs/notifications.md)) |
+| `ONBOARDING_STEPS` | organization | the product's onboarding checklist steps, JSON, each asked of its service at `<SERVICE>_URL` ([docs/onboarding.md](../docs/onboarding.md)) |
 | `SCIM_GROUP_SYNC` | user | the data owner that carries a SCIM group to what it grants: its name in `DATA_OWNERS` ([docs/users.md](../docs/users.md#scim)). Unset, groups grant nothing |
 | `IDENTITY_URL` | every service | where API keys and personal access tokens are resolved, on every request that brings one ([docs/api-keys.md](../docs/api-keys.md)); unset, a service refuses keys. Required by organization and user already |
 | `API_KEY_PREFIX`, `PAT_PREFIX` | identity | what API keys and personal access tokens start with: `<PRODUCT_ID>_ak_` and `<PRODUCT_ID>_pat_` by default ([docs/rebranding.md](../docs/rebranding.md)) |

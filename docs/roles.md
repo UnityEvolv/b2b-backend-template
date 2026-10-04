@@ -85,11 +85,13 @@ user service and the org's configuration from its own table. Tests use
 `authz.Static{"org/membership": grant}`.
 
 Enforced today: people, invites, sessions and MFA resets (users), the plan
-and invoices (billing), the audit log (audit), organization settings and
-reading the domain claim (settings), the identity provider, read and
-changed (sso), the org's API keys (api_keys), role assignment, permission
-configuration, ownership transfer, deleting the organization and claiming
-or verifying its domain (Owner only).
+and invoices (billing), the audit log (audit), organization settings, the
+onboarding checklist and its dismissals, reading the domain claim, and
+reading support access, consents and who looked (settings), the identity
+provider, read and changed (sso), the org's API keys (api_keys), role
+assignment, permission configuration, ownership transfer, deleting the
+organization, claiming or verifying its domain, consenting to support
+impersonation and turning standing support access on (Owner only).
 
 ## API keys and personal access tokens
 

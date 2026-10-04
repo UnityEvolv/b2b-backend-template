@@ -1057,6 +1057,117 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/onboarding:
+    get:
+      operationId: getOnboarding
+      summary: The organization's first-run checklist, as it stands now
+      description: |
+        Every registered step, the core's then the product's, each derived
+        now from the data that says whether it is done; nothing is a stored
+        flag. Each step's service is asked at once, within two seconds: one
+        that does not answer leaves its step unknown, never the checklist
+        failed. Dismissals are the organization's. Needs the settings
+        permission (an Owner or an Admin).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The checklist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Onboarding'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/onboarding/dismissal:
+    post:
+      operationId: dismissOnboarding
+      summary: Hide the whole checklist for the organization
+      description: Needs the settings permission. Audited (onboarding.dismissed).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '204':
+          description: Hidden
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: restoreOnboarding
+      summary: Show the checklist again
+      description: Needs the settings permission. Audited (onboarding.restored).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '204':
+          description: Shown
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal:
+    post:
+      operationId: dismissOnboardingStep
+      summary: Hide one step for the organization
+      description: Needs the settings permission. Audited (onboarding.step_dismissed).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/StepId'
+      responses:
+        '204':
+          description: Hidden
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: restoreOnboardingStep
+      summary: Show one step again
+      description: Needs the settings permission. Audited (onboarding.step_restored).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/StepId'
+      responses:
+        '204':
+          description: Shown
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearer:
@@ -1067,6 +1178,13 @@ components:
         Issued by the identity service (the local stub issuer in development).
         Scoped to one org; a token for another org is refused with 403.
   parameters:
+    StepId:
+      name: step_id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 51
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1563,3 +1681,43 @@ components:
           additionalProperties:
             type: string
           description: The inputs that were wrong, when there were any.
+    Onboarding:
+      type: object
+      required: [org_id, dismissed, complete, steps]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        dismissed:
+          type: boolean
+          description: The whole checklist is hidden for the organization.
+        complete:
+          type: boolean
+          description: Every step is done or dismissed, and none is unknown.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingStep'
+    OnboardingStep:
+      type: object
+      required: [id, label, href, app, done, dismissed, unknown]
+      properties:
+        id:
+          type: string
+          description: Stable; the core's are verify_domain, invite_teammates, set_up_sso and choose_plan, and a product adds its own. Not an enum.
+        label:
+          type: string
+        href:
+          type: string
+          description: Where the step is done, a path in app.
+        app:
+          type: string
+          description: The web app href is in, by name (admin unless the step says otherwise).
+        done:
+          type: boolean
+          description: Derived now from the organization's data. False when unknown.
+        dismissed:
+          type: boolean
+        unknown:
+          type: boolean
+          description: The service that knows did not answer in time; done is not known.

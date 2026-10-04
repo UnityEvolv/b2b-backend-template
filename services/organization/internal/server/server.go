@@ -17,6 +17,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/onboarding"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
@@ -36,6 +37,10 @@ type Server struct {
 	brand Branding
 	// off is what offboarding and exports call out to.
 	off Offboarding
+	// steps is the onboarding checklist, and stepChecker asks the other
+	// services whether theirs are done (WithOnboarding).
+	steps       *onboarding.Registry
+	stepChecker onboarding.Checker
 }
 
 // WithOffboarding is s with the offboarding and export dependencies.
@@ -89,31 +94,36 @@ func (s *Server) Wrapper() kms.Wrapper { return s.wrapper }
 // Limits is this API's rate limits: one line per endpoint. An
 // endpoint not listed is limited only by the per-address ceiling.
 var Limits = map[string]ratelimit.Bound{
-	"POST /v1/organizations":                                        ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations":                                         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}":                                ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"PATCH /v1/organizations/{org_id}":                              ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"GET /v1/plans":                                                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/plan":                           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/plan":                           ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/plan-change":                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"GET /v1/organizations/{org_id}/plan-overrides":                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"PUT /v1/organizations/{org_id}/plan-overrides/{kind}/{key}":    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"DELETE /v1/organizations/{org_id}/plan-overrides/{kind}/{key}": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/signups":                                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/signups/complete":                                     ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/organizations/{org_id}/close":                         ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/organizations/{org_id}/reopen":                        ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/organizations/{org_id}/reopen-link":                   ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/organizations/{org_id}/retention":                      ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"PUT /v1/organizations/{org_id}/retention":                      ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/organizations/{org_id}/exports":                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/exports":                        ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"POST /v1/me/exports":                                           ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/me/exports":                                            ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/domain":                         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/domain":                         ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"POST /v1/organizations/{org_id}/domain/verify":                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"POST /v1/organizations":                                                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations":                                                  ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}":                                         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PATCH /v1/organizations/{org_id}":                                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"GET /v1/plans":                                                          ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/plan":                                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PUT /v1/organizations/{org_id}/plan":                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/plan-change":                             ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"GET /v1/organizations/{org_id}/plan-overrides":                          ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"PUT /v1/organizations/{org_id}/plan-overrides/{kind}/{key}":             ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"DELETE /v1/organizations/{org_id}/plan-overrides/{kind}/{key}":          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/signups":                                                       ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/signups/complete":                                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/organizations/{org_id}/close":                                  ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/reopen":                                 ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/organizations/{org_id}/reopen-link":                            ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/organizations/{org_id}/retention":                               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"PUT /v1/organizations/{org_id}/retention":                               ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/exports":                                ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/exports":                                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"POST /v1/me/exports":                                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/me/exports":                                                     ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/domain":                                  ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PUT /v1/organizations/{org_id}/domain":                                  ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"POST /v1/organizations/{org_id}/domain/verify":                          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"GET /v1/organizations/{org_id}/onboarding":                              ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"POST /v1/organizations/{org_id}/onboarding/dismissal":                   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/onboarding/dismissal":                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"POST /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal":   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/onboarding/steps/{step_id}/dismissal": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in the

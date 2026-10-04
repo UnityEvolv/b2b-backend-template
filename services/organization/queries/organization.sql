@@ -47,7 +47,8 @@ INSERT INTO purged_organizations (org_id, purged_at) VALUES (@org_id, @purged_at
 SELECT (SELECT count(*) FROM organizations o WHERE o.org_id = @org_id)
      + (SELECT count(*) FROM org_data_keys k WHERE k.org_id = @org_id)
      + (SELECT count(*) FROM data_exports e WHERE e.org_id = @org_id)
-     + (SELECT count(*) FROM plan_overrides p WHERE p.org_id = @org_id) AS remaining;
+     + (SELECT count(*) FROM plan_overrides p WHERE p.org_id = @org_id)
+     + (SELECT count(*) FROM onboarding_dismissals d WHERE d.org_id = @org_id) AS remaining;
 
 -- name: InsertExport :one
 INSERT INTO data_exports (org_id, id, kind, user_id, idempotency_key)

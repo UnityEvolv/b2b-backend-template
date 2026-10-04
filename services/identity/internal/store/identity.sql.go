@@ -77,6 +77,19 @@ func (q *Queries) ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (MfaTo
 	return i, err
 }
 
+const countInvitesOfOrg = `-- name: CountInvitesOfOrg :one
+SELECT count(*) FROM invites WHERE org_id = $1
+`
+
+// Every invite the org ever sent, whatever became of it: whether it has
+// invited anyone, for its onboarding checklist.
+func (q *Queries) CountInvitesOfOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countInvitesOfOrg, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOrgRows = `-- name: CountOrgRows :one
 SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = $1)
      + (SELECT count(*) FROM session_policies p WHERE p.org_id = $1)

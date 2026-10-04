@@ -44,6 +44,7 @@ template's services, rendered from the same values by `product.Env()`.
 | storage purpose | `project-cover`: JPEG, PNG or WebP, at most 2 MB | `product.CoverImage` | a package variable, in `storage.Default` |
 | rate-limit rule | `project-create`: 20 a minute per membership | `product.CreateRule` | a package variable, in `ratelimit.Default`, bound in `server.Limits` |
 | audit | `project.created`, `.updated`, `.deleted`, `.member_added`, `.member_removed`, `.cover_set`, `.cover_removed` | `internal/server` (`Server.record`) | `pkg/audit`, to the audit service with its own token |
+| onboarding step | `create_project`, "Create your first project", done while the org has a project | `product.OnboardingStep`, `internal/server/onboarding.go` | `ONBOARDING_STEPS` on the organization service, which asks `GET /v1/internal/organizations/{org_id}/onboarding/create_project` at `PROJECTS_URL` when the checklist is read ([docs/onboarding.md](../../docs/onboarding.md)) |
 | support sessions | read-only, every request audited | `main.go`: `verifier.WithImpersonationAudit(audit.Impersonation(...))` | `pkg/auth` refuses its writes, `pkg/audit` records its reads ([docs/impersonation.md](../../docs/impersonation.md)) |
 
 ### Its service, schema and role
@@ -225,8 +226,9 @@ ways, the permission group configured per org, the plan cap and an upgrade, the
 cap and the downgrade checklist as the organization service shows them,
 idempotent creates, paging, the audit log, the notification in the member's
 feed and the event on the live bus, the cover upload, the rate limit, the org
-and personal exports, the purge of a closed org and the erasure of a deleted
-member. The template's services are not imported: their packages are
+and personal exports, the purge of a closed org, the erasure of a deleted
+member, API keys, and its step on the onboarding checklist (done once a
+project exists, unknown while the product is down). The template's services are not imported: their packages are
 internal to them, and a product never imports a service. Only the clock is
 stood in for: the purge's thirty days and the deletion's fourteen are moved
 back in the database before the service's own daily pass runs.

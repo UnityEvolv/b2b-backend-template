@@ -52,6 +52,7 @@ x-service-env: &service-env
   PERMISSION_GROUPS: ${PERMISSION_GROUPS:-}
   DATA_OWNERS: ${DATA_OWNERS:-}
   NOTIFICATION_CATEGORIES: ${NOTIFICATION_CATEGORIES:-}
+  ONBOARDING_STEPS: ${ONBOARDING_STEPS:-}
   # The data owner that carries SCIM groups to what they grant (user).
   SCIM_GROUP_SYNC: ${SCIM_GROUP_SYNC:-}
 

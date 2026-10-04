@@ -16,7 +16,7 @@ API.
 | service | schema | role | owns |
 | --- | --- | --- | --- |
 | identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, support impersonation and its consents, the token issuer and its keys |
-| organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys |
+| organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys, the onboarding checklist |
 | user | `users` | `svc_users` | users, memberships, profiles, bulk import, SCIM 2.0 |
 | authorization | `authz` | `svc_authz` | each org's permission configuration, ownership transfer, the permission check |
 | audit | `audit` | `svc_audit` | the append-only audit log |
@@ -57,6 +57,7 @@ another service.
 | `livebus` | the live-session event bus and its type registry ([sessions.md](sessions.md#the-push)) |
 | `logging` | structured JSON logs, without personal data |
 | `notifycat` | the notification category registry ([notifications.md](notifications.md)) |
+| `onboarding` | the onboarding checklist's step registry and the endpoint each step's service answers ([onboarding.md](onboarding.md)) |
 | `orgdata` | the shapes of the export, purge and erase endpoints every data owner answers |
 | `plan` | the plan registry and the limit and feature checks ([plans.md](plans.md)) |
 | `ratelimit` | the rate limiter and its rule registry |
@@ -82,6 +83,7 @@ process at start, so a mistake never reaches a request.
 | dataowner | services that export, purge, erase or decrypt | `dataowner.Default.Register` | `DATA_OWNERS`, `<NAME>_URL` | every service; Terraform, through `cmd/dataowners` |
 | notifycat | notification categories, with copy and default channels | `notifycat.Default.Register` | `NOTIFICATION_CATEGORIES` | notification |
 | livebus | live-session event types | `livebus.Default.Register` | none | the process that publishes |
+| onboarding | first-run checklist steps, with the service that says whether each is done | `onboarding.Default.Register` | `ONBOARDING_STEPS`, `<SERVICE>_URL` | organization |
 
 Storage purposes, rate-limit rules and event types have no environment seam
 because only the product's own code uses them: they are registered in the

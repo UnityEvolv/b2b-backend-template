@@ -194,6 +194,7 @@ var Limits = map[string]ratelimit.Bound{
 	"POST /v1/platform/impersonations":                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"POST /v1/session/impersonation/refresh":                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
 	"POST /v1/session/impersonation/end":                                  ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/internal/organizations/{org_id}/onboarding/{step_id}":        ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in the

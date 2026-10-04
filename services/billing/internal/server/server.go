@@ -183,10 +183,11 @@ func (s *Server) account(ctx context.Context, org uuid.UUID) (store.Account, err
 	}
 	// The org's plan is contractual: invoiced by contract, every
 	// automatic path skipped.
-	band, err := s.orgs.Band(ctx, org)
+	ent, err := s.orgs.Entitlements(ctx, org)
 	if err != nil {
 		return a, err
 	}
+	band := ent.Band
 	if plan.Contractual(band) && a.State != "invoiced" {
 		return s.update(ctx, org, func(a *store.Account) error {
 			a.State, a.Band, a.AutoUpgrade = "invoiced", string(band), false
@@ -328,10 +329,16 @@ func (s *Server) view(ctx context.Context, org uuid.UUID, a store.Account, grant
 		return api.Billing{}, err
 	}
 	band := plan.Band(a.Band)
+	// The cap the org has: its band's, or a platform operator's override.
+	ent, err := s.orgs.Entitlements(ctx, org)
+	if err != nil {
+		return api.Billing{}, err
+	}
+	ent.Band = band
 	out := api.Billing{
 		Band: api.Band(a.Band), State: api.BillingState(a.State), AutoUpgrade: a.AutoUpgrade,
 		CanManageAutoUpgrade: grant.Role == authz.Owner, Invoiced: a.State == "invoiced",
-		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: plan.For(band).Cap(plan.Users),
+		TrialAvailable: !a.TrialUsed && a.State == "free", ActiveMembers: active, UsersCap: ent.Cap(plan.Users),
 		Prices: map[string]api.Price{}, Bands: offered(), ProviderConfigured: s.provider != nil,
 	}
 	for b, p := range s.pricesNow(ctx) {
@@ -730,18 +737,26 @@ func (s *Server) MakeRoom(ctx context.Context, req api.MakeRoomRequestObject) (a
 	}
 	from := plan.Band(a.Band)
 	members := req.Body.Members
-	if cap := plan.For(from).Cap(plan.Users); cap == plan.Unlimited || members <= cap {
+	ent, err := s.orgs.Entitlements(ctx, req.OrgId)
+	if err != nil {
+		return nil, err
+	}
+	ent.Band = from
+	if cap := ent.Cap(plan.Users); cap == plan.Unlimited || members <= cap {
 		return api.MakeRoom200JSONResponse{Band: api.Band(from), Upgraded: false}, nil
 	}
 	refuse := func() (api.MakeRoomResponseObject, error) {
-		r, _ := plan.AsRefusal(plan.CheckUsers(from, plan.For(from).Cap(plan.Users)))
+		r, _ := plan.AsRefusal(ent.CheckUsers(ent.Cap(plan.Users)))
 		msg := "The plan has no room for more members."
 		if r != nil {
 			msg = r.Message
 		}
 		return api.MakeRoom409JSONResponse(conflict(plan.Code, msg)), nil
 	}
-	eligible := s.provider != nil && a.AutoUpgrade && a.CardLast4.Valid && a.SubscriptionRef.Valid &&
+	// A seat cap set by an override is the organization's agreement: a
+	// band change would not move it, so billing never charges for one.
+	_, agreed := ent.LimitOverride(plan.Users)
+	eligible := s.provider != nil && a.AutoUpgrade && a.CardLast4.Valid && a.SubscriptionRef.Valid && !agreed &&
 		(a.State == "active" || a.State == "trialing") && plan.Rank(from) > plan.Rank(plan.Lowest())
 	to, ok := bandFor(members)
 	if !eligible || !ok || plan.Rank(to) <= plan.Rank(from) {
@@ -783,7 +798,12 @@ func (s *Server) MembersChanged(ctx context.Context, req api.MembersChangedReque
 		return nil, err
 	}
 	band := plan.Band(a.Band)
-	cap := plan.For(band).Cap(plan.Users)
+	ent, err := s.orgs.Entitlements(ctx, req.OrgId)
+	if err != nil {
+		return nil, err
+	}
+	ent.Band = band
+	cap := ent.Cap(plan.Users)
 	notice := "warn80:" + string(band)
 	if cap == plan.Unlimited || a.State == "invoiced" || req.Body.Members*5 < cap*4 || slices.Contains(a.Notices, notice) {
 		return api.MembersChanged204Response{}, nil

@@ -553,13 +553,16 @@ func (r *Registry) Downgrade(from, to Band) []Consequence {
 }
 
 // Description is one band as the plan endpoint shows it: every registered
-// limit's cap (Unlimited for none) and the features on it.
+// limit's cap (Unlimited for none) and the features on it. Described for
+// one org (DescribeOf), the caps and features are what the org may do, and
+// Overrides is the overrides in force that changed them.
 type Description struct {
 	Band        Band
 	Label       string
 	Contractual bool
 	Limits      map[string]int
 	Features    []string
+	Overrides   []Override
 }
 
 // Describe is band b, described.

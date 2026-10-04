@@ -14,30 +14,28 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/organization/internal/store"
 )
 
-func toPlanLimits(o store.Organization) api.PlanLimits {
-	d := plan.Describe(plan.Band(o.Plan))
-	return api.PlanLimits{OrgId: o.OrgID, Plan: api.Plan(d.Band), Contractual: d.Contractual, Limits: d.Limits, Features: d.Features}
+// toPlanLimits is what the org may do, described for a service: the band,
+// every limit and feature with its overrides in force applied, and those
+// overrides, so the service checks the band's value then the override.
+func (s *Server) toPlanLimits(o store.Organization, e plan.Entitlements) api.PlanLimits {
+	d := e.Describe()
+	return api.PlanLimits{OrgId: o.OrgID, Plan: api.Plan(d.Band), Contractual: d.Contractual, Limits: d.Limits, Features: d.Features, Overrides: s.inForce(d)}
 }
 
-// GetPlan is the org's plan and its limits, for a service about to gate an
-// action. Read every time; nothing here is cached.
+// GetPlan is the org's plan, its limits and its overrides, for a service
+// about to gate an action. Read every time; nothing here is cached.
 func (s *Server) GetPlan(ctx context.Context, req api.GetPlanRequestObject) (api.GetPlanResponseObject, error) {
 	if err := auth.RequireService(ctx); err != nil {
 		return api.GetPlan403JSONResponse{Code: httpx.CodeForbidden, Message: "Services only."}, nil
 	}
-	var org store.Organization
-	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
-		var err error
-		org, err = store.New(tx).GetOrganization(ctx, req.OrgId)
-		return err
-	})
+	org, e, err := s.orgAndOverrides(ctx, req.OrgId)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return api.GetPlan404JSONResponse{Code: "organization.not_found", Message: "No such organization."}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return api.GetPlan200JSONResponse(toPlanLimits(org)), nil
+	return api.GetPlan200JSONResponse(s.toPlanLimits(org, e)), nil
 }
 
 // PreviewPlanChange is the checklist an admin confirms before a downgrade:
@@ -130,6 +128,7 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 		return api.SetPlanInternal400JSONResponse{ErrorJSONResponse: invalid("Not a plan.", map[string]string{"plan": "one of " + bandList()})}, nil
 	}
 	var before, org store.Organization
+	var e plan.Entitlements
 	enterprise := false
 	err = s.cluster.Tx(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
@@ -141,11 +140,13 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 			enterprise = true
 			return nil
 		}
-		if before.Plan == string(to) {
-			org = before
-			return nil
+		org = before
+		if before.Plan != string(to) {
+			if org, err = q.UpdateOrganizationPlan(ctx, store.UpdateOrganizationPlanParams{OrgID: req.OrgId, Plan: string(to)}); err != nil {
+				return err
+			}
 		}
-		org, err = q.UpdateOrganizationPlan(ctx, store.UpdateOrganizationPlanParams{OrgID: req.OrgId, Plan: string(to)})
+		e, err = entitlements(ctx, q, org)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -167,7 +168,7 @@ func (s *Server) SetPlanInternal(ctx context.Context, req api.SetPlanInternalReq
 			return nil, err
 		}
 	}
-	return api.SetPlanInternal200JSONResponse(toPlanLimits(org)), nil
+	return api.SetPlanInternal200JSONResponse(s.toPlanLimits(org, e)), nil
 }
 
 // ListPlans is the plan catalogue: every band, lowest first, with its
@@ -200,21 +201,16 @@ func (s *Server) GetOrganizationPlan(ctx context.Context, req api.GetOrganizatio
 	if err := auth.RequireOrgOrPlatform(ctx, req.OrgId.String()); err != nil {
 		return api.GetOrganizationPlan403JSONResponse{Code: httpx.CodeForbidden, Message: "Not permitted for this organization."}, nil
 	}
-	var org store.Organization
-	err := s.cluster.Read(ctx, req.OrgId.String(), func(tx pgx.Tx) error {
-		var err error
-		org, err = store.New(tx).GetOrganization(ctx, req.OrgId)
-		return err
-	})
+	org, e, err := s.orgAndOverrides(ctx, req.OrgId)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return api.GetOrganizationPlan404JSONResponse{Code: "organization.not_found", Message: "No such organization."}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	d := plan.Describe(plan.Band(org.Plan))
+	d := e.Describe()
 	out := api.OrganizationPlan{OrgId: org.OrgID, Plan: api.Plan(d.Band), Label: d.Label, Contractual: d.Contractual,
-		Limits: d.Limits, Features: d.Features, Usage: map[string]int{}}
+		Limits: d.Limits, Features: d.Features, Overrides: s.inForce(d), Usage: map[string]int{}}
 	if s.deps.Users != nil {
 		active, err := s.deps.Users.CountMembers(ctx, org.OrgID)
 		if err != nil {

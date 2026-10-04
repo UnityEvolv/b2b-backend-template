@@ -55,7 +55,7 @@ func (s *Server) admit(ctx context.Context, q *store.Queries, orgID uuid.UUID, k
 	if strings.EqualFold(orgID.String(), auth.PlatformOrg) {
 		return nil, nil
 	}
-	band, err := s.plans.Band(ctx, orgID.String())
+	ent, err := s.plans.Entitlements(ctx, orgID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *Server) admit(ctx context.Context, q *store.Queries, orgID uuid.UUID, k
 	if err != nil {
 		return nil, err
 	}
-	if err := plan.CheckUsers(band, int(active)); err != nil {
+	if err := ent.CheckUsers(int(active)); err != nil {
 		// Past the cap: billing upgrades where the org has that on, and
 		// only then is the member let in.
 		if s.capacity != nil {

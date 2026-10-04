@@ -306,8 +306,8 @@ func (s *Server) ReconcileAll(ctx context.Context) error {
 		return err
 	}
 	for _, org := range orgs {
-		band, err := s.plans.Band(ctx, org.String())
-		if err != nil || plan.CheckFeature(band, plan.SCIM) != nil {
+		ent, err := s.plans.Entitlements(ctx, org.String())
+		if err != nil || ent.CheckFeature(plan.SCIM) != nil {
 			continue
 		}
 		if err := s.Reconcile(ctx, org); err != nil {

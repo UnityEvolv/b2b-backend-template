@@ -19,7 +19,8 @@ import (
 // Orgs is what billing needs of the organization service: the plan as it
 // stands, moving it, and the org's name for the provider's customer.
 type Orgs interface {
-	Band(ctx context.Context, org uuid.UUID) (plan.Band, error)
+	// Entitlements is the org's band and its overrides, read now.
+	Entitlements(ctx context.Context, org uuid.UUID) (plan.Entitlements, error)
 	SetPlan(ctx context.Context, org uuid.UUID, band plan.Band, reason string) error
 	Name(ctx context.Context, org uuid.UUID) (string, error)
 }
@@ -108,8 +109,8 @@ func (s *Services) do(ctx context.Context, method, u string, body, out any) (int
 	return resp.StatusCode, nil
 }
 
-func (s *Services) Band(ctx context.Context, org uuid.UUID) (plan.Band, error) {
-	return s.plans.Band(ctx, org.String())
+func (s *Services) Entitlements(ctx context.Context, org uuid.UUID) (plan.Entitlements, error) {
+	return s.plans.Entitlements(ctx, org.String())
 }
 
 func (s *Services) SetPlan(ctx context.Context, org uuid.UUID, band plan.Band, reason string) error {

@@ -46,7 +46,6 @@ type Entitlements struct {
 // Of is band b with no overrides.
 func Of(b Band) Entitlements { return Entitlements{Band: b} }
 
-
 // LimitOverride is the override of l in force now, if there is one.
 func (e Entitlements) LimitOverride(l Limit) (Override, bool) {
 	t := time.Now()

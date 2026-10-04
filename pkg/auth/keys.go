@@ -101,7 +101,9 @@ type KeyRefusal struct {
 	RetryAfter int
 }
 
-func (r *KeyRefusal) Error() string { return fmt.Sprintf("auth: key refused: %d %s", r.Status, r.Body.Code) }
+func (r *KeyRefusal) Error() string {
+	return fmt.Sprintf("auth: key refused: %d %s", r.Status, r.Body.Code)
+}
 
 // WithKeys is v accepting API keys and personal access tokens too, each
 // resolved by r on every request. Without it, a key is refused like any

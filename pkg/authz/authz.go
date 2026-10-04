@@ -4,9 +4,9 @@
 // protected action. Enforced on the server, never on the client.
 //
 // The groups are a registry the product fills at start (see Registry): the
-// template registers billing, users, audit and sso, and a product adds its
-// own ("projects"), each with the roles that hold it by default. The
-// Owner-only actions and the Admin's settings are fixed.
+// template registers billing, users, audit, sso and webhooks, and a
+// product adds its own ("projects"), each with the roles that hold it by
+// default. The Owner-only actions and the Admin's settings are fixed.
 //
 // Roles live on the membership, one per org: the same person can be an
 // Owner in one org and a Guest in another.
@@ -59,6 +59,8 @@ const (
 	Users   Permission = "users"   // invite, deactivate, edit, bulk import
 	Audit   Permission = "audit"   // audit log access
 	SSO     Permission = "sso"     // the org's single sign-on identity provider
+	// Webhooks is the org's outbound webhook endpoints and their deliveries.
+	Webhooks Permission = "webhooks"
 	// Settings is the org's own settings: name, time zone, and reading the
 	// domain claim (claiming one is ClaimDomain, the Owner's). Admin
 	// has it and it is not a toggle; an Owner always has it.
@@ -105,13 +107,14 @@ type Registry struct {
 }
 
 // New is a registry with the template's own groups: billing for Billing
-// Admin, and users, audit and sso for Admin.
+// Admin, and users, audit, sso and webhooks for Admin.
 func New() *Registry {
 	r := &Registry{}
 	r.Register(Group{Key: Billing, Label: "Billing", Description: "The plan, invoices, payment method and usage against the allowance.", Default: []Role{BillingAdmin}})
 	r.Register(Group{Key: Users, Label: "Users", Description: "Invite, deactivate and edit people, import them in bulk, and end their sessions.", Default: []Role{Admin}})
 	r.Register(Group{Key: Audit, Label: "Audit log", Description: "Read the audit log.", Default: []Role{Admin}})
 	r.Register(Group{Key: SSO, Label: "Single sign-on", Description: "Configure the organization's identity provider.", Default: []Role{Admin}})
+	r.Register(Group{Key: Webhooks, Label: "Webhooks", Description: "Add, change and remove webhook endpoints, rotate their secrets, and see and resend deliveries.", Default: []Role{Admin}})
 	return r
 }
 
@@ -262,8 +265,8 @@ type Config struct {
 }
 
 // Defaults is the configuration a new org starts with, from Default: Admin
-// gets users, audit and sso with billing off; Billing Admin gets billing;
-// a product's groups go where they default to.
+// gets users, audit, sso and webhooks with billing off; Billing Admin
+// gets billing; a product's groups go where they default to.
 func Defaults() Config { return Default.Defaults() }
 
 // Validate refuses a group that is not registered in Default.

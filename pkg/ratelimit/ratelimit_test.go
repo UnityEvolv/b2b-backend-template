@@ -148,7 +148,7 @@ func TestProductRuleIsEnforced(t *testing.T) {
 	for _, x := range ratelimit.NewRegistry().Rules() {
 		names = append(names, x.Name)
 	}
-	if strings.Join(names, ",") != "address,unauthenticated,read,write,signin-failed,password-reset,invite-send,scim,webhook" {
+	if strings.Join(names, ",") != "address,unauthenticated,read,write,signin-failed,password-reset,invite-send,scim,webhook,webhook-send,webhook-events" {
 		t.Errorf("template rules: %v", names)
 	}
 

@@ -49,6 +49,8 @@ const (
 	SCIM                    Feature = "scim"
 	AuditExport             Feature = "audit_export"
 	CustomerHostedDataPlane Feature = "customer_hosted_data_plane"
+	// Webhooks is outbound webhooks to the org's own endpoints.
+	Webhooks Feature = "webhooks"
 )
 
 // BandSpec is one band: its name, what it caps and what it allows.
@@ -137,6 +139,7 @@ func New() *Registry {
 	r.RegisterFeature(FeatureSpec{Key: SCIM, Label: "SCIM provisioning", LostCode: "scim_stops", LostMessage: "SCIM provisioning stops; people already provisioned stay."})
 	r.RegisterFeature(FeatureSpec{Key: AuditExport, Label: "audit export", LostCode: "audit_export_stops", LostMessage: "Audit export is no longer available; the log itself is kept."})
 	r.RegisterFeature(FeatureSpec{Key: CustomerHostedDataPlane, Label: "a customer-hosted data plane", LostCode: "data_plane_contractual", LostMessage: "The customer-hosted data plane is contractual; talk to us before changing this."})
+	r.RegisterFeature(FeatureSpec{Key: Webhooks, Label: "webhooks", LostCode: "webhooks_stop", LostMessage: "Webhook deliveries stop and no endpoint can be added; the endpoints and their history are kept."})
 	return r
 }
 
@@ -145,9 +148,9 @@ func New() *Registry {
 func DefaultBands() []BandSpec {
 	return []BandSpec{
 		{Name: "free", Limits: map[Limit]int{Users: 10}},
-		{Name: "team", Limits: map[Limit]int{Users: 50}},
-		{Name: "business", Limits: map[Limit]int{Users: 200}},
-		{Name: "enterprise", Contractual: true, Features: []Feature{SCIM, AuditExport, CustomerHostedDataPlane}},
+		{Name: "team", Limits: map[Limit]int{Users: 50}, Features: []Feature{Webhooks}},
+		{Name: "business", Limits: map[Limit]int{Users: 200}, Features: []Feature{Webhooks}},
+		{Name: "enterprise", Contractual: true, Features: []Feature{Webhooks, SCIM, AuditExport, CustomerHostedDataPlane}},
 	}
 }
 

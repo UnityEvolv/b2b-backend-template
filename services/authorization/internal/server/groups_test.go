@@ -37,10 +37,10 @@ func TestProductPermissionGroup(t *testing.T) {
 	for _, g := range list {
 		keys = append(keys, g.(map[string]any)["key"].(string))
 	}
-	if len(keys) != 5 || keys[0] != "billing" || keys[1] != "users" || keys[2] != "audit" || keys[3] != "sso" || keys[4] != "projects" {
+	if len(keys) != 6 || keys[0] != "billing" || keys[1] != "users" || keys[2] != "audit" || keys[3] != "sso" || keys[4] != "webhooks" || keys[5] != "projects" {
 		t.Fatalf("groups: %v", keys)
 	}
-	last := list[4].(map[string]any)
+	last := list[5].(map[string]any)
 	if last["label"] != "Projects" || last["description"] == "" || !has(last["default_roles"], "admin") {
 		t.Errorf("product group: %v", last)
 	}

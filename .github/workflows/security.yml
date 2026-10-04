@@ -182,6 +182,15 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           docker system prune -af >/dev/null
           df -h /
+      # The web images build from the frontend repository's main, which the
+      # compose file finds at FRONTEND_DIR (locally the sibling checkout). It
+      # is public, so no token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.changed.outputs.images == 'true'
+        with:
+          repository: UnityEvolv/b2b-frontend-template
+          path: .frontend
+          persist-credentials: false
       # Every image this repo builds is a compose service with a build section,
       # so a new service is scanned without touching this file. One at a time:
       # built, scanned, then removed with its layers, so the disk holds one
@@ -190,6 +199,8 @@ jobs:
       # the vulnerability database, downloaded once into a volume.
       - name: build and scan (every image, one at a time)
         if: steps.changed.outputs.images == 'true'
+        env:
+          FRONTEND_DIR: ${{ github.workspace }}/.frontend
         run: |
           status=0
           : > images.md

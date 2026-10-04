@@ -58,6 +58,13 @@ service knows webhooks exist. The live-session bus was the other
 candidate; it was not chosen because it drops what nobody is listening
 for, and it has no "added".
 
+One consequence: a service records its audit entry inside the transaction
+that makes the change, so the event can reach a receiver a moment before
+that transaction commits, and in the rare case the commit then fails, the
+event (like the audit entry) says it happened. A receiver that reads the
+membership back through the API and finds nothing should try again
+shortly.
+
 A product registers its own types, in code in a process that builds the
 webhooks service itself:
 

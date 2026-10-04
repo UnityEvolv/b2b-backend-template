@@ -28,6 +28,7 @@ ships a ladder so it runs out of the box:
 | --- | --- | --- | --- | --- |
 | Users (active memberships; deactivated and guests do not count) | 10 | 50 | 200 | contractual |
 | SCIM, audit export, customer-hosted data plane | no | no | no | yes |
+| API access: API keys and personal access tokens ([api-keys.md](api-keys.md)) | no | yes | yes | yes |
 | Everything else | every plan | | | |
 
 A product replaces the ladder and adds its own limits and features, in its
@@ -47,11 +48,11 @@ plan.Default.SetBands([]plan.BandSpec{
 
 A product that runs the template's services unchanged declares the same
 through `PLANS`, JSON, set on every service that reads plans (organization,
-user and billing). Each loads it at start into `plan.Default`
-(`plan.Default.Load`), with the checks the code path makes: an unknown field,
-a repeated band, limit or feature, an empty ladder, a negative cap, or a band
-naming a limit or feature that is not registered fails start and names the
-setting.
+user, billing, and identity for API access). Each loads it at start into
+`plan.Default` (`plan.Default.Load`), with the checks the code path makes:
+an unknown field, a repeated band, limit or feature, an empty ladder, a
+negative cap, or a band naming a limit or feature that is not registered
+fails start and names the setting.
 
 ```sh
 PLANS='{"limits":[{"key":"projects","label":"projects"}],
@@ -63,11 +64,12 @@ PLANS='{"limits":[{"key":"projects","label":"projects"}],
 
 - `limits` (`key`, `label`) and `features` (`key`, `label`, `lost_code`,
   `lost_message`) are registered beside the template's own (`users`; `scim`,
-  `audit_export`, `customer_hosted_data_plane`), replacing one with the same
-  key.
+  `audit_export`, `customer_hosted_data_plane`, `api_access`), replacing one
+  with the same key.
 - `bands` (`name`, `label`, `contractual`, `limits` by key, `features`),
   lowest first, replaces the ladder. Without it the template's ladder stays,
-  and a new limit is unlimited on every band.
+  and a new limit is unlimited on every band. A ladder of its own lists
+  `api_access` on the bands that include API access, or there is none.
 - Downgrade consequences beyond a tightened limit or a lost feature are code
   (`RegisterConsequence`); they have no configuration.
 

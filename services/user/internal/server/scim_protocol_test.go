@@ -2,9 +2,34 @@ package server
 
 import (
 	"encoding/json"
+	"math"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+// A startIndex past what a query offset holds is held there, never wrapped
+// to a negative offset.
+func TestScimPageIsBounded(t *testing.T) {
+	for _, tc := range []struct {
+		query        string
+		start, count int
+	}{
+		{"", 1, 100},
+		{"?startIndex=0&count=-1", 1, 100},
+		{"?startIndex=5&count=10", 5, 10},
+		{"?count=100000", 1, scimMaxPage},
+		{"?startIndex=9223372036854775807", math.MaxInt32, 100},
+	} {
+		start, count := scimPage(httptest.NewRequest("GET", "/scim/v2/Users"+tc.query, nil))
+		if start != tc.start || count != tc.count {
+			t.Errorf("%q: got %d, %d; want %d, %d", tc.query, start, count, tc.start, tc.count)
+		}
+		if int32(start-1) < 0 {
+			t.Errorf("%q: offset %d wraps", tc.query, start-1)
+		}
+	}
+}
 
 func resource(t *testing.T, raw string) map[string]any {
 	t.Helper()

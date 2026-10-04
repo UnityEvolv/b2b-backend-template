@@ -145,6 +145,9 @@ func run() error {
 	if localIssuers && environment != "local" {
 		return errors.New("OIDC_LOCAL_ISSUERS is for a laptop only")
 	}
+	if !secureCookies && environment != "local" {
+		return errors.New("SECURE_COOKIES=false is for a laptop over plain http only")
+	}
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {
 		return err

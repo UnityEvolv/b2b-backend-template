@@ -44,6 +44,7 @@ template's services, rendered from the same values by `product.Env()`.
 | storage purpose | `project-cover`: JPEG, PNG or WebP, at most 2 MB | `product.CoverImage` | a package variable, in `storage.Default` |
 | rate-limit rule | `project-create`: 20 a minute per membership | `product.CreateRule` | a package variable, in `ratelimit.Default`, bound in `server.Limits` |
 | audit | `project.created`, `.updated`, `.deleted`, `.member_added`, `.member_removed`, `.cover_set`, `.cover_removed` | `internal/server` (`Server.record`) | `pkg/audit`, to the audit service with its own token |
+| support sessions | read-only, every request audited | `main.go`: `verifier.WithImpersonationAudit(audit.Impersonation(...))` | `pkg/auth` refuses its writes, `pkg/audit` records its reads ([docs/impersonation.md](../../docs/impersonation.md)) |
 
 ### Its service, schema and role
 

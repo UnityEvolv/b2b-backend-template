@@ -18,6 +18,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/oauth2/google"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
@@ -64,9 +65,11 @@ func run() error {
 		brand    = config.BrandFrom(env)
 		audience = env.String("AUTH_AUDIENCE", brand.ID)
 		// The Redis channels shared with the other services, under one prefix.
-		redisNames  = config.RedisFrom(env, brand)
-		jwksURL     = env.Required("AUTH_JWKS_URL")
-		redisURL    = env.Required("REDIS_URL")
+		redisNames = config.RedisFrom(env, brand)
+		jwksURL    = env.Required("AUTH_JWKS_URL")
+		redisURL   = env.Required("REDIS_URL")
+		// The audit service, where a support session's requests are recorded.
+		auditURL    = env.Required("AUDIT_URL")
 		sentryDSN   = env.String("SENTRY_DSN", "")
 		environment = env.String("ENVIRONMENT", "local")
 		// The one base hostname every product host derives from (empty on a
@@ -190,6 +193,9 @@ func run() error {
 		// service on every request (docs/api-keys.md).
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
+	// A support session's every request is recorded in the org's log
+	// (docs/impersonation.md); a service without this refuses one.
+	verifier.WithImpersonationAudit(audit.Impersonation(audit.NewClient(auditURL, tokens, nil), name))
 	pushers := notify.Pushers{}
 	vapidPublic := ""
 	if vapidKey != "" {

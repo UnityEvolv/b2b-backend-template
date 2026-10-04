@@ -147,6 +147,9 @@ func run() error {
 		// service on every request (docs/api-keys.md).
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
+	// A support session's every request is recorded in the org's log
+	// (docs/impersonation.md); a service without this refuses one.
+	verifier.WithImpersonationAudit(audit.Impersonation(audit.NewClient(auditURL, tokens, nil), name))
 	cluster := db.SingleShard(pool)
 	srv := server.New(cluster, logger, audit.NewClient(auditURL, tokens, nil), server.NewMemberships(userURL, tokens, nil),
 		server.Transfer{Email: email.NewClient(notificationURL, tokens, nil), Orgs: server.NewOrganizations(organizationURL, tokens, nil), Apps: map[string]string{"admin": adminOrigin}})

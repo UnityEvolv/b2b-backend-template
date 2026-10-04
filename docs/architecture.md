@@ -15,7 +15,7 @@ API.
 
 | service | schema | role | owns |
 | --- | --- | --- | --- |
-| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, the token issuer and its keys |
+| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, support impersonation and its consents, the token issuer and its keys |
 | organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys |
 | user | `users` | `svc_users` | users, memberships, profiles, bulk import, SCIM 2.0 |
 | authorization | `authz` | `svc_authz` | each org's permission configuration, ownership transfer, the permission check |
@@ -41,7 +41,7 @@ another service.
 | package | what |
 | --- | --- |
 | `audit` | the one call that records who did what, to the audit service |
-| `auth` | token verification, the caller in the context, the org and service checks, service tokens |
+| `auth` | token verification, the caller in the context, the org and service checks, service tokens, the support-session rules |
 | `authz` | roles, the permission-group registry, and the per-request permission check |
 | `captcha` | bot protection on public forms ([captcha.md](captcha.md)) |
 | `config` | settings from the environment: the brand, app origins, hostnames, cookie names, Redis names |
@@ -151,6 +151,10 @@ with a bearer access token.
      or a personal access token is resolved by the identity service instead,
      on every request, and put in the context as a key, not a caller
      ([api-keys.md](api-keys.md)).
+     A platform operator's support session (a token with
+     `impersonator_id`) is admitted only to read, and each of its requests
+     is recorded in the org's audit log before the handler runs
+     ([impersonation.md](impersonation.md)).
 3. **The route's rate limit.** Every endpoint has one line in the service's
    `Limits` table, binding it to a rule and to what is counted (address,
    user, membership or org).

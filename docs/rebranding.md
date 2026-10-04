@@ -23,7 +23,7 @@ Each has its own setting, for the rare case it must differ.
 
 | what | setting | default | where it shows |
 | --- | --- | --- | --- |
-| cookie prefix | `COOKIE_PREFIX` | the id, hyphens as underscores | `<prefix>_session`, `<prefix>_signin` on the API host |
+| cookie prefix | `COOKIE_PREFIX` | the id, hyphens as underscores | `<prefix>_session`, `<prefix>_signin`, `<prefix>_impersonation` on the API host |
 | SCIM token prefix | `SCIM_TOKEN_PREFIX` | `<id>_scim_` | the start of every SCIM bearer token, so a leaked one is recognisable |
 | API key and personal access token prefixes | `API_KEY_PREFIX`, `PAT_PREFIX` (identity) | `<id>_ak_`, `<id>_pat_` | the start of every API key and personal access token, so a secret scanner recognises a leaked one and its kind ([api-keys.md](api-keys.md)) |
 | Redis prefix | `REDIS_PREFIX` | the id | every channel and key: `<prefix>:notify`, `<prefix>:live-events`, rate limits; two products can share one Redis |

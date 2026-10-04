@@ -55,6 +55,7 @@ func toSession(s store.Session, current bool) api.Session {
 	if idleAt.Before(s.ExpiresAt) {
 		out.IdleExpiresAt = &idleAt
 	}
+	out.ImpersonationId = uuidOf(s.ImpersonationID)
 	return out
 }
 
@@ -187,6 +188,12 @@ func (s *Server) ended(ctx context.Context, session store.Session, reason string
 	if err != nil {
 		return err
 	}
+	// A support session ends its impersonation with it, in the org's log.
+	if session.ImpersonationID.Valid {
+		if err := s.impersonationEnded(ctx, session, reason, actor); err != nil {
+			return err
+		}
+	}
 	ev := livebus.Event{Type: livebus.SessionRevoked, UserID: session.UserID.String(), SessionID: session.ID.String(), Scope: scope, Code: reason, Message: message(reason)}
 	if session.ActiveOrgID.Valid {
 		ev.OrgID = uuid.UUID(session.ActiveOrgID.Bytes).String()
@@ -248,7 +255,9 @@ func (s *Server) MembershipEnded(ctx context.Context, req api.MembershipEndedReq
 		if session.UserID != req.Body.UserId {
 			continue
 		}
-		if !remain {
+		// A support session never moves to another org: it ends with the
+		// membership it sees as.
+		if !remain || session.ImpersonationID.Valid {
 			var revoked store.Session
 			err := s.cluster.Tx(db.WithActor(ctx, actor), auth.PlatformOrg, func(tx pgx.Tx) error {
 				var err error

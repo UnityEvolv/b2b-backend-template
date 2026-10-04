@@ -7,7 +7,7 @@ controls that quietly do nothing.
 
 ## Cookies
 
-A browser session is two HTTP-only, SameSite Lax cookies on the API host,
+A browser session is HTTP-only, SameSite Lax cookies on the API host,
 never a parent domain, named from `COOKIE_PREFIX` (the product id,
 `PRODUCT_ID`, by default; a hyphen becomes an underscore):
 
@@ -15,6 +15,7 @@ never a parent domain, named from `COOKIE_PREFIX` (the product id,
 | --- | --- |
 | `<prefix>_session` (`b2bapp_session` by default) | the session's refresh token |
 | `<prefix>_signin` (`b2bapp_signin` by default) | the sign-in attempt, binding an identity provider's callback to the browser that started it; cleared once used |
+| `<prefix>_impersonation` (`b2bapp_impersonation` by default) | a platform operator's support session, apart from their own ([impersonation.md](impersonation.md)) |
 
 Pages never read them: the web apps call the refresh endpoint with
 credentials and get an access token back.
@@ -132,6 +133,10 @@ events.addEventListener('org.suspended', (e) => signOut(JSON.parse(e.data)))
   their cookie, checks the session on connect exactly as the refresh does,
   and publishes the revocations: nothing else has to be asked who the
   browser is.
+
+A platform operator's support session ([impersonation.md](impersonation.md))
+opens the same stream with `?impersonation=true`, naming its session by
+the support cookie, so an Owner who withdraws consent closes its tab too.
 
 Revoking a session reaches its open tabs within a second or two. The
 notification service listens too, and drops a revoked session's push

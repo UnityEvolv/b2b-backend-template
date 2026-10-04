@@ -70,6 +70,7 @@ or schema registered twice panics at start.
 | Every API request carries a valid token; health is public | `auth.Require` around the API in `main.go` |
 | A token only reaches its own org | `auth.RequireOrg` in each handler that takes an `org_id` |
 | An API key or personal access token reaches only what its permission groups gate, resolved on every request | `auth.Require` with `Verifier.WithKeys(auth.KeyClient(IDENTITY_URL, ...))` in `main.go`; `authz.Require`; `auth.RequireOrg` and the other person checks refuse a key ([docs/api-keys.md](../docs/api-keys.md)) |
+| A platform operator's support session only reads, and every request it makes is in the org's audit log | `auth.Require` with `Verifier.WithImpersonationAudit(audit.Impersonation(recorder, name))` in `main.go`; without it a service refuses one ([docs/impersonation.md](../docs/impersonation.md)) |
 | Every endpoint is rate limited, one line each | `server.Limits` + `ratelimit.Routes`; `PerAddress` in front of auth |
 | Admin actions are audited: one call, ids only, fails rather than drops | `audit.Recorder` passed to `server.New`; the audit service owns the append-only store |
 | A service calls another service with its own token | `auth.IssuerTokenSource` + `auth.Authorize`; `auth.RequireService` on internal endpoints |
@@ -125,6 +126,7 @@ configuration:
 | `SCIM_GROUP_SYNC` | user | the data owner that carries a SCIM group to what it grants: its name in `DATA_OWNERS` ([docs/users.md](../docs/users.md#scim)). Unset, groups grant nothing |
 | `IDENTITY_URL` | every service | where API keys and personal access tokens are resolved, on every request that brings one ([docs/api-keys.md](../docs/api-keys.md)); unset, a service refuses keys. Required by organization and user already |
 | `API_KEY_PREFIX`, `PAT_PREFIX` | identity | what API keys and personal access tokens start with: `<PRODUCT_ID>_ak_` and `<PRODUCT_ID>_pat_` by default ([docs/rebranding.md](../docs/rebranding.md)) |
+| `AUDIT_URL` | every service | the audit service: admin actions, and every request of a support session ([docs/impersonation.md](../docs/impersonation.md)); required |
 | `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `AUDIT_URL`) are these |
 
 The organization service needs the URL of every owner that exports or

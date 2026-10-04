@@ -92,3 +92,34 @@ func TestRecordNeedsAnActorAndAWellFormedEvent(t *testing.T) {
 		}
 	}
 }
+
+type keep struct{ events []audit.Event }
+
+func (k *keep) Record(_ context.Context, ev audit.Event) error {
+	k.events = append(k.events, ev)
+	return nil
+}
+
+func TestAnImpersonatedRequestIsTheOperatorsInTheOrgsLog(t *testing.T) {
+	const (
+		operator = "01922b5e-0000-7000-8000-0000000000e1"
+		run      = "01922b5e-0000-7000-8000-0000000000e2"
+		grant    = "01922b5e-0000-7000-8000-0000000000e3"
+		member   = "01922b5e-0000-7000-8000-0000000000c1"
+	)
+	k := &keep{}
+	c := auth.Caller{UserID: "01922b5e-0000-7000-8000-0000000000c2", OrgID: org, MembershipID: member,
+		ImpersonatorID: operator, ImpersonationID: run, ImpersonationGrantID: grant}
+	err := audit.Impersonation(k, "user").RecordImpersonated(requestContext(c), auth.ImpersonatedRequest{Caller: c, Method: http.MethodPost, Path: "/v1/me", Refused: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := k.events[0]
+	if ev.OrgID != org || ev.Action != audit.ActionImpersonatedRequest || ev.TargetType != "impersonation" || ev.TargetID != run || ev.Actor != db.UserActor(operator) {
+		t.Fatalf("event: %+v", ev)
+	}
+	d := ev.Details
+	if d["service"] != "user" || d["method"] != "POST" || d["path"] != "/v1/me" || d["grant_id"] != grant || d["membership_id"] != member || d["refused"] != true {
+		t.Fatalf("details: %v", d)
+	}
+}

@@ -135,54 +135,65 @@ func New(cluster *db.Cluster, logger *slog.Logger, recorder audit.Recorder, sig 
 // public endpoints are limited by address; a wrong sign-in is a failed
 // sign-in and closes hard.
 var Limits = map[string]ratelimit.Bound{
-	"GET /v1/sign-in/start":                                             ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/sign-in/callback":                                          ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/sign-in/methods":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/session/refresh":                                          ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/session/switch":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/session/memberships":                                       ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/session/sign-out":                                         ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/organizations/{org_id}/identity-provider":                  ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/identity-provider":                  ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/organizations/{org_id}/identity-provider/test":            ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/identity-provider-presets":                                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/session-policy":                     ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"PUT /v1/organizations/{org_id}/session-policy":                     ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/sign-in/local":                                            ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/sign-in/exchange":                                         ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/sign-in/mfa":                                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/sign-in/mfa/enroll":                                       ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/sign-in/mfa/confirm":                                      ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/mfa":                                                       ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"DELETE /v1/mfa":                                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/mfa/totp":                                                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/mfa/totp/confirm":                                         ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/mfa/recovery-codes":                                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"DELETE /v1/organizations/{org_id}/members/{user_id}/mfa":           ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/organizations/{org_id}/invites":                           ratelimit.On(ratelimit.InviteSend, ratelimit.ByMembership),
-	"GET /v1/organizations/{org_id}/invites":                            ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"POST /v1/organizations/{org_id}/invites/{invite_id}/resend":        ratelimit.On(ratelimit.InviteSend, ratelimit.ByMembership),
-	"DELETE /v1/organizations/{org_id}/invites/{invite_id}":             ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"GET /v1/invites/{token}":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/invites/{token}/accept":                                   ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/local/password":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/local/password/forgot":                                    ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/email-verification/verify":                                ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/email-verification/resend":                                ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"GET /v1/sessions":                                                  ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
-	"DELETE /v1/sessions":                                               ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/members/{user_id}/sessions":         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"DELETE /v1/organizations/{org_id}/members/{user_id}/sessions":      ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
-	"DELETE /v1/sessions/{session_id}":                                  ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/me/email":                                                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/email-change/confirm":                                     ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/email-change/undo":                                        ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
-	"POST /v1/organizations/{org_id}/api-keys":                          ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/api-keys":                           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"DELETE /v1/organizations/{org_id}/api-keys/{key_id}":               ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"POST /v1/organizations/{org_id}/personal-access-tokens":            ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
-	"GET /v1/organizations/{org_id}/personal-access-tokens":             ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
-	"DELETE /v1/organizations/{org_id}/personal-access-tokens/{key_id}": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/sign-in/start":                                               ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/sign-in/callback":                                            ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/sign-in/methods":                                             ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/session/refresh":                                            ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/session/switch":                                             ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/session/memberships":                                         ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/session/sign-out":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/organizations/{org_id}/identity-provider":                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PUT /v1/organizations/{org_id}/identity-provider":                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/identity-provider/test":              ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/identity-provider-presets":                                   ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/session-policy":                       ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PUT /v1/organizations/{org_id}/session-policy":                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/sign-in/local":                                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/sign-in/exchange":                                           ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/sign-in/mfa":                                                ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/sign-in/mfa/enroll":                                         ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/sign-in/mfa/confirm":                                        ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/mfa":                                                         ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"DELETE /v1/mfa":                                                      ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/mfa/totp":                                                   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/mfa/totp/confirm":                                           ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/mfa/recovery-codes":                                         ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"DELETE /v1/organizations/{org_id}/members/{user_id}/mfa":             ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/invites":                             ratelimit.On(ratelimit.InviteSend, ratelimit.ByMembership),
+	"GET /v1/organizations/{org_id}/invites":                              ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"POST /v1/organizations/{org_id}/invites/{invite_id}/resend":          ratelimit.On(ratelimit.InviteSend, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/invites/{invite_id}":               ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"GET /v1/invites/{token}":                                             ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/invites/{token}/accept":                                     ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/local/password":                                             ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/local/password/forgot":                                      ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/email-verification/verify":                                  ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/email-verification/resend":                                  ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"GET /v1/sessions":                                                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"DELETE /v1/sessions":                                                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/members/{user_id}/sessions":           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/members/{user_id}/sessions":        ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByMembership),
+	"DELETE /v1/sessions/{session_id}":                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/me/email":                                                   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/email-change/confirm":                                       ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/email-change/undo":                                          ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/organizations/{org_id}/api-keys":                            ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/api-keys":                             ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/api-keys/{key_id}":                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/organizations/{org_id}/personal-access-tokens":              ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/personal-access-tokens":               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/personal-access-tokens/{key_id}":   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/support-access":                       ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"PUT /v1/organizations/{org_id}/support-access":                       ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/impersonation-grants":                 ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"POST /v1/organizations/{org_id}/impersonation-grants":                ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"DELETE /v1/organizations/{org_id}/impersonation-grants/{grant_id}":   ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/organizations/{org_id}/impersonations":                       ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByMembership),
+	"DELETE /v1/organizations/{org_id}/impersonations/{impersonation_id}": ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/platform/impersonation-grants":                               ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
+	"POST /v1/platform/impersonations":                                    ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"POST /v1/session/impersonation/refresh":                              ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
+	"POST /v1/session/impersonation/end":                                  ratelimit.On(ratelimit.Unauthenticated, ratelimit.ByIP),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in the
@@ -246,9 +257,21 @@ func hashSecret(raw string) []byte {
 	return sum[:]
 }
 
-// currentSession is the session the cookie names, if it is live.
+// currentSession is the session the cookie names, if it is live. A
+// support session is never one: it is found only by the impersonation
+// cookie (impersonationSession), so a refresh token moved from one cookie
+// to the other cannot switch an impersonation to another org.
 func (s *Server) currentSession(ctx context.Context) (store.Session, bool, error) {
-	raw := cookieValue(ctx, sessionCookie)
+	session, ok, err := s.sessionIn(ctx, sessionCookie)
+	if err != nil || !ok || session.ImpersonationID.Valid {
+		return store.Session{}, false, err
+	}
+	return session, true, nil
+}
+
+// sessionIn is the session a cookie names, if it is live.
+func (s *Server) sessionIn(ctx context.Context, which cookie) (store.Session, bool, error) {
+	raw := cookieValue(ctx, which)
 	if raw == "" {
 		return store.Session{}, false, nil
 	}

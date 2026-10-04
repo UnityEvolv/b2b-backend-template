@@ -139,3 +139,41 @@ type Discard struct{}
 
 // Record does nothing.
 func (Discard) Record(context.Context, Event) error { return nil }
+
+// ActionImpersonatedRequest is the entry every request of an impersonation
+// session leaves in the org's log, a read or a refused write alike.
+const ActionImpersonatedRequest = "impersonation.request"
+
+// impersonation records an impersonation session's requests through a
+// Recorder.
+type impersonation struct {
+	rec     Recorder
+	service string
+}
+
+// Impersonation is the auditor every service gives its verifier
+// (auth.Verifier.WithImpersonationAudit): each request an impersonation
+// session makes to service is an impersonation.request entry in the org's
+// log, as the platform operator, naming the impersonation, the consent and
+// the person seen as, the method and the path (ids and route words only).
+func Impersonation(rec Recorder, service string) auth.ImpersonationAuditor {
+	return impersonation{rec: rec, service: service}
+}
+
+func (i impersonation) RecordImpersonated(ctx context.Context, req auth.ImpersonatedRequest) error {
+	c := req.Caller
+	details := map[string]any{
+		"service": i.service, "method": req.Method, "path": req.Path,
+		"impersonator_id": c.ImpersonatorID, "user_id": c.UserID, "membership_id": c.MembershipID,
+	}
+	if c.ImpersonationGrantID != "" {
+		details["grant_id"] = c.ImpersonationGrantID
+	}
+	if req.Refused {
+		details["refused"] = true
+	}
+	return i.rec.Record(ctx, Event{
+		OrgID: c.OrgID, Action: ActionImpersonatedRequest, TargetType: "impersonation", TargetID: c.ImpersonationID,
+		Details: details, Actor: db.UserActor(c.ImpersonatorID),
+	})
+}

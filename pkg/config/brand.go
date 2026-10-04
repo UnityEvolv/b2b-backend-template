@@ -74,22 +74,26 @@ func (r Redis) LiveEvents() string { return r.Key("live-events") }
 func (r Redis) ToMembers() string { return r.Key("to-members") }
 
 // Cookies is the names of the cookies the identity service sets on the API
-// host: the session's refresh token, and the sign-in attempt that binds an
-// identity provider's callback to the browser that started it.
+// host: the session's refresh token, the sign-in attempt that binds an
+// identity provider's callback to the browser that started it, and a
+// platform operator's support session (docs/impersonation.md), kept apart
+// from their own session so neither replaces the other.
 type Cookies struct {
-	Session string
-	SignIn  string
+	Session       string
+	SignIn        string
+	Impersonation string
 }
 
 // cookiePrefix is what a cookie name may start with: letters, digits,
 // hyphens and underscores.
 var cookiePrefix = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
 
-// CookiesFor is the cookie names under prefix: "<prefix>_session" and
-// "<prefix>_signin", with any hyphen in the prefix as an underscore.
+// CookiesFor is the cookie names under prefix: "<prefix>_session",
+// "<prefix>_signin" and "<prefix>_impersonation", with any hyphen in the
+// prefix as an underscore.
 func CookiesFor(prefix string) Cookies {
 	p := strings.ReplaceAll(prefix, "-", "_")
-	return Cookies{Session: p + "_session", SignIn: p + "_signin"}
+	return Cookies{Session: p + "_session", SignIn: p + "_signin", Impersonation: p + "_impersonation"}
 }
 
 // DefaultCookies is the cookie names under the default brand.

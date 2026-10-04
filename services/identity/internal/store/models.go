@@ -87,6 +87,35 @@ type IdentityProvider struct {
 	LastModifiedAt       time.Time
 }
 
+type Impersonation struct {
+	OrgID          uuid.UUID
+	ID             uuid.UUID
+	GrantID        pgtype.UUID
+	ImpersonatorID uuid.UUID
+	UserID         uuid.UUID
+	MembershipID   uuid.UUID
+	SessionID      uuid.UUID
+	EndsAt         time.Time
+	EndedAt        pgtype.Timestamptz
+	EndedReason    pgtype.Text
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
+type ImpersonationGrant struct {
+	OrgID          uuid.UUID
+	ID             uuid.UUID
+	ExpiresAt      time.Time
+	IncludeOwners  bool
+	RevokedAt      pgtype.Timestamptz
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
 type Invite struct {
 	OrgID                 uuid.UUID
 	ID                    uuid.UUID
@@ -179,6 +208,7 @@ type Session struct {
 	CreatedAt          time.Time
 	LastModifiedBy     string
 	LastModifiedAt     time.Time
+	ImpersonationID    pgtype.UUID
 }
 
 type SessionPolicy struct {
@@ -218,6 +248,16 @@ type SigningKey struct {
 	KmsKeyVersion  string
 	PublicJwk      []byte
 	State          string
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
+type SupportAccess struct {
+	OrgID          uuid.UUID
+	Standing       bool
+	IncludeOwners  bool
 	CreatedBy      string
 	CreatedAt      time.Time
 	LastModifiedBy string

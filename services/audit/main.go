@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
@@ -135,7 +136,11 @@ func run() error {
 		// service on every request (docs/api-keys.md).
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
-	api := server.New(cluster, logger, authz.Client(authorizationURL, tokens, nil)).Handler(httpx.NewMux(), limiter.Routes(server.Limits))
+	srv := server.New(cluster, logger, authz.Client(authorizationURL, tokens, nil))
+	// A support session's every request is recorded (docs/impersonation.md);
+	// here, straight into the log.
+	verifier.WithImpersonationAudit(audit.Impersonation(srv, name))
+	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// Health is public, for the load balancer. Everything else needs a token.
 	root := http.NewServeMux()

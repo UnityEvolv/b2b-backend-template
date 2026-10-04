@@ -9,16 +9,19 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/api"
 )
 
-// cookie is one of the two cookies this service sets, each named from the
+// cookie is one of the cookies this service sets, each named from the
 // product's id (config.Cookies). The session cookie is the refresh token,
 // on this host only, never a parent domain, so cookie scope ties nothing to
-// a domain. It is the only cookie the platform keeps. The sign-in attempt
-// cookie binds a callback to the browser that started it.
+// a domain. The sign-in attempt cookie binds a callback to the browser that
+// started it. The impersonation cookie is a platform operator's support
+// session (impersonation.go), the refresh token of an impersonation, kept
+// apart from their own session so neither replaces the other.
 type cookie int
 
 const (
 	sessionCookie cookie = iota
 	attemptCookie
+	impersonationCookie
 )
 
 // cookies carries a request's cookies into a strict handler, and the
@@ -40,8 +43,14 @@ func (c *cookies) name(which cookie) string {
 	if names.Session == "" {
 		names = config.DefaultCookies
 	}
-	if which == attemptCookie {
+	switch which {
+	case attemptCookie:
 		return names.SignIn
+	case impersonationCookie:
+		if names.Impersonation == "" {
+			return config.DefaultCookies.Impersonation
+		}
+		return names.Impersonation
 	}
 	return names.Session
 }

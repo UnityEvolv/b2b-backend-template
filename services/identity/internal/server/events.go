@@ -51,6 +51,8 @@ var heartbeat = 25 * time.Second
 // and ends after a session.revoked for this session, which the app answers
 // by signing out. A session that is already over gets that event at once.
 // The browser opens it with new EventSource(url, {withCredentials: true}).
+// A support session's tab opens it with ?impersonation=true, naming its
+// session by the support cookie instead.
 func (s *Server) SessionEvents() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.live == nil {
@@ -62,12 +64,18 @@ func (s *Server) SessionEvents() http.Handler {
 			c.in[cookie.Name] = cookie.Value
 		}
 		ctx := context.WithValue(r.Context(), cookiesKey{}, c)
-		session, live, err := s.currentSession(ctx)
+		which := sessionCookie
+		if r.URL.Query().Get("impersonation") == "true" {
+			which = impersonationCookie
+		}
+		session, live, err := s.sessionIn(ctx, which)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, httpx.CodeInternal, "Something went wrong.")
 			return
 		}
-		if !live && c.in[c.name(sessionCookie)] == "" {
+		// Each cookie names only its own kind of session.
+		live = live && session.ImpersonationID.Valid == (which == impersonationCookie)
+		if !live && c.in[c.name(which)] == "" {
 			httpx.WriteError(w, http.StatusUnauthorized, codeNoSession, "Not signed in.")
 			return
 		}
@@ -175,6 +183,18 @@ func message(reason string) string {
 		return "This organization is closing. An Owner can reopen it from the link in the email sent when it closed."
 	case reasonEmailChangeUndone:
 		return "A change to your sign-in email was undone. Sign in again."
+	case reasonImpersonationEnded, reasonImpersonationReplaced, reasonImpersonationFailed:
+		return "The support session has ended."
+	case reasonImpersonationByOwner:
+		return "An Owner of the organization ended this support session."
+	case reasonConsentRevoked:
+		return "An Owner of the organization withdrew consent for this support session."
+	case reasonSupportAccessOff:
+		return "The organization no longer allows standing support access."
+	case reasonImpersonationTarget:
+		return "The person this support session sees as is no longer covered by it."
+	case reasonImpersonatorRemoved:
+		return "You are no longer a platform operator."
 	}
 	return "Your session has ended. Sign in again."
 }

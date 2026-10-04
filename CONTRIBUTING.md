@@ -137,6 +137,11 @@ template as it was; `scripts/without-examples.sh` proves it in CI.
   calling service's own token. An API key or personal access token is
   resolved by the identity service on every request and reaches only what
   its permission groups gate ([docs/api-keys.md](docs/api-keys.md)).
+- A platform operator sees an org as one of its people only with the
+  org's consent, read-only, with every request in the org's audit log;
+  every service mounts the rule (`Verifier.WithImpersonationAudit`), and
+  one that does not refuses such a session
+  ([docs/impersonation.md](docs/impersonation.md)).
 - Sessions are HTTP-only cookies on the API host, never a parent domain. The
   access token is short-lived and refreshed against the session, and every
   revocation is pushed to the open session at once.

@@ -44,6 +44,13 @@ the next sign-in lands there. `POST /identity/v1/session/sign-out` ends it.
 Errors go back to the app's sign-in page as `?error=`: `provider_refused`,
 `attempt_expired`, `membership_inactive`, `plan_limit`, `no_membership`.
 
+A SAML provider follows the same steps with SAML in place of OpenID
+Connect: step 1 sends an AuthnRequest (HTTP-Redirect) and keeps its id in
+the attempt, and in step 2 the provider posts the response to
+`POST /identity/v1/sign-in/saml/{org_id}/acs`, where `RelayState` must name
+the attempt in the cookie and the signed assertion must answer the request
+([sso.md](sso.md#saml-20)). Steps 3 to 6 are the same.
+
 `GET /identity/v1/sign-in/methods?email=…` tells the sign-in page how an
 address signs in (`sso` or `local`) and nothing else, so the page can
 send the person to their provider or show the password field without
@@ -53,8 +60,12 @@ naming any organization before they have proven who they are.
 
 Any OpenID Connect provider, filled in from a preset (Entra, Google, or
 generic with discovery), tested with a real round trip before it is saved,
-its secret encrypted under the organization's data key. The endpoints, the
-shapes, what the test checks and the local stub issuer: [sso.md](sso.md).
+its secret encrypted under the organization's data key; or a SAML 2.0
+identity provider from its metadata, verified by its first sign-in. An Owner
+can require it of the org's domain, and password sign-in is then refused
+there (`sso.required`) except to Owners with a second factor. The
+endpoints, the shapes, what the test checks and the local stub issuer:
+[sso.md](sso.md).
 
 ## Keys and tokens
 

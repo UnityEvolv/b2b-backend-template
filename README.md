@@ -18,10 +18,11 @@ frontend half, with the account, admin and platform web apps, is
 
 - **Organisations:** self-serve signup, domain claim and DNS verification,
   suspension, offboarding with a 30-day purge, and data export.
-- **Identity:** per-organisation OpenID Connect single sign-on (Entra,
-  Google, or any provider by discovery), local accounts with email
-  verification, TOTP multi-factor authentication, invites, and sessions you
-  can list and revoke.
+- **Identity:** per-organisation single sign-on over OpenID Connect (Entra,
+  Google, or any provider by discovery) or SAML 2.0 (Okta, Entra, Google,
+  JumpCloud, AD FS, OneLogin, ...), optionally required of the domain,
+  local accounts with email verification, TOTP multi-factor authentication,
+  invites, and sessions you can list and revoke.
 - **People:** users and memberships (one person, many organisations),
   profiles, bulk import from CSV or XLSX, and SCIM 2.0 provisioning.
 - **Access:** Owner, Admin, Billing Admin, User and Guest roles, with

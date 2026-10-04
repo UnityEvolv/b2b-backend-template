@@ -53,8 +53,8 @@ UI did not exist.
 - Plan limits are read at the moment of the action, from the registry,
   never from a flag the client holds ([plans.md](plans.md)).
 - Owner-only actions (`assign_roles`, `configure_permissions`,
-  `transfer_ownership`, `delete_organization`, `claim_domain`) are not
-  configurable.
+  `transfer_ownership`, `delete_organization`, `claim_domain`, and
+  requiring single sign-on of the domain) are not configurable.
 - [getting-started.md](getting-started.md#change-what-a-role-may-do) shows
   it: a group taken from Admins leaves the menu, and the API answers the
   same Admin's direct call with 403.
@@ -126,11 +126,13 @@ consent, and every step is visible to the org
 
 ## Single sign-on hardening
 
-An admin types the identity provider's address, so the identity service
-fetches a URL someone else chose. It defends against that and against a
-provider that would assert anyone ([sso.md](sso.md)):
+An admin types the identity provider's address (an OpenID issuer, or a
+SAML metadata URL), so the identity service fetches a URL someone else
+chose. It defends against that, against a provider that would assert
+anyone, and against forged SAML ([sso.md](sso.md)):
 
-- **Public addresses only.** Deployed, the OIDC client connects only to
+- **Public addresses only.** Deployed, the client for issuers and metadata
+  ([pkg/egress](../pkg/egress/egress.go)) connects only to
   public addresses, checked after name resolution, so a redirect or a DNS
   answer pointing inside the network is refused. https only, a 10-second
   timeout and a 1 MB cap on each answer. `OIDC_LOCAL_ISSUERS=true` lifts
@@ -148,6 +150,28 @@ provider that would assert anyone ([sso.md](sso.md)):
   its token endpoint, and its client secret is encrypted under the org's key.
 - No secret, code or token is logged. A test checks the logs of a whole
   sign-in.
+- **SAML assertions are verified, not parsed.** The assertion itself must
+  be signed by one of the certificates saved from the provider's metadata
+  (unexpired, RSA 2048 or ECDSA), and what is read is the element the
+  signature library returns after verifying it, never the document around
+  it: signature wrapping, a second assertion and a comment splitting the
+  address are refused or read as signed. Exactly one plain-text assertion;
+  `Destination`, `Recipient`, audience, `InResponseTo` and every time
+  window checked; each assertion id accepted once. Every parse is behind an
+  XML round-trip check.
+- **SP-initiated only.** A SAML response must answer a request this
+  service made for this browser's attempt (RelayState and a SameSite None
+  attempt cookie, used once). An identity-provider-initiated response is
+  never accepted; the browser is sent to start a sign-in instead.
+- **A SAML provider is proven by its first sign-in.** The metadata is tested
+  before it is saved, but only a real sign-in proves the provider's side,
+  so until then it is `pending_first_sign_in` and single sign-on cannot be
+  required.
+- **Requiring single sign-on is an Owner's,** audited, and in force only
+  while the provider is verified. Password sign-in is then refused to the
+  org's domain, after the password is checked (so it reveals nothing),
+  except to the org's Owners with a second factor they already have (break
+  glass, audited as `session.sso_bypassed`).
 
 ## Outbound webhooks
 

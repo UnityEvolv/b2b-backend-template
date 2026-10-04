@@ -259,7 +259,7 @@ func TestRolesAndPermissions(t *testing.T) {
 		t.Errorf("admin re-roling an admin: %d", status)
 	}
 	// An Owner grants billing to the Admin role and it takes effect on the next check.
-	status, out := f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users", "audit", "sso", "billing"}, "billing_admin": []string{"billing"}})
+	status, out := f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users", "audit", "sso", "api_keys", "billing"}, "billing_admin": []string{"billing"}})
 	if status != http.StatusOK || !has(out["admin"], "billing") || len(out["warnings"].([]any)) != 0 {
 		t.Fatalf("grant billing: %d %v", status, out)
 	}
@@ -272,7 +272,7 @@ func TestRolesAndPermissions(t *testing.T) {
 	}
 	// Leaving nobody but the Owner able to do something warns.
 	_, out = f.do(http.MethodPut, perms, f.as(acme, owner), map[string]any{"admin": []string{"users"}, "billing_admin": []string{}})
-	if len(out["warnings"].([]any)) != 3 {
+	if len(out["warnings"].([]any)) != 4 {
 		t.Errorf("warnings: %v", out["warnings"])
 	}
 	// Every member may read the configuration; another org's member may not.

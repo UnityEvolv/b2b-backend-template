@@ -21,20 +21,33 @@ func ByIP(r *http.Request) (string, bool) {
 	return "ip:" + host, host != ""
 }
 
-// ByUser keys by the authenticated user.
+// ByUser keys by the authenticated user. A request made with an API key or
+// a personal access token counts against the key, so one script never
+// spends its person's allowance, nor another key's.
 func ByUser(r *http.Request) (string, bool) {
+	if k, ok := auth.KeyFrom(r.Context()); ok {
+		return "key:" + k.ID, true
+	}
 	c, ok := auth.CallerFrom(r.Context())
 	return "user:" + c.UserID, ok && c.UserID != ""
 }
 
-// ByMembership keys by the caller's membership: one person in one org.
+// ByMembership keys by the caller's membership: one person in one org. A
+// key counts against itself, as ByUser.
 func ByMembership(r *http.Request) (string, bool) {
+	if k, ok := auth.KeyFrom(r.Context()); ok {
+		return "key:" + k.ID, true
+	}
 	c, ok := auth.CallerFrom(r.Context())
 	return "mbr:" + c.MembershipID, ok && c.MembershipID != ""
 }
 
-// ByOrg keys by the caller's org, for limits a whole org shares.
+// ByOrg keys by the caller's org, for limits a whole org shares, keys
+// included.
 func ByOrg(r *http.Request) (string, bool) {
+	if k, ok := auth.KeyFrom(r.Context()); ok {
+		return "org:" + k.OrgID, true
+	}
 	c, ok := auth.CallerFrom(r.Context())
 	return "org:" + c.OrgID, ok && c.OrgID != ""
 }

@@ -75,7 +75,7 @@ func (s *Server) Handler(mux *http.ServeMux, middlewares ...api.MiddlewareFunc) 
 
 var (
 	actionShape = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`)
-	actorShape  = regexp.MustCompile(`^(membership|user):[0-9a-f-]{36}$|^system:[a-z][a-z0-9-]*$`)
+	actorShape  = regexp.MustCompile(`^(membership|user|api_key):[0-9a-f-]{36}$|^system:[a-z][a-z0-9-]*$`)
 )
 
 const (

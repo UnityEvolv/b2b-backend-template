@@ -12,6 +12,8 @@ import (
 //	membership:<uuid>   a person acting in an org
 //	user:<uuid>         a person acting outside any org (sign-in, profile)
 //	system:<service>    the platform itself, such as a housekeeping tick
+//	api_key:<uuid>      an org's API key, acting on its own (a personal
+//	                    access token acts as its person's membership)
 type Actor string
 
 // SystemActor is the platform acting on its own, named by service.
@@ -19,6 +21,9 @@ func SystemActor(service string) Actor { return Actor("system:" + service) }
 
 // MembershipActor is a person acting inside an organization.
 func MembershipActor(membershipID string) Actor { return Actor("membership:" + membershipID) }
+
+// APIKeyActor is an org's API key acting in that org.
+func APIKeyActor(keyID string) Actor { return Actor("api_key:" + keyID) }
 
 // UserActor is a person acting outside any organization.
 func UserActor(userID string) Actor { return Actor("user:" + userID) }
@@ -29,7 +34,7 @@ func (a Actor) valid() bool {
 		return false
 	}
 	switch kind {
-	case "membership", "user", "system":
+	case "membership", "user", "system", "api_key":
 		return true
 	}
 	return false

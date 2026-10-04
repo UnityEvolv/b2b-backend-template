@@ -25,6 +25,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/webhook"
 )
 
 // Member is what this service needs to know about a membership: whether it
@@ -78,6 +79,10 @@ type Deps struct {
 	Notifier Notifier
 	Live     livebus.Publisher
 	Files    Files
+	// Webhooks sends the product's webhook events (product.CreatedEvent)
+	// to the org's endpoints, through the template's webhooks service. Nil
+	// sends none.
+	Webhooks webhook.Emitter
 }
 
 // Server answers the projects API.
@@ -91,6 +96,9 @@ var _ api.StrictServerInterface = (*Server)(nil)
 
 // New is the API on cluster.
 func New(cluster *db.Cluster, logger *slog.Logger, deps Deps) *Server {
+	if deps.Webhooks == nil {
+		deps.Webhooks = webhook.Discard{}
+	}
 	return &Server{cluster: cluster, logger: logger, deps: deps}
 }
 

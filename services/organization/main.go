@@ -193,6 +193,11 @@ func run() error {
 
 	cluster := db.SingleShard(pool)
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	deps := server.Deps{
 		Email: email.NewClient(notificationURL, tokens, nil), Users: server.NewUsers(userURL, tokens, nil),
 		Accounts: server.NewAccounts(identityURL, tokens, nil), DNS: server.DNS{},

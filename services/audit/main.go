@@ -62,8 +62,11 @@ func run() error {
 		// asked with this service's own token.
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
-		sentryDSN        = env.String("SENTRY_DSN", "")
-		environment      = env.String("ENVIRONMENT", "local")
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
+		sentryDSN   = env.String("SENTRY_DSN", "")
+		environment = env.String("ENVIRONMENT", "local")
 		// The one base hostname every product host derives from (empty on a
 		// laptop), plus the dev servers and desktop scheme named explicitly.
 		baseHost = env.String("BASE_HOSTNAME", "")
@@ -127,6 +130,11 @@ func run() error {
 
 	cluster := db.SingleShard(pool)
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	api := server.New(cluster, logger, authz.Client(authorizationURL, tokens, nil)).Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// Health is public, for the load balancer. Everything else needs a token.

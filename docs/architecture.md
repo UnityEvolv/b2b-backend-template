@@ -15,7 +15,7 @@ API.
 
 | service | schema | role | owns |
 | --- | --- | --- | --- |
-| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, the token issuer and its keys |
+| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, the token issuer and its keys |
 | organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys |
 | user | `users` | `svc_users` | users, memberships, profiles, bulk import, SCIM 2.0 |
 | authorization | `authz` | `svc_authz` | each org's permission configuration, ownership transfer, the permission check |
@@ -74,7 +74,7 @@ process at start, so a mistake never reaches a request.
 
 | registry | what a product adds | code seam | environment seam | read by |
 | --- | --- | --- | --- | --- |
-| plan | bands, limit keys, features, downgrade consequences | `plan.Default.SetBands`, `RegisterLimit`, `RegisterFeature`, `RegisterConsequence` | `PLANS` | organization, user, billing |
+| plan | bands, limit keys, features, downgrade consequences | `plan.Default.SetBands`, `RegisterLimit`, `RegisterFeature`, `RegisterConsequence` | `PLANS` | organization, user, billing, identity |
 | authz | permission groups, with the roles that hold them by default | `authz.Default.Register` | `PERMISSION_GROUPS` | authorization |
 | db | services, each with a schema and migrations | `db.Default.Register` | none: the product's own `dbinit` and `migrate` (`pkg/db/dbcmd`) | `dbinit`, `migrate`, every service at start |
 | storage | storage purposes: types, size ceiling, retention | `storage.Default.Register` | none | the service that stores the file |
@@ -147,7 +147,10 @@ with a bearer access token.
    - `auth.Require` verifies the token: signature against the identity
      service's JWKS, issuer, audience and expiry. It puts the caller (user,
      org, membership, session, ids only) in the context. Only health and
-     each service's few public paths skip it.
+     each service's few public paths skip it. A bearer that is an API key
+     or a personal access token is resolved by the identity service instead,
+     on every request, and put in the context as a key, not a caller
+     ([api-keys.md](api-keys.md)).
 3. **The route's rate limit.** Every endpoint has one line in the service's
    `Limits` table, binding it to a rule and to what is counted (address,
    user, membership or org).

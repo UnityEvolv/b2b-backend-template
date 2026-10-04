@@ -88,18 +88,20 @@ var Caps = map[plan.Band]int{"free": 3, "team": 25, "business": 100} // enterpri
 ```
 
 In its own process it registers them (`plan.Default.RegisterLimit`,
-`plan.Default.SetBands`). The organization, user and billing services learn
-the same from `PLANS`. The create handler reads the org's band at the moment
-of the action, counts the org's projects under a per-org lock, and asks:
+`plan.Default.SetBands`). The organization, user, billing and identity
+services learn the same from `PLANS`. The create handler reads the org's
+band and its overrides at the moment of the action, counts the org's
+projects under a per-org lock, and asks:
 
 ```go
-band, err := plans.Band(ctx, orgID)            // plan.Client over the organization service
-if err := plan.CheckLimit(band, product.Projects, count); err != nil { /* 403 plan.limit_reached */ }
+ent, err := plans.Entitlements(ctx, orgID)     // plan.Client over the organization service
+if err := ent.CheckLimit(product.Projects, count); err != nil { /* 403 plan.limit_reached */ }
 ```
 
-Nothing is cached. A plan change applies to the next create. The plans
-page, the billing page and the downgrade checklist show the new limit with
-no frontend change.
+Nothing is cached. A plan change, or an override a platform operator sets
+for the org ([plans.md](plans.md#overrides)), applies to the next create.
+The plans page, the billing page and the downgrade checklist show the new
+limit with no frontend change.
 
 ## 3. A permission group
 
@@ -215,7 +217,7 @@ go run ./examples/projects/cmd/projects-env
 
 | setting | on |
 | --- | --- |
-| `PLANS` | organization, user, billing |
+| `PLANS` | organization, user, billing, identity |
 | `PERMISSION_GROUPS` | authorization |
 | `NOTIFICATION_CATEGORIES` | notification |
 | `DATA_OWNERS` | every template service |

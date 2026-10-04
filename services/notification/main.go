@@ -87,7 +87,10 @@ func run() error {
 		organizationURL  = env.Required("ORGANIZATION_URL")
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
-		hosts            = config.HostsFor(baseHost)
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
+		hosts       = config.HostsFor(baseHost)
 		// The web apps: links open the main one, admin events the admin app.
 		apps = config.AppsFrom(env, baseHost)
 		// This service as the internet reaches it, for one-click unsubscribe.
@@ -182,6 +185,11 @@ func run() error {
 
 	cluster := db.SingleShard(pool)
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	pushers := notify.Pushers{}
 	vapidPublic := ""
 	if vapidKey != "" {

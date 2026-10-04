@@ -36,6 +36,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/gcpkms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/oidc"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/server"
@@ -96,6 +97,9 @@ func run() error {
 		// The session and sign-in cookies' names, from COOKIE_PREFIX or the
 		// product id: <prefix>_session and <prefix>_signin.
 		cookieNames = config.CookiesFrom(env, brand)
+		// What API keys and personal access tokens start with, from
+		// API_KEY_PREFIX and PAT_PREFIX or the product id: <id>_ak_ and <id>_pat_.
+		keyPrefixes = config.KeyPrefixesFrom(env, brand)
 		// Local only: mint service tokens for any service that asks, as the
 		// stub issuer did. Deployed, a service proves who it is first.
 		localServiceTokens = env.Bool("LOCAL_SERVICE_TOKENS", false)
@@ -129,6 +133,11 @@ func run() error {
 	// accepted here.
 	if err := dataowner.Default.Load(env.String("DATA_OWNERS", "")); err != nil {
 		return fmt.Errorf("DATA_OWNERS: %w", err)
+	}
+	// A product's plan ladder and features (PLANS), for the API access its
+	// bands include (pkg/plan, docs/plans.md); the template's own without.
+	if err := plan.Default.Load(env.String("PLANS", "")); err != nil {
+		return fmt.Errorf("PLANS: %w", err)
 	}
 	if localServiceTokens && environment != "local" {
 		return errors.New("LOCAL_SERVICE_TOKENS is for a laptop only")
@@ -198,10 +207,15 @@ func run() error {
 	bus := livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger)
 	srv := server.New(cluster, logger, recorder, sig, oidcClient, keyring,
 		server.NewUsers(userURL, tokens, nil), server.NewOrganizations(organizationURL, tokens, nil), authz.Client(authorizationURL, tokens, nil), bus, email.NewClient(notificationURL, tokens, nil), limiter, wrapper,
-		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, Cookies: cookieNames, DesktopScheme: desktopScheme})
+		server.Config{PublicURL: publicURL, Apps: apps.Origins, MainApp: apps.Main(), PlatformApp: apps.Platform, Product: brand.Name, AccessTTL: accessTTL, SecureCookies: secureCookies, Cookies: cookieNames, DesktopScheme: desktopScheme, KeyPrefixes: keyPrefixes})
 	srv.WithLive(bus)
 	// Security and membership notices, on the notification service's channel.
 	srv.WithNotifier(server.RedisNotifier{Client: rdb, Channel: redisNames.Notify()})
+	// API keys and personal access tokens: API access is read from the
+	// org's plan when one is made and every time one is used, and this
+	// service resolves them itself on its own routes.
+	srv.WithPlans(plan.Client(organizationURL, tokens, nil))
+	verifier.WithKeys(srv)
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

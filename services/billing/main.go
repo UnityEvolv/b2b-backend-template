@@ -75,6 +75,9 @@ func run() error {
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		auditURL         = env.Required("AUDIT_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
 		// The billing page, where the provider's form comes back to.
 		adminOrigin = env.String("APP_ORIGIN_ADMIN", derived(baseHost, "https://"+config.HostsFor(baseHost).Admin))
 		// Stripe; without a key, paid actions are refused as not set up.
@@ -143,6 +146,11 @@ func run() error {
 	limiter := ratelimit.New(rdb, logger)
 
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	cluster := db.SingleShard(pool)
 	var payments provider.Provider
 	if stripeKey != "" {

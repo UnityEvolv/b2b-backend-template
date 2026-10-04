@@ -61,19 +61,44 @@ func (m *memoryRecorder) actions() []string {
 	return out
 }
 
-// plans knows the two orgs; anyone else does not exist.
+// plans knows the three orgs, each on its band with whatever overrides a
+// test sets in overrides; anyone else does not exist.
 type plans struct{}
 
-func (plans) Band(_ context.Context, orgID string) (plan.Band, error) {
+// overrides is each org's overrides, as a platform operator would set them.
+var overrides = struct {
+	sync.Mutex
+	by map[uuid.UUID][]plan.Override
+}{by: map[uuid.UUID][]plan.Override{}}
+
+// setOverrides gives org these overrides until the test ends.
+func setOverrides(t *testing.T, org uuid.UUID, o ...plan.Override) {
+	t.Helper()
+	overrides.Lock()
+	overrides.by[org] = o
+	overrides.Unlock()
+	t.Cleanup(func() {
+		overrides.Lock()
+		delete(overrides.by, org)
+		overrides.Unlock()
+	})
+}
+
+func (plans) Entitlements(_ context.Context, orgID string) (plan.Entitlements, error) {
+	var band plan.Band
 	switch orgID {
 	case acme.String():
-		return "free", nil
+		band = "free"
 	case globex.String():
-		return "team", nil
+		band = "team"
 	case initech.String():
-		return "enterprise", nil
+		band = "enterprise"
+	default:
+		return plan.Entitlements{}, plan.ErrNoOrganization
 	}
-	return "", plan.ErrNoOrganization
+	overrides.Lock()
+	defer overrides.Unlock()
+	return plan.Entitlements{Band: band, Overrides: overrides.by[uuid.MustParse(orgID)]}, nil
 }
 
 type fixture struct {

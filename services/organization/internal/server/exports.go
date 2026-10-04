@@ -467,7 +467,7 @@ func (s *Server) purge(ctx context.Context, org uuid.UUID) error {
 		if err := q.DeleteOrgSignups(ctx, pgtype.UUID{Bytes: org, Valid: true}); err != nil {
 			return err
 		}
-		for _, step := range []func(context.Context, uuid.UUID) error{q.DeleteOrgExports, q.DeleteOrgDataKeys, q.DeleteOrganization} {
+		for _, step := range []func(context.Context, uuid.UUID) error{q.DeleteOrgExports, q.DeleteOrgPlanOverrides, q.DeleteOrgDataKeys, q.DeleteOrganization} {
 			if err := step(ctx, org); err != nil {
 				return err
 			}

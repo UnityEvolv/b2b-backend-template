@@ -1901,6 +1901,221 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/api-keys:
+    post:
+      operationId: createApiKey
+      summary: Make an API key for the organization (the api_keys permission)
+      description: |
+        A named key for a script, granted permission groups, each one the
+        caller holds themself; never api_keys, settings or an Owner-only
+        action. Optionally expires. The token is in this answer only: it is
+        stored as a hash and cannot be shown again. Refused unless the
+        org's plan includes API access. Audited (api_key.created). A key
+        acts as itself (actor api_key:<id>) with an Admin's reach over
+        people, and only where its groups allow.
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewApiKey'
+      responses:
+        '201':
+          description: The key, with its token shown this once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreated'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listApiKeys
+      summary: Every API key and personal access token in the organization (the api_keys permission)
+      description: |
+        Newest first, revoked and expired included, never a token: the
+        prefix, the groups, who it belongs to, when it expires and when it
+        was last used (to the minute).
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/api-keys/{key_id}:
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke any API key or personal access token in the organization (the api_keys permission)
+      description: |
+        At once: the next request made with it is refused. Audited
+        (api_key.revoked).
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/personal-access-tokens:
+    post:
+      operationId: createPersonalAccessToken
+      summary: Make a personal access token for yourself in the organization
+      description: |
+        Granted a subset of the caller's own permission groups now; never
+        api_keys, settings or an Owner-only action. Each use is also checked
+        against what the person may do at that moment, so a role that drops
+        takes the token's access with it. Optionally expires. The token is
+        in this answer only. Refused unless the org's plan includes API
+        access. Audited (api_key.created, kind personal).
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewApiKey'
+      responses:
+        '201':
+          description: The token, shown this once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreated'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listPersonalAccessTokens
+      summary: Your own personal access tokens in the organization
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The tokens, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/personal-access-tokens/{key_id}:
+    delete:
+      operationId: revokePersonalAccessToken
+      summary: Revoke one of your own personal access tokens
+      description: At once. Audited (api_key.revoked).
+      security:
+        - bearer: []
+      tags: [api-keys]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/api-keys/resolve:
+    post:
+      operationId: resolveApiKey
+      summary: What an API key or personal access token is, now (services only)
+      description: |
+        Every service's auth middleware asks this for every request that
+        brings a key (pkg/auth.KeyClient); nothing is cached. 401 when it is
+        no key, revoked or expired; 429 past the key's rate limit, with
+        Retry-After; 403 plan.limit_reached when the org's plan does not
+        include API access. The first use is audited (api_key.first_used),
+        and the last use recorded at most once a minute.
+      security:
+        - bearer: []
+      tags: [internal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: The key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolvedApiKey'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          description: Past the key's rate limit
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearer:
@@ -1910,6 +2125,13 @@ components:
   parameters:
     OrgId:
       name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    KeyId:
+      name: key_id
       in: path
       required: true
       schema:
@@ -1945,6 +2167,111 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    NewApiKey:
+      type: object
+      required: [name, groups]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: What a person calls it, such as nightly export.
+        groups:
+          type: array
+          minItems: 1
+          description: Permission groups, keys of the authorization service's registry (GET /authorization/v1/permission-groups), each one the caller holds.
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+          description: When it stops working, in the future; none when absent.
+    ApiKey:
+      type: object
+      required: [id, org_id, kind, name, prefix, groups, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [org, personal]
+          description: org, the organization's key; personal, a person's own token.
+        name:
+          type: string
+        prefix:
+          type: string
+          description: The token's first characters, to tell keys apart. The token itself is never shown again.
+        groups:
+          type: array
+          items:
+            type: string
+        user_id:
+          type: string
+          format: uuid
+          description: Whose personal access token it is.
+        membership_id:
+          type: string
+          format: uuid
+        created_by:
+          type: string
+          description: The actor who made it, such as membership:<uuid>.
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          description: To the minute.
+        revoked_at:
+          type: string
+          format: date-time
+    ApiKeyCreated:
+      type: object
+      required: [key, token]
+      properties:
+        key:
+          $ref: '#/components/schemas/ApiKey'
+        token:
+          type: string
+          description: The bearer token, shown this once. It starts with the product's prefix for its kind.
+    ApiKeyList:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKey'
+    ResolvedApiKey:
+      type: object
+      required: [id, kind, org_id, groups]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [org, personal]
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        groups:
+          type: array
+          items:
+            type: string
     DataPart:
       type: object
       required: [service, data, files]

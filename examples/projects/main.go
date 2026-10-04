@@ -73,7 +73,10 @@ func run() error {
 		origins     = config.AllowedOrigins(env, baseHost)
 		// The template's services it calls, and where it gets the token it
 		// calls them with.
-		tokenURL         = env.Required("SERVICE_TOKEN_URL")
+		tokenURL = env.Required("SERVICE_TOKEN_URL")
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL      = env.String("IDENTITY_URL", "")
 		auditURL         = env.Required("AUDIT_URL")
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		organizationURL  = env.Required("ORGANIZATION_URL")
@@ -141,6 +144,11 @@ func run() error {
 	}
 
 	tokens := auth.IssuerTokenSource(tokenURL, product.Name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	cluster := db.SingleShard(pool)
 	srv := server.New(cluster, logger, server.Deps{
 		Audit:    audit.NewClient(auditURL, tokens, nil),

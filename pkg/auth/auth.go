@@ -95,10 +95,13 @@ var ErrForbidden = errors.New("auth: not permitted for this org")
 //
 // This is the tenant boundary, not the permission model: whether a member may
 // do a particular thing in their org is the role check in pkg/authz, layered on top.
+//
+// An API key or personal access token is refused: it reaches only what
+// pkg/authz.Require admits it to, by its groups, never what any member may.
 func RequireOrg(ctx context.Context, orgID string) error {
 	c, ok := CallerFrom(ctx)
 	if !ok {
-		return ErrUnauthenticated
+		return noCaller(ctx)
 	}
 	if c.OrgID == "" || !strings.EqualFold(c.OrgID, orgID) {
 		return ErrForbidden
@@ -112,7 +115,7 @@ func RequireOrg(ctx context.Context, orgID string) error {
 func RequireService(ctx context.Context, names ...string) error {
 	c, ok := CallerFrom(ctx)
 	if !ok {
-		return ErrUnauthenticated
+		return noCaller(ctx)
 	}
 	if !c.IsService() || (len(names) > 0 && !slices.Contains(names, c.Service)) {
 		return ErrForbidden
@@ -126,6 +129,9 @@ type Verifier struct {
 	audience string
 	keys     jwk.Set
 	ready    func(context.Context) error
+	// resolver says what an API key or personal access token is; nil
+	// refuses them (WithKeys).
+	resolver KeyResolver
 }
 
 // Skew tolerated between the issuer's clock and ours.
@@ -224,6 +230,10 @@ func Require(v *Verifier, next http.Handler) http.Handler {
 			unauthenticated(w)
 			return
 		}
+		if IsKeyToken(raw) {
+			v.resolve(w, r, raw, next)
+			return
+		}
 		caller, err := v.Verify(raw)
 		if err != nil {
 			unauthenticated(w)
@@ -280,7 +290,7 @@ const PlatformOrg = "00000000-0000-7000-8000-000000000000"
 func RequirePlatform(ctx context.Context) error {
 	c, ok := CallerFrom(ctx)
 	if !ok {
-		return ErrUnauthenticated
+		return noCaller(ctx)
 	}
 	if c.IsService() || !strings.EqualFold(c.OrgID, PlatformOrg) {
 		return ErrForbidden
@@ -309,4 +319,14 @@ func KnownService(name string) bool {
 		return true
 	}
 	return dataowner.Default.Known(name)
+}
+
+// noCaller is why a request has no Caller: ErrForbidden when it came with an
+// API key or personal access token, which no person's or service's check
+// admits, and ErrUnauthenticated when it came with nothing.
+func noCaller(ctx context.Context) error {
+	if _, ok := KeyFrom(ctx); ok {
+		return ErrForbidden
+	}
+	return ErrUnauthenticated
 }

@@ -130,7 +130,7 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 	}
 
 	// The plan's cap, read now: rows past it are reported, not dropped.
-	band, err := s.plans.Band(ctx, req.OrgId.String())
+	ent, err := s.plans.Entitlements(ctx, req.OrgId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -145,20 +145,26 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 	}
 	// A real import past the cap asks billing for room once, for the whole
 	// sheet, so an org upgrades once per crossing rather than band by band.
-	if !dryRun && s.capacity != nil && plan.For(band).Cap(plan.Users) != plan.Unlimited && int(active)+len(table.Rows) > plan.For(band).Cap(plan.Users) {
+	if !dryRun && s.capacity != nil && ent.Cap(plan.Users) != plan.Unlimited && int(active)+len(table.Rows) > ent.Cap(plan.Users) {
 		ok, err := s.capacity.MakeRoom(ctx, req.OrgId, int(active)+len(table.Rows))
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			if band, err = s.plans.Band(ctx, req.OrgId.String()); err != nil {
+			if ent, err = s.plans.Entitlements(ctx, req.OrgId.String()); err != nil {
 				return nil, err
 			}
 		}
 	}
-	room := plan.For(band).Cap(plan.Users) - int(active)
-	if plan.For(band).Cap(plan.Users) == plan.Unlimited {
+	room := ent.Cap(plan.Users) - int(active)
+	if ent.Cap(plan.Users) == plan.Unlimited {
 		room = len(table.Rows) + 1
+	}
+	// What a row past the cap says: the plan's own refusal, which names the
+	// band, or the organization's agreement under an override.
+	full := "The plan's user limit is reached."
+	if r, ok := plan.AsRefusal(ent.CheckUsers(ent.Cap(plan.Users))); ok {
+		full = r.Message
 	}
 
 	c, _ := auth.CallerFrom(ctx)
@@ -239,7 +245,7 @@ func (s *Server) ImportUsers(ctx context.Context, req api.ImportUsersRequestObje
 		}
 		if len(r.Errors) == 0 {
 			if room <= 0 {
-				r.Errors = append(r.Errors, rowError("plan_limit", fmt.Sprintf("The %s plan's user limit is reached; the next plan up is %s.", band, plan.Next(band))))
+				r.Errors = append(r.Errors, rowError("plan_limit", full))
 			} else {
 				room--
 			}

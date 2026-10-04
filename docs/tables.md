@@ -73,7 +73,8 @@ err := cluster.Tx(ctx, orgID, func(tx pgx.Tx) error {
 - A write with no actor is refused, both by `cluster.Tx` and, for anything that
   goes around it, by the trigger.
 - An actor is an identifier, never a name or an email:
-  `membership:<uuid>`, `user:<uuid>`, or `system:<service>` for the platform
+  `membership:<uuid>`, `user:<uuid>`, `api_key:<uuid>` for an org's API key
+  ([api-keys.md](api-keys.md)), or `system:<service>` for the platform
   acting on its own (a housekeeping tick, say).
 
 ## Types

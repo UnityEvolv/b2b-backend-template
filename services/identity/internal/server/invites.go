@@ -183,8 +183,18 @@ func (s *Server) inviter(ctx context.Context, orgID uuid.UUID, role authz.Role) 
 	if role == authz.Owner || !authz.MayManage(grant.Role, role) {
 		return pgtype.UUID{}, false, nil
 	}
-	c, _ := auth.CallerFrom(ctx)
-	id, err := uuid.Parse(c.MembershipID)
+	membership := ""
+	if c, ok := auth.CallerFrom(ctx); ok {
+		membership = c.MembershipID
+	} else if k, ok := auth.KeyFrom(ctx); ok {
+		// A personal access token invites as its person; an org's API key
+		// as itself, with no inviting member, as a platform operator does.
+		if k.Kind != auth.PersonalKey {
+			return pgtype.UUID{}, true, nil
+		}
+		membership = k.MembershipID
+	}
+	id, err := uuid.Parse(membership)
 	if err != nil {
 		return pgtype.UUID{}, false, nil
 	}

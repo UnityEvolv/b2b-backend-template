@@ -106,3 +106,27 @@ func TestCookiesAndTokenPrefixFollowTheBrand(t *testing.T) {
 		t.Fatal("a bad COOKIE_PREFIX was taken")
 	}
 }
+
+// API keys and personal access tokens start with the product's id too, one
+// prefix per kind, unless the settings name their own.
+func TestKeyPrefixesFollowTheBrand(t *testing.T) {
+	t.Setenv("API_KEY_PREFIX", "")
+	t.Setenv("PAT_PREFIX", "")
+	env := &config.Env{}
+	if p := config.KeyPrefixesFrom(env, config.DefaultBrand); p != config.DefaultKeyPrefixes || p.Org != "b2bapp_ak_" || p.Personal != "b2bapp_pat_" {
+		t.Fatalf("default: %+v", p)
+	}
+	if p := config.KeyPrefixesFrom(env, config.Brand{Name: "Acme Cloud", ID: "acme-cloud"}); p.Org != "acme_cloud_ak_" || p.Personal != "acme_cloud_pat_" {
+		t.Errorf("under the product id: %+v", p)
+	}
+	t.Setenv("API_KEY_PREFIX", "acme_key_")
+	t.Setenv("PAT_PREFIX", "acme_tok_")
+	if p := config.KeyPrefixesFrom(env, config.DefaultBrand); p.Org != "acme_key_" || p.Personal != "acme_tok_" || env.Err() != nil {
+		t.Errorf("configured: %+v %v", p, env.Err())
+	}
+	t.Setenv("PAT_PREFIX", "acme_key_")
+	config.KeyPrefixesFrom(env, config.DefaultBrand)
+	if env.Err() == nil {
+		t.Fatal("the same prefix for both kinds was taken")
+	}
+}

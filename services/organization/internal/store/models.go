@@ -69,6 +69,19 @@ type Organization struct {
 	LastModifiedAt          time.Time
 }
 
+type PlanOverride struct {
+	OrgID          uuid.UUID
+	Kind           string
+	Key            string
+	Cap            pgtype.Int4
+	Allowed        pgtype.Bool
+	EndsAt         pgtype.Timestamptz
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
 type PurgedOrganization struct {
 	OrgID          uuid.UUID
 	PurgedAt       time.Time

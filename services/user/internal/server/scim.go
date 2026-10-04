@@ -146,7 +146,7 @@ func (s *Server) scimAuth(operation string, h scimHandler) http.Handler {
 			s.scimFailed(w, r, err)
 			return
 		}
-		band, err := s.plans.Band(ctx, org.String())
+		ent, err := s.plans.Entitlements(ctx, org.String())
 		if errors.Is(err, plan.ErrNoOrganization) {
 			writeProblem(w, &scimProblem{status: http.StatusNotFound, detail: "No such organization."})
 			return
@@ -155,7 +155,7 @@ func (s *Server) scimAuth(operation string, h scimHandler) http.Handler {
 			s.scimFailed(w, r, err)
 			return
 		}
-		if err := plan.CheckFeature(band, plan.SCIM); err != nil {
+		if err := ent.CheckFeature(plan.SCIM); err != nil {
 			detail := "This organization's plan does not include SCIM provisioning."
 			if ref, ok := plan.AsRefusal(err); ok {
 				detail = ref.Message

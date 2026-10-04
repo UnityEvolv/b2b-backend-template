@@ -3,6 +3,7 @@ package plan_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 )
@@ -68,7 +69,7 @@ func TestBandsParseAndOrder(t *testing.T) {
 		t.Error("unknown band is not treated as the lowest")
 	}
 	d := plan.Describe("enterprise")
-	if d.Limits["users"] != plan.Unlimited || len(d.Features) != 3 || !d.Contractual {
+	if d.Limits["users"] != plan.Unlimited || len(d.Features) != 4 || !d.Contractual {
 		t.Errorf("described: %+v", d)
 	}
 }
@@ -271,5 +272,59 @@ func TestBandLabelsAndCopies(t *testing.T) {
 	}
 	if d := r.Describe("a"); d.Label != "A" {
 		t.Errorf("described %+v", d)
+	}
+}
+
+// An override replaces the band's value for one limit or feature until its
+// end, and is ignored from then on with nothing run: resolution is the
+// band's value, then the override in force.
+func TestOverridesResolveAfterTheBand(t *testing.T) {
+	later, earlier := time.Now().Add(time.Hour), time.Now().Add(-time.Minute)
+	deal := plan.Entitlements{Band: "team", Overrides: []plan.Override{
+		{Limit: plan.Users, Cap: 75, EndsAt: &later},
+		{Feature: plan.SCIM, Allowed: true},
+		{Feature: plan.AuditExport, Allowed: true, EndsAt: &earlier},
+	}}
+	if deal.Cap(plan.Users) != 75 || deal.CheckUsers(74) != nil {
+		t.Errorf("raised cap: %d %v", deal.Cap(plan.Users), deal.CheckUsers(74))
+	}
+	r, ok := plan.AsRefusal(deal.CheckUsers(75))
+	if !ok || r.Plan != "team" || r.Limit != "users" || r.Required != "business" || !strings.Contains(r.Message, "agreement allows 75 users") {
+		t.Errorf("past the deal's cap: %+v", r)
+	}
+	if err := deal.CheckFeature(plan.SCIM); err != nil {
+		t.Errorf("SCIM granted: %v", err)
+	}
+	if r, ok := plan.AsRefusal(deal.CheckFeature(plan.AuditExport)); !ok || r.Required != "enterprise" {
+		t.Errorf("an ended grant still applies: %+v", r)
+	}
+	d := deal.Describe()
+	if d.Limits["users"] != 75 || strings.Join(d.Features, ",") != "api_access,scim" || len(d.Overrides) != 2 {
+		t.Errorf("described: %+v", d)
+	}
+
+	// Lowered and taken away, under a band that would allow both.
+	tight := plan.Entitlements{Band: "enterprise", Overrides: []plan.Override{{Limit: plan.Users, Cap: 5}, {Feature: plan.SCIM, Allowed: false}}}
+	if r, ok := plan.AsRefusal(tight.CheckUsers(5)); !ok || r.Required != "" {
+		t.Errorf("lowered cap: %+v", r)
+	}
+	if r, ok := plan.AsRefusal(tight.CheckFeature(plan.SCIM)); !ok || !strings.Contains(r.Message, "agreement does not include SCIM") {
+		t.Errorf("taken away: %+v", r)
+	}
+	// An ended override is the band again; an unlimited one lifts the cap.
+	ended := plan.Entitlements{Band: "free", Overrides: []plan.Override{{Limit: plan.Users, Cap: 500, EndsAt: &earlier}}}
+	if r, ok := plan.AsRefusal(ended.CheckUsers(10)); !ok || r.Required != "team" {
+		t.Errorf("ended: %+v", r)
+	}
+	lifted := plan.Entitlements{Band: "free", Overrides: []plan.Override{{Limit: plan.Users, Cap: plan.Unlimited}}}
+	if err := lifted.CheckUsers(100000); err != nil {
+		t.Errorf("lifted: %v", err)
+	}
+
+	// Only a registered limit or feature can be overridden.
+	for _, o := range []plan.Override{{Limit: "seats", Cap: 1}, {Feature: "teleport", Allowed: true}, {}, {Limit: plan.Users, Feature: plan.SCIM}, {Limit: plan.Users, Cap: -1}} {
+		if plan.Default.CheckOverride(o) == nil {
+			t.Errorf("accepted %+v", o)
+		}
 	}
 }

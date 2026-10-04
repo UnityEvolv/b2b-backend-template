@@ -8,7 +8,7 @@ shape they give.
 
 ## Services and schemas
 
-Seven Go services, one per directory under [services/](../services/). Each
+Eight Go services, one per directory under [services/](../services/). Each
 owns one Postgres schema and connects as its own login role, which can reach
 that schema and nothing else. A service that needs another's data calls its
 API.
@@ -22,9 +22,10 @@ API.
 | audit | `audit` | `svc_audit` | the append-only audit log |
 | notification | `notification` | `svc_notification` | the email outbox, the feed, push, digests, preferences |
 | billing | `billing` | `svc_billing` | Stripe customers, subscriptions, invoices, dunning |
+| webhooks | `webhooks` | `svc_webhooks` | each org's outbound webhook endpoints, their signed deliveries and retries ([webhooks.md](webhooks.md)) |
 
 `user`'s schema is `users` because `user` is a reserved word in Postgres.
-All seven share one database. `cmd/dbinit` makes a schema and a role for every
+All eight share one database. `cmd/dbinit` makes a schema and a role for every
 registered service and grants each role its own schema only; `cmd/migrate`
 runs each service's migrations as that service's role. A test proves a role
 cannot read another schema.
@@ -47,6 +48,7 @@ another service.
 | `config` | settings from the environment: the brand, app origins, hostnames, cookie names, Redis names |
 | `csp` | origins a backend feature adds to the web apps' Content Security Policy (the CAPTCHA widget's) |
 | `dataowner` | the registry of services that hold org or member data ([data-owners.md](data-owners.md)) |
+| `egress` | the HTTP client for addresses someone else chose (an identity provider, a webhook endpoint): public addresses only |
 | `db` | pools, the service registry, `Cluster.Tx` with org and actor, bootstrap, the table convention checks; `db/dbcmd` is `dbinit` and `migrate` |
 | `email` | the one call that sends mail, through the notification outbox, and the templates ([email.md](email.md)) |
 | `envelope` | per-org envelope encryption ([encryption.md](encryption.md)) |
@@ -63,6 +65,7 @@ another service.
 | `sheet` | reads CSV and XLSX for bulk import |
 | `storage` | the object store and the storage purpose registry ([storage.md](storage.md)) |
 | `timezone` | validates IANA zone names |
+| `webhook` | the webhook event-type registry, the one call that sends an event, and the delivery signature ([webhooks.md](webhooks.md)) |
 
 ## The registries
 
@@ -82,6 +85,7 @@ process at start, so a mistake never reaches a request.
 | dataowner | services that export, purge, erase or decrypt | `dataowner.Default.Register` | `DATA_OWNERS`, `<NAME>_URL` | every service; Terraform, through `cmd/dataowners` |
 | notifycat | notification categories, with copy and default channels | `notifycat.Default.Register` | `NOTIFICATION_CATEGORIES` | notification |
 | livebus | live-session event types | `livebus.Default.Register` | none | the process that publishes |
+| webhook | webhook event types an org's endpoints may subscribe to | `webhook.Default.Register` | `WEBHOOK_EVENTS` | webhooks |
 
 Storage purposes, rate-limit rules and event types have no environment seam
 because only the product's own code uses them: they are registered in the
@@ -103,7 +107,9 @@ There is no job queue, no message broker and no scheduler service.
 - **Housekeeping is a loop in the service that owns the data.** The
   notification outbox, the export pass and the daily purge are each a ticker
   in their service's process, and the outbox locks what it claims, so two
-  instances never send one email twice.
+  instances never send one email twice. Outbound webhooks are the same: a
+  delivery is a row, attempted when its event arrives and retried by the
+  webhooks service's own sweep ([webhooks.md](webhooks.md#no-queue-retries)).
 - **Messages to other services go on Redis pub/sub,** under the configured
   prefix: notification events on `<prefix>:notify`, and live-session events
   on `<prefix>:live-events`. A message nobody is listening for is dropped.

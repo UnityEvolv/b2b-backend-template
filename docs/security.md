@@ -21,8 +21,8 @@ report a vulnerability, see [SECURITY.md](../SECURITY.md).
 ## Per-org envelope encryption
 
 Anything a customer gives the product that grants access to something
-(identity provider client secrets, SCIM tokens, and whatever a product keeps
-of the kind) is encrypted under that org's own data key
+(identity provider client secrets, SCIM tokens, webhook signing secrets,
+and whatever a product keeps of the kind) is encrypted under that org's own data key
 ([encryption.md](encryption.md)):
 
 - Each org has a 32-byte data key, made when the org is, stored wrapped by
@@ -34,7 +34,8 @@ of the kind) is encrypted under that org's own data key
 - Two gates decide who may unwrap: the organization service hands a wrapped
   key only to the data owners registered with `decrypt`, and KMS IAM lets
   only those service accounts decrypt. Both come from one list, the
-  data-owner registry. In the template that is the identity service alone.
+  data-owner registry. In the template that is the identity and webhooks
+  services.
 - The plaintext key exists in memory for one request. Nothing caches it,
   and no API returns a secret: an admin page shows that a value is set.
 
@@ -99,6 +100,25 @@ provider that would assert anyone ([sso.md](sso.md)):
 - No secret, code or token is logged. A test checks the logs of a whole
   sign-in.
 
+## Outbound webhooks
+
+A customer types the URL the webhooks service sends to, so it defends
+the network and the customer's receiver alike ([webhooks.md](webhooks.md)):
+
+- **Public addresses only,** with the identity service's dialer
+  ([pkg/egress](../pkg/egress/egress.go)): https, checked when the URL is
+  saved and again at every connection after resolution; no redirect is
+  followed. `WEBHOOKS_LOCAL_TARGETS=true` lifts it on a laptop only.
+- **Every delivery is signed** (HMAC-SHA256 over the message id, a
+  timestamp and the body, in the Standard Webhooks format), so a receiver
+  can refuse a forgery and a replay. The secret is shown once, sealed under
+  the org's key, and rotated with an overlap.
+- **Ids, not people.** Event data naming a person (`email`, `name`, an
+  email address anywhere) is refused when it is sent; the core's events
+  carry membership and user ids.
+- **Bounded.** A 10-second timeout, 4 KB of the answer read and dropped, a
+  per-org cap on events and a per-admin cap on hand-sent deliveries.
+
 ## Rate limits
 
 One limiter, [pkg/ratelimit](../pkg/ratelimit/ratelimit.go), for every
@@ -150,8 +170,8 @@ No secret, hostname or product URL is in the code. Deployed, secrets live in
 Secret Manager, each readable only by the services that use it
 ([operations.md](operations.md#secrets)). Locally, the few a laptop needs are
 in `deploy/.env`, which is git-ignored. `LOCAL_SERVICE_TOKENS`,
-`OIDC_LOCAL_ISSUERS` and `CAPTCHA_PROVIDER=off` are refused outside
-`ENVIRONMENT=local`.
+`OIDC_LOCAL_ISSUERS`, `WEBHOOKS_LOCAL_TARGETS` and `CAPTCHA_PROVIDER=off` are
+refused outside `ENVIRONMENT=local`.
 
 ## What CI checks
 

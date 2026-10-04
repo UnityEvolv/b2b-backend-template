@@ -2,7 +2,7 @@
 
 A product built on the template adds its own services, plan limits,
 permissions and notifications through the template's registries. It does
-not edit the template's code, and it runs the template's seven services
+not edit the template's code, and it runs the template's eight services
 unchanged.
 
 [examples/projects](../examples/projects/README.md) is a small product built
@@ -158,7 +158,7 @@ services accept tokens from ([architecture.md](architecture.md#service-tokens)).
 Set `decrypt` only if the service keeps customer secrets under the org's key
 ([encryption.md](encryption.md)).
 
-## 6. A live event
+## 6. A live event and a webhook event
 
 ```go
 const SharedEvent livebus.Type = "project.shared"
@@ -169,6 +169,21 @@ The type is registered in the process that publishes it. The product
 publishes it on the bus to the member in the org; the identity service's
 stream passes it to their open browser sessions, and the web app reads the
 project list again ([sessions.md](sessions.md#the-push)).
+
+A webhook event goes to the org's own endpoints instead, through the
+template's webhooks service, which learns the type from `WEBHOOK_EVENTS`:
+
+```go
+var CreatedEventType = webhook.EventType{Type: "project.created", Description: "A project was created."}
+
+webhooks.Emit(ctx, org, webhook.Message{ID: id.String(), Type: "project.created",
+    Data: map[string]any{"project_id": id.String()}})
+```
+
+The product sends it after the create commits, with the project's id as
+the message id so a retry is one event, and ids only: data naming a person
+is refused. Signing, retries and the admin pages are the template's
+([webhooks.md](webhooks.md)).
 
 ## 7. A storage purpose and a rate-limit rule
 
@@ -215,10 +230,11 @@ go run ./examples/projects/cmd/projects-env
 
 | setting | on |
 | --- | --- |
-| `PLANS` | organization, user, billing |
+| `PLANS` | organization, user, billing, webhooks |
 | `PERMISSION_GROUPS` | authorization |
 | `NOTIFICATION_CATEGORIES` | notification |
 | `DATA_OWNERS` | every template service |
+| `WEBHOOK_EVENTS` | webhooks |
 | `PROJECTS_URL` | organization, user |
 
 Locally they go in `deploy/.env`, which the compose stack passes to every
@@ -237,7 +253,7 @@ packages. Its README says how to run it against this backend.
 
 ## Seeing it work
 
-[examples/projects/e2e](../examples/projects/e2e/) builds the seven
+[examples/projects/e2e](../examples/projects/e2e/) builds the eight
 template services and the projects service, runs each as a process against
 a fresh database, configured as a deployment would be, and takes the
 product through every seam above. It needs a Postgres, a Redis and an S3
@@ -268,7 +284,7 @@ When your product is under way, delete the example:
 3. Optionally delete the `without-examples` job in
    `.github/workflows/go.yml` and `scripts/without-examples.sh`.
 4. Remove the example's settings (`PLANS`, `PERMISSION_GROUPS`,
-   `NOTIFICATION_CATEGORIES`, `DATA_OWNERS`, `PROJECTS_URL`) from
+   `NOTIFICATION_CATEGORIES`, `DATA_OWNERS`, `WEBHOOK_EVENTS`, `PROJECTS_URL`) from
    `deploy/.env` if you added them.
 
 Nothing else in the template refers to it. `scripts/without-examples.sh`

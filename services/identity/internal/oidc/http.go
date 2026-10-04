@@ -21,3 +21,7 @@ func HTTPClient(local bool) *http.Client {
 
 // Public is whether ip is a public unicast address.
 func Public(ip netip.Addr) bool { return egress.Public(ip) }
+
+// HTTP is the client the service fetches what an admin names with: the
+// provider's documents, and a SAML provider's metadata.
+func (c *Client) HTTP() *http.Client { return c.http }

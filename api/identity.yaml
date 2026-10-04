@@ -186,6 +186,73 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/sign-in/saml/{org_id}/acs:
+    post:
+      operationId: finishSamlSignIn
+      summary: The SAML identity provider posts the browser back here
+      description: |
+        The assertion consumer service of the organization's SAML service
+        provider (HTTP-POST binding). `RelayState` must name the sign-in
+        attempt in this browser's attempt cookie, and the response must
+        answer that attempt's AuthnRequest. The assertion must be signed
+        with one of the provider's certificates, addressed to this ACS URL
+        and this organization's entity id, within its time, and seen for
+        the first time. Then, as the OpenID callback: the address must be in
+        the organization's proven domain, the sign-in is recorded, a session
+        starts, and the browser goes to the app.
+
+        A response that answers no request (identity-provider-initiated:
+        a tile on the provider's dashboard) is never accepted. When the
+        browser has no sign-in attempt for the organization, it is sent to
+        `GET /v1/sign-in/start?org_id=…` instead, which starts a sign-in
+        the provider answers at once.
+      security: []
+      tags: [sign-in]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                SAMLResponse:
+                  type: string
+                RelayState:
+                  type: string
+      responses:
+        '302':
+          description: To the app, to the app's sign-in page with an error code, or to start a sign-in
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/sign-in/saml/{org_id}/metadata:
+    get:
+      operationId: getSamlServiceProviderMetadata
+      summary: This service's SAML metadata for an organization
+      description: |
+        The service provider metadata to give the identity provider: the
+        entity id (this URL), the assertion consumer service, and that
+        assertions must be signed. Public, and fixed by the organization's
+        id, so it can be set up at the provider before anything is saved
+        here.
+      security: []
+      tags: [sign-in]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The metadata
+          content:
+            application/samlmetadata+xml:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/session/refresh:
     post:
       operationId: refreshSession
@@ -306,14 +373,19 @@ paths:
       operationId: setIdentityProvider
       summary: Configure the organization's identity provider
       description: |
-        Any OpenID Connect provider, filled in from a preset. Nothing is
+        Any OpenID Connect provider, filled in from a preset, or a SAML 2.0
+        identity provider (`preset: saml`). Nothing is
         saved unless the settings pass the same test as
-        `POST .../identity-provider/test` (discovery, issuer, keys, and the
-        client id and secret at the token endpoint); a failure is 422 with
+        `POST .../identity-provider/test` (OpenID: discovery, issuer, keys,
+        and the client id and secret at the token endpoint; SAML: the
+        metadata, entity id, single sign-on URL and signing certificates);
+        a failure is 422 with
         `fields` naming the inputs to fix. The client secret is encrypted
         under the organization's data key and never returned; left out on a
         change to the same provider and client id, the stored one is kept
-        and tested again. Audited. Needs the
+        and tested again. A SAML provider is `pending_first_sign_in` until
+        someone signs in through it, which is what proves the provider
+        side of the setup. Audited. Needs the
         sso permission (an Owner, an Admin with it, or a platform operator).
       security:
         - bearer: []
@@ -388,6 +460,80 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/identity-provider/saml-service-provider:
+    get:
+      operationId: getSamlServiceProvider
+      summary: What to set up at a SAML identity provider for this organization
+      description: |
+        The entity id, ACS URL and metadata URL of the organization's SAML
+        service provider, for the admin page to show before any SAML
+        provider is saved. Needs the sso permission.
+      security:
+        - bearer: []
+      tags: [identity-providers]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The service provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SamlServiceProvider'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/identity-provider/enforcement:
+    put:
+      operationId: setSsoEnforcement
+      summary: Require single sign-on for the organization's domain
+      description: |
+        On: everyone whose address is in the domain the organization has
+        proven signs in through its identity provider, and a password
+        sign-in is refused (`sso.required`). The organization's Owners may
+        still sign in with a password and the second factor they already
+        have, so a broken provider never locks the organization out. In
+        force only while the provider is active and verified; it can be
+        turned on only then (409 `identity_provider.not_verified`). An
+        Owner only, never an Admin, a platform operator or a support
+        session. Audited.
+      security:
+        - bearer: []
+      tags: [identity-providers]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enforced]
+              properties:
+                enforced:
+                  type: boolean
+      responses:
+        '200':
+          description: The provider, with the setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProvider'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/identity-provider-presets:
     get:
       operationId: listIdentityProviderPresets
@@ -396,6 +542,8 @@ paths:
         What each preset fills in, so the admin page's provider picker
         needs no copy of it: the issuer (with `{tenant_id}` where Entra's
         goes), the scopes, the claims, and which fields the preset asks for.
+        `saml_profiles` is the attribute names each common SAML provider
+        sends, for the `saml` preset's mapping.
       security:
         - bearer: []
       tags: [identity-providers]
@@ -406,12 +554,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [presets]
+                required: [presets, saml_profiles]
                 properties:
                   presets:
                     type: array
                     items:
                       $ref: '#/components/schemas/IdentityProviderPreset'
+                  saml_profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SamlProfile'
         '401':
           $ref: '#/components/responses/Error'
         default:
@@ -822,6 +974,13 @@ paths:
         account and per address; a person who types their password right is
         never slowed. An unverified account is refused until its email is
         verified.
+
+        When the organization that has proven the address's domain requires
+        single sign-on (`PUT .../identity-provider/enforcement`), the right
+        password is refused with 403 `sso.required`: the person signs in
+        through the organization's provider. Its Owners are the exception
+        (break glass), and only with a second factor already set up, which
+        the 202 then asks for.
       security: []
       tags: [sign-in]
       requestBody:
@@ -858,6 +1017,15 @@ paths:
           $ref: '#/components/responses/Error'
         '401':
           description: Refused; the code says whether it was the credentials, an unverified email, or no organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: |
+            The password is right, but the address's organization requires
+            single sign-on: `sso.required`. The sign-in page sends the
+            person to `GET /v1/sign-in/start?email=…`.
           content:
             application/json:
               schema:
@@ -2966,15 +3134,19 @@ components:
           description: "With verified, when the account has no password yet: what POST /v1/local/password takes with the first one. One use, fifteen minutes."
     NewIdentityProvider:
       type: object
-      required: [preset, client_id]
+      required: [preset]
       description: |
-        An OpenID Connect provider. The preset fills in what is left out:
-        see `GET /v1/identity-provider-presets` and docs/sso.md.
+        An OpenID Connect provider, or a SAML 2.0 identity provider. The
+        preset fills in what is left out: see
+        `GET /v1/identity-provider-presets` and docs/sso.md. With `saml`,
+        only `saml` is sent: any OpenID field is a 400 naming it.
       properties:
         preset:
           type: string
-          description: "`entra`, `google` or `generic`; checked by the server."
+          description: "`entra`, `google` or `generic` (OpenID Connect), or `saml`; checked by the server."
           maxLength: 20
+        saml:
+          $ref: '#/components/schemas/NewSamlSettings'
         issuer:
           type: string
           description: |
@@ -2993,6 +3165,7 @@ components:
           maxLength: 253
         client_id:
           type: string
+          description: OpenID Connect presets only, and required there.
           maxLength: 200
         client_secret:
           type: string
@@ -3018,19 +3191,139 @@ components:
           description: |
             Refuse a token that does not say email_verified=true. A token that
             says false is refused either way. The preset's when left out.
+    NewSamlSettings:
+      type: object
+      description: |
+        A SAML 2.0 identity provider: its metadata, by URL or uploaded (one
+        of them; neither keeps the saved metadata, its certificates checked
+        again), and the attributes the address and name are read from (the
+        profile's when left out).
+      properties:
+        metadata_url:
+          type: string
+          description: Fetched now, from a public https address. Kept, so the admin page can show it.
+          maxLength: 1000
+        metadata_xml:
+          type: string
+          description: The metadata document itself, at most 1 MB.
+          maxLength: 1048576
+        profile:
+          type: string
+          description: "Whose attribute names fill in the mapping: `okta`, `entra`, `google`, `jumpcloud`, `adfs`, `onelogin` or `generic` (the default). Checked by the server."
+          maxLength: 40
+        email_attribute:
+          type: string
+          description: The attribute the address is read from. Without it in an assertion, the subject's NameID is used when it is an address.
+          maxLength: 300
+        name_attribute:
+          type: string
+          description: The attribute the display name is read from.
+          maxLength: 300
+        given_name_attribute:
+          type: string
+          description: With family_name_attribute, the name when name_attribute is absent. Empty reads none.
+          maxLength: 300
+        family_name_attribute:
+          type: string
+          maxLength: 300
+    SamlProvider:
+      type: object
+      required: [entity_id, sso_url, profile, email_attribute, name_attribute, certificates, certificates_expire_at, service_provider]
+      properties:
+        entity_id:
+          type: string
+          description: The identity provider's entity id; the issuer of every assertion.
+        sso_url:
+          type: string
+          description: Where the browser is sent to sign in (HTTP-Redirect binding).
+        metadata_url:
+          type: string
+          description: Where the metadata was fetched from; absent when it was uploaded.
+        profile:
+          type: string
+        email_attribute:
+          type: string
+        name_attribute:
+          type: string
+        given_name_attribute:
+          type: string
+        family_name_attribute:
+          type: string
+        certificates:
+          type: array
+          description: The signing certificates assertions are checked against.
+          items:
+            $ref: '#/components/schemas/SamlCertificate'
+        certificates_expire_at:
+          type: string
+          format: date-time
+          description: When the last certificate expires, and sign-in with it stops unless new metadata is saved.
+        service_provider:
+          $ref: '#/components/schemas/SamlServiceProvider'
+    SamlCertificate:
+      type: object
+      required: [subject, not_before, not_after, sha256]
+      properties:
+        subject:
+          type: string
+        not_before:
+          type: string
+          format: date-time
+        not_after:
+          type: string
+          format: date-time
+        sha256:
+          type: string
+          description: The SHA-256 fingerprint, hex, colon-separated, as providers show it.
+    SamlServiceProvider:
+      type: object
+      required: [entity_id, acs_url, metadata_url, name_id_format]
+      description: What the identity provider is set up with for this organization.
+      properties:
+        entity_id:
+          type: string
+          description: The audience (Entity ID, Identifier) every assertion must name.
+        acs_url:
+          type: string
+          description: The assertion consumer service URL (Reply URL, Single sign-on URL), HTTP-POST binding.
+        metadata_url:
+          type: string
+          description: This service provider's metadata, for providers that read it.
+        name_id_format:
+          type: string
+          description: The NameID format asked for; the email address is preferred.
+    SamlProfile:
+      type: object
+      required: [profile, label, email_attribute, name_attribute, given_name_attribute, family_name_attribute]
+      properties:
+        profile:
+          type: string
+        label:
+          type: string
+        email_attribute:
+          type: string
+        name_attribute:
+          type: string
+        given_name_attribute:
+          type: string
+        family_name_attribute:
+          type: string
     IdentityProvider:
       type: object
-      required: [org_id, preset, issuer, client_id, client_secret_set, scopes, email_claim, name_claim, require_email_verified, status, redirect_uri]
+      required: [org_id, protocol, preset, issuer, client_id, client_secret_set, scopes, email_claim, name_claim, require_email_verified, status, redirect_uri, sso_enforced, sso_enforcement_active]
       properties:
         org_id:
           type: string
           format: uuid
+        protocol:
+          type: string
+          enum: [oidc, saml]
         preset:
           type: string
-          description: "`entra`, `google` or `generic`."
+          description: "`entra`, `google`, `generic` or `saml`."
         issuer:
           type: string
-          description: The issuer as its discovery document names it.
+          description: The issuer as its discovery document names it; for SAML, the identity provider's entity id.
         tenant_id:
           type: string
           description: entra only.
@@ -3039,29 +3332,42 @@ components:
           description: google only.
         client_id:
           type: string
+          description: The client id; for SAML, this service provider's entity id (the audience).
         client_secret_set:
           type: boolean
-          description: A secret is stored. The secret itself is never returned.
+          description: A secret is stored. The secret itself is never returned. Always false for SAML.
         scopes:
           type: array
+          description: Empty for SAML.
           items:
             type: string
         email_claim:
           type: string
+          description: The claim the address is read from; for SAML, the attribute.
         name_claim:
           type: string
+          description: The claim the name is read from; for SAML, the attribute.
         require_email_verified:
           type: boolean
         status:
           type: string
-          enum: [active, disabled]
+          description: "`pending_first_sign_in`: a SAML provider nobody has signed in through yet. It signs people in; it is not verified, so single sign-on cannot be required yet."
+          enum: [active, pending_first_sign_in, disabled]
         verified_at:
           type: string
           format: date-time
-          description: When the settings last passed the test before saving.
+          description: When the settings last passed the test before saving; for SAML, when someone first signed in through the provider as saved.
         redirect_uri:
           type: string
-          description: What to register with the provider as the redirect URI.
+          description: What to register with the provider as the redirect URI; for SAML, the ACS URL.
+        sso_enforced:
+          type: boolean
+          description: An Owner requires single sign-on for the organization's domain.
+        sso_enforcement_active:
+          type: boolean
+          description: It is required and in force now, the provider being active and verified.
+        saml:
+          $ref: '#/components/schemas/SamlProvider'
     IdentityProviderTest:
       type: object
       required: [ok, checks, redirect_uri]
@@ -3071,10 +3377,10 @@ components:
           description: Every check passed; a save with these settings would be accepted.
         issuer:
           type: string
-          description: The issuer the discovery document named, once it was fetched.
+          description: The issuer the discovery document named, once it was fetched; for SAML, the entity id the metadata named.
         redirect_uri:
           type: string
-          description: What to register with the provider as the redirect URI.
+          description: What to register with the provider as the redirect URI; for SAML, the ACS URL.
         checks:
           type: array
           description: In order; a check after a failed one is not run and not listed.
@@ -3086,24 +3392,27 @@ components:
       properties:
         check:
           type: string
-          description: "`discovery`, `issuer`, `keys` or `client`."
+          description: "OpenID Connect: `discovery`, `issuer`, `keys`, `client`. SAML: `metadata`, `entity_id`, `sso_url`, `certificates`."
         ok:
           type: boolean
         field:
           type: string
-          description: When it failed, the input to fix (issuer, tenant_id, client_id, client_secret). Absent when no input explains it, such as Google being unreachable.
+          description: When it failed, the input to fix (issuer, tenant_id, client_id, client_secret; saml.metadata_url, saml.metadata_xml). Absent when no input explains it, such as Google being unreachable.
         message:
           type: string
           description: A sentence for the admin. Never a secret or a token.
     IdentityProviderPreset:
       type: object
-      required: [preset, issuer, scopes, email_claim, name_claim, require_email_verified, fields]
+      required: [preset, protocol, issuer, scopes, email_claim, name_claim, require_email_verified, fields]
       properties:
         preset:
           type: string
+        protocol:
+          type: string
+          enum: [oidc, saml]
         issuer:
           type: string
-          description: "The issuer the preset uses: `{tenant_id}` stands for Entra's tenant; empty for generic, which asks for it."
+          description: "The issuer the preset uses: `{tenant_id}` stands for Entra's tenant; empty for generic, which asks for it, and for saml."
         scopes:
           type: array
           items:
@@ -3116,7 +3425,7 @@ components:
           type: boolean
         fields:
           type: array
-          description: The inputs the preset asks for besides the client id and secret.
+          description: The inputs the preset asks for besides the client id and secret; for saml, the inputs of `saml`.
           items:
             type: string
     Error:

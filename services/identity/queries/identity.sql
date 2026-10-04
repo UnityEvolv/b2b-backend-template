@@ -21,15 +21,17 @@ ON CONFLICT (org_id) DO UPDATE
 SET preset = excluded.preset, issuer = excluded.issuer, tenant_id = excluded.tenant_id,
     hosted_domain = excluded.hosted_domain, client_id = excluded.client_id, client_secret = excluded.client_secret,
     scopes = excluded.scopes, email_claim = excluded.email_claim, name_claim = excluded.name_claim,
-    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now()
+    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now(),
+    saml_sso_url = NULL, saml_certificates = NULL, saml_certificates_expire_at = NULL, saml_metadata_url = NULL,
+    saml_profile = NULL, saml_given_name_attribute = NULL, saml_family_name_attribute = NULL
 RETURNING *;
 
 -- name: SetIdentityProviderStatus :one
 UPDATE identity_providers SET status = @status WHERE org_id = @org_id RETURNING *;
 
 -- name: InsertSignInAttempt :exec
-INSERT INTO sign_in_attempts (org_id, id, code_verifier, nonce, next_path, app, expires_at, client, app_challenge)
-VALUES (@org_id, @id, @code_verifier, @nonce, @next_path, @app, @expires_at, @client, sqlc.narg('app_challenge'));
+INSERT INTO sign_in_attempts (org_id, id, code_verifier, nonce, next_path, app, expires_at, client, app_challenge, saml_request_id)
+VALUES (@org_id, @id, @code_verifier, @nonce, @next_path, @app, @expires_at, @client, sqlc.narg('app_challenge'), sqlc.narg('saml_request_id'));
 
 -- name: UseSignInAttempt :one
 -- One use: the row is marked used in the same statement that reads it, so
@@ -377,7 +379,8 @@ SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = @org_id)
      + (SELECT count(*) FROM api_keys k WHERE k.org_id = @org_id)
      + (SELECT count(*) FROM support_access s WHERE s.org_id = @org_id)
      + (SELECT count(*) FROM impersonation_grants g WHERE g.org_id = @org_id)
-     + (SELECT count(*) FROM impersonations m WHERE m.org_id = @org_id))::bigint AS remaining;
+     + (SELECT count(*) FROM impersonations m WHERE m.org_id = @org_id)
+     + (SELECT count(*) FROM saml_assertions x WHERE x.org_id = @org_id))::bigint AS remaining;
 
 -- name: RevokeSessionsOfOrg :many
 -- Every live session working in an org, ended with a reason: the org is

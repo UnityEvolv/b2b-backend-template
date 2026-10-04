@@ -136,3 +136,18 @@ func (w *cookieWriter) Write(b []byte) (int, error) {
 	}
 	return w.ResponseWriter.Write(b)
 }
+
+// setCrossSiteCookie is setCookie for a cookie the browser must send on a
+// cross-site POST: SameSite None, and so always Secure (browsers treat
+// http://localhost as secure for it). The SAML attempt cookie is the one:
+// the identity provider posts the response back from its own site, and a
+// Lax cookie would be left behind. It binds a response to this browser and
+// is used once; it grants nothing alone, since the response must also be
+// signed by the org's provider for this attempt's request.
+func setCrossSiteCookie(ctx context.Context, which cookie, value string, maxAge time.Duration) {
+	setCookie(ctx, which, value, maxAge)
+	c := cookiesFrom(ctx)
+	last := c.out[len(c.out)-1]
+	last.SameSite = http.SameSiteNoneMode
+	last.Secure = true
+}

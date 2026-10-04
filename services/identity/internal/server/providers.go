@@ -16,6 +16,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/httpx"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/api"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/oidc"
+	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/saml"
 	"github.com/UnityEvolv/b2b-backend-template/services/identity/internal/store"
 )
 
@@ -28,13 +29,25 @@ func textPtr(t pgtype.Text) *string {
 
 func (s *Server) toAPI(p store.IdentityProvider) api.IdentityProvider {
 	out := api.IdentityProvider{
-		OrgId: p.OrgID, Preset: p.Preset, Issuer: p.Issuer, TenantId: textPtr(p.TenantID), HostedDomain: textPtr(p.HostedDomain),
+		OrgId: p.OrgID, Protocol: api.IdentityProviderProtocolOidc, Preset: p.Preset, Issuer: p.Issuer, TenantId: textPtr(p.TenantID), HostedDomain: textPtr(p.HostedDomain),
 		ClientId: p.ClientID, ClientSecretSet: len(p.ClientSecret) > 0, Scopes: p.Scopes,
 		EmailClaim: p.EmailClaim, NameClaim: p.NameClaim, RequireEmailVerified: p.RequireEmailVerified,
 		Status: api.IdentityProviderStatus(p.Status), RedirectUri: s.redirectURI(),
+		SsoEnforced: p.SsoEnforced, SsoEnforcementActive: enforcing(p),
 	}
 	if p.VerifiedAt.Valid {
 		out.VerifiedAt = &p.VerifiedAt.Time
+	}
+	if p.Preset == presetSAML {
+		out.Protocol = api.IdentityProviderProtocolSaml
+		out.RedirectUri = s.spFor(p.OrgID).ACSURL
+		out.Saml = s.samlOf(p)
+		if out.Scopes == nil {
+			out.Scopes = []string{}
+		}
+		if p.Status == "active" && !p.VerifiedAt.Valid {
+			out.Status = api.PendingFirstSignIn
+		}
 	}
 	return out
 }
@@ -62,11 +75,26 @@ func (s *Server) ListIdentityProviderPresets(_ context.Context, _ api.ListIdenti
 			issuer = s.cfg.GoogleIssuer
 		}
 		out = append(out, api.IdentityProviderPreset{
-			Preset: p.Name, Issuer: issuer, Scopes: slices.Clone(p.Scopes), EmailClaim: p.EmailClaim, NameClaim: p.NameClaim,
+			Preset: p.Name, Protocol: api.IdentityProviderPresetProtocolOidc, Issuer: issuer, Scopes: slices.Clone(p.Scopes), EmailClaim: p.EmailClaim, NameClaim: p.NameClaim,
 			RequireEmailVerified: p.RequireEmailVerified, Fields: slices.Clone(p.Fields),
 		})
 	}
-	return api.ListIdentityProviderPresets200JSONResponse{Presets: out}, nil
+	// SAML is one preset: the provider is described by its metadata, and
+	// the profiles fill in its attribute names.
+	generic, _ := saml.ProfileNamed(saml.ProfileGeneric)
+	out = append(out, api.IdentityProviderPreset{
+		Preset: presetSAML, Protocol: api.IdentityProviderPresetProtocolSaml, Scopes: []string{},
+		EmailClaim: generic.Mapping.Email, NameClaim: generic.Mapping.Name,
+		Fields: []string{saml.FieldMetadataURL, saml.FieldMetadataXML, "saml.profile", "saml.email_attribute", "saml.name_attribute", "saml.given_name_attribute", "saml.family_name_attribute"},
+	})
+	profiles := make([]api.SamlProfile, 0, len(saml.Profiles))
+	for _, p := range saml.Profiles {
+		profiles = append(profiles, api.SamlProfile{
+			Profile: p.Name, Label: p.Label, EmailAttribute: p.Mapping.Email, NameAttribute: p.Mapping.Name,
+			GivenNameAttribute: p.Mapping.GivenName, FamilyNameAttribute: p.Mapping.FamilyName,
+		})
+	}
+	return api.ListIdentityProviderPresets200JSONResponse{Presets: out, SamlProfiles: profiles}, nil
 }
 
 // GetIdentityProvider is the org's provider, never its secret. The sso
@@ -123,7 +151,7 @@ func (s *Server) candidateOf(body api.NewIdentityProvider) (candidate, map[strin
 	}
 	preset, ok := oidc.PresetNamed(strings.TrimSpace(body.Preset))
 	if !ok {
-		fields["preset"] = "entra, google or generic"
+		fields["preset"] = "entra, google, generic or saml"
 		return candidate{}, fields
 	}
 	c := candidate{preset: preset, issuerField: "issuer"}
@@ -168,7 +196,10 @@ func (s *Server) candidateOf(body api.NewIdentityProvider) (candidate, map[strin
 	if preset.Name != oidc.PresetGoogle && hd != "" {
 		fields["hosted_domain"] = "Google only"
 	}
-	clientID := strings.TrimSpace(body.ClientId)
+	if body.Saml != nil {
+		fields["saml"] = "SAML only: preset saml"
+	}
+	clientID := str(body.ClientId)
 	if clientID == "" || len(clientID) > 200 {
 		fields["client_id"] = "the application (client) id"
 	}
@@ -302,6 +333,16 @@ func (s *Server) TestIdentityProvider(ctx context.Context, req api.TestIdentityP
 	if req.Body == nil {
 		return api.TestIdentityProvider400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "No settings."}}, nil
 	}
+	if strings.TrimSpace(req.Body.Preset) == presetSAML {
+		_, tested, fields, err := s.prepareSAML(ctx, req.OrgId, *req.Body)
+		if err != nil {
+			return nil, err
+		}
+		if fields != nil {
+			return api.TestIdentityProvider400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Some fields are not valid.", Fields: &fields}}, nil
+		}
+		return api.TestIdentityProvider200JSONResponse(samlReport(tested, s.spFor(req.OrgId))), nil
+	}
 	_, tested, fields, err := s.prepare(ctx, req.OrgId, *req.Body)
 	if err != nil {
 		return nil, err
@@ -322,6 +363,9 @@ func (s *Server) SetIdentityProvider(ctx context.Context, req api.SetIdentityPro
 	if req.Body == nil {
 		return api.SetIdentityProvider400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "No settings."}}, nil
 	}
+	if strings.TrimSpace(req.Body.Preset) == presetSAML {
+		return s.setSAML(ctx, req.OrgId, *req.Body)
+	}
 	c, tested, fields, err := s.prepare(ctx, req.OrgId, *req.Body)
 	if err != nil {
 		return nil, err
@@ -330,23 +374,7 @@ func (s *Server) SetIdentityProvider(ctx context.Context, req api.SetIdentityPro
 		return api.SetIdentityProvider400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeInvalidRequest, Message: "Some fields are not valid.", Fields: &fields}}, nil
 	}
 	if !tested.OK() {
-		failed := map[string]string{}
-		message := "The provider could not be reached with these settings."
-		for _, check := range tested.Checks {
-			if !check.OK {
-				message = check.Message
-				if check.Field != "" {
-					failed[check.Field] = check.Message
-				}
-			}
-		}
-		// The check's name only: its message can carry the issuer's URL.
-		s.logger.Warn("identity provider settings refused", "org_id", req.OrgId, "check", tested.Checks[len(tested.Checks)-1].Name)
-		out := api.SetIdentityProvider422JSONResponse{Code: "identity_provider.test_failed", Message: message}
-		if len(failed) > 0 {
-			out.Fields = &failed
-		}
-		return out, nil
+		return api.SetIdentityProvider422JSONResponse(s.failedTest(req.OrgId, report(tested, s.redirectURI()).Checks)), nil
 	}
 	sealed, err := s.keyring.Encrypt(ctx, req.OrgId.String(), []byte(c.settings.ClientSecret), purposeClientSecret)
 	if err != nil {

@@ -101,7 +101,8 @@ SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = $1)
      + (SELECT count(*) FROM api_keys k WHERE k.org_id = $1)
      + (SELECT count(*) FROM support_access s WHERE s.org_id = $1)
      + (SELECT count(*) FROM impersonation_grants g WHERE g.org_id = $1)
-     + (SELECT count(*) FROM impersonations m WHERE m.org_id = $1))::bigint AS remaining
+     + (SELECT count(*) FROM impersonations m WHERE m.org_id = $1)
+     + (SELECT count(*) FROM saml_assertions x WHERE x.org_id = $1))::bigint AS remaining
 `
 
 // What is left of an org after a purge: zero when it is gone.
@@ -400,7 +401,7 @@ func (q *Queries) GetEmailVerification(ctx context.Context, tokenHash []byte) (E
 }
 
 const getIdentityProvider = `-- name: GetIdentityProvider :one
-SELECT org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at FROM identity_providers WHERE org_id = $1
+SELECT org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at, saml_sso_url, saml_certificates, saml_certificates_expire_at, saml_metadata_url, saml_profile, saml_given_name_attribute, saml_family_name_attribute, sso_enforced FROM identity_providers WHERE org_id = $1
 `
 
 func (q *Queries) GetIdentityProvider(ctx context.Context, orgID uuid.UUID) (IdentityProvider, error) {
@@ -425,6 +426,14 @@ func (q *Queries) GetIdentityProvider(ctx context.Context, orgID uuid.UUID) (Ide
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.SamlSsoUrl,
+		&i.SamlCertificates,
+		&i.SamlCertificatesExpireAt,
+		&i.SamlMetadataUrl,
+		&i.SamlProfile,
+		&i.SamlGivenNameAttribute,
+		&i.SamlFamilyNameAttribute,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
@@ -950,20 +959,21 @@ func (q *Queries) InsertSessionWithPolicy(ctx context.Context, arg InsertSession
 }
 
 const insertSignInAttempt = `-- name: InsertSignInAttempt :exec
-INSERT INTO sign_in_attempts (org_id, id, code_verifier, nonce, next_path, app, expires_at, client, app_challenge)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO sign_in_attempts (org_id, id, code_verifier, nonce, next_path, app, expires_at, client, app_challenge, saml_request_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type InsertSignInAttemptParams struct {
-	OrgID        uuid.UUID
-	ID           uuid.UUID
-	CodeVerifier string
-	Nonce        string
-	NextPath     string
-	App          string
-	ExpiresAt    time.Time
-	Client       string
-	AppChallenge pgtype.Text
+	OrgID         uuid.UUID
+	ID            uuid.UUID
+	CodeVerifier  string
+	Nonce         string
+	NextPath      string
+	App           string
+	ExpiresAt     time.Time
+	Client        string
+	AppChallenge  pgtype.Text
+	SamlRequestID pgtype.Text
 }
 
 func (q *Queries) InsertSignInAttempt(ctx context.Context, arg InsertSignInAttemptParams) error {
@@ -977,6 +987,7 @@ func (q *Queries) InsertSignInAttempt(ctx context.Context, arg InsertSignInAttem
 		arg.ExpiresAt,
 		arg.Client,
 		arg.AppChallenge,
+		arg.SamlRequestID,
 	)
 	return err
 }
@@ -1778,7 +1789,7 @@ func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) (S
 }
 
 const setIdentityProviderStatus = `-- name: SetIdentityProviderStatus :one
-UPDATE identity_providers SET status = $1 WHERE org_id = $2 RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
+UPDATE identity_providers SET status = $1 WHERE org_id = $2 RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at, saml_sso_url, saml_certificates, saml_certificates_expire_at, saml_metadata_url, saml_profile, saml_given_name_attribute, saml_family_name_attribute, sso_enforced
 `
 
 type SetIdentityProviderStatusParams struct {
@@ -1808,6 +1819,14 @@ func (q *Queries) SetIdentityProviderStatus(ctx context.Context, arg SetIdentity
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.SamlSsoUrl,
+		&i.SamlCertificates,
+		&i.SamlCertificatesExpireAt,
+		&i.SamlMetadataUrl,
+		&i.SamlProfile,
+		&i.SamlGivenNameAttribute,
+		&i.SamlFamilyNameAttribute,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
@@ -1876,8 +1895,10 @@ ON CONFLICT (org_id) DO UPDATE
 SET preset = excluded.preset, issuer = excluded.issuer, tenant_id = excluded.tenant_id,
     hosted_domain = excluded.hosted_domain, client_id = excluded.client_id, client_secret = excluded.client_secret,
     scopes = excluded.scopes, email_claim = excluded.email_claim, name_claim = excluded.name_claim,
-    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now()
-RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at
+    require_email_verified = excluded.require_email_verified, status = 'active', verified_at = now(),
+    saml_sso_url = NULL, saml_certificates = NULL, saml_certificates_expire_at = NULL, saml_metadata_url = NULL,
+    saml_profile = NULL, saml_given_name_attribute = NULL, saml_family_name_attribute = NULL
+RETURNING org_id, id, preset, issuer, tenant_id, hosted_domain, client_id, client_secret, scopes, email_claim, name_claim, require_email_verified, status, verified_at, created_by, created_at, last_modified_by, last_modified_at, saml_sso_url, saml_certificates, saml_certificates_expire_at, saml_metadata_url, saml_profile, saml_given_name_attribute, saml_family_name_attribute, sso_enforced
 `
 
 type UpsertIdentityProviderParams struct {
@@ -1930,6 +1951,14 @@ func (q *Queries) UpsertIdentityProvider(ctx context.Context, arg UpsertIdentity
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.SamlSsoUrl,
+		&i.SamlCertificates,
+		&i.SamlCertificatesExpireAt,
+		&i.SamlMetadataUrl,
+		&i.SamlProfile,
+		&i.SamlGivenNameAttribute,
+		&i.SamlFamilyNameAttribute,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
@@ -2159,7 +2188,7 @@ func (q *Queries) UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams
 const useSignInAttempt = `-- name: UseSignInAttempt :one
 UPDATE sign_in_attempts SET used_at = now()
 WHERE org_id = $1 AND id = $2 AND used_at IS NULL AND expires_at > now()
-RETURNING org_id, id, code_verifier, nonce, next_path, app, expires_at, used_at, client, app_challenge, created_by, created_at, last_modified_by, last_modified_at
+RETURNING org_id, id, code_verifier, nonce, next_path, app, expires_at, used_at, client, app_challenge, created_by, created_at, last_modified_by, last_modified_at, saml_request_id
 `
 
 type UseSignInAttemptParams struct {
@@ -2187,6 +2216,7 @@ func (q *Queries) UseSignInAttempt(ctx context.Context, arg UseSignInAttemptPara
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.SamlRequestID,
 	)
 	return i, err
 }

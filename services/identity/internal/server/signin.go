@@ -188,6 +188,11 @@ func (s *Server) StartSignIn(ctx context.Context, req api.StartSignInRequestObje
 	if err != nil {
 		return nil, err
 	}
+	if idp.Preset == presetSAML {
+		return s.startSAML(ctx, orgID, idp, store.InsertSignInAttemptParams{
+			OrgID: orgID, NextPath: safeNext(p.Next), App: app, Client: client, AppChallenge: challenge,
+		})
+	}
 	provider, err := s.oidc.Discover(ctx, idp.Issuer)
 	if err != nil {
 		s.logger.Error("identity provider unreachable", "org_id", orgID, "error", err)
@@ -249,6 +254,11 @@ func (s *Server) back(app, code string) api.FinishSignInResponseObject {
 // backWith is back with more query parameters for the page, such as the
 // date a closing org is deleted.
 func (s *Server) backWith(app, code string, extra url.Values) api.FinishSignInResponseObject {
+	return found(s.backURL(app, code, extra))
+}
+
+// backURL is where backWith sends the browser.
+func (s *Server) backURL(app, code string, extra url.Values) string {
 	origin, ok := s.appOrigin(app)
 	if !ok {
 		origin = s.cfg.Apps[s.cfg.MainApp]
@@ -258,15 +268,24 @@ func (s *Server) backWith(app, code string, extra url.Values) api.FinishSignInRe
 		q[k] = v
 	}
 	q.Set("error", code)
-	location := origin + "/sign-in?" + q.Encode()
+	return origin + "/sign-in?" + q.Encode()
+}
+
+// found is the OpenID callback's redirect to location.
+func found(location string) api.FinishSignInResponseObject {
 	return api.FinishSignIn302Response{Headers: api.FinishSignIn302ResponseHeaders{Location: &location}}
 }
 
 // backFor is back to where the attempt came from: the web app's sign-in
 // page, or the desktop app's scheme when the desktop app started it.
 func (s *Server) backFor(attempt store.SignInAttempt, code string, extra url.Values) api.FinishSignInResponseObject {
+	return found(s.backForURL(attempt, code, extra))
+}
+
+// backForURL is where backFor sends the browser.
+func (s *Server) backForURL(attempt store.SignInAttempt, code string, extra url.Values) string {
 	if !appClient(attempt.Client) {
-		return s.backWith(attempt.App, code, extra)
+		return s.backURL(attempt.App, code, extra)
 	}
 	q := url.Values{}
 	for k, v := range extra {
@@ -274,8 +293,7 @@ func (s *Server) backFor(attempt store.SignInAttempt, code string, extra url.Val
 	}
 	q.Set("error", code)
 	q.Set("next", attempt.NextPath)
-	location := s.cfg.DesktopScheme + "://auth/callback?" + q.Encode()
-	return api.FinishSignIn302Response{Headers: api.FinishSignIn302ResponseHeaders{Location: &location}}
+	return s.cfg.DesktopScheme + "://auth/callback?" + q.Encode()
 }
 
 // appClient is the desktop or mobile app, which sign in through the system
@@ -326,6 +344,10 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	if err != nil {
 		return nil, err
 	}
+	// A SAML provider answers at its own endpoint, never here.
+	if idp.Preset == presetSAML || attempt.SamlRequestID.Valid {
+		return s.backFor(attempt, errProviderRefused, nil), nil
+	}
 	if p.Error != nil && *p.Error != "" {
 		s.logger.Warn("identity provider refused a sign-in", "org_id", orgID, "error", oidc.ErrorCode(*p.Error))
 		return s.backFor(attempt, errProviderRefused, nil), nil
@@ -350,42 +372,62 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	if err != nil {
 		return nil, err
 	}
-
-	// An org's provider speaks only for addresses in the domain the org has
-	// proven it owns. Users are global, so a provider that could assert any
-	// address would sign its owner in as anyone, in every org they belong to.
-	owns, err := s.ownsDomainOf(ctx, orgID, claims.Email)
+	location, _, err := s.finishProviderSignIn(ctx, orgID, attempt, idp.Preset, asserted{
+		Email: claims.Email, Name: claims.Name, Subject: claims.Subject, Directory: directoryOf(claims),
+	})
 	if err != nil {
 		return nil, err
 	}
+	return found(location), nil
+}
+
+// asserted is who an org's provider says signed in, whatever the protocol.
+type asserted struct {
+	Email, Name, Subject string
+	Directory            map[string]string
+}
+
+// finishProviderSignIn is the rest of a sign-in once the org's provider
+// (OpenID or SAML) has vouched for who: the address must be in the org's
+// proven domain, the user service records the sign-in, the session starts
+// (or the desktop app gets its code), and the browser goes to the app.
+// Returns where the browser goes, and whether a session was started there.
+func (s *Server) finishProviderSignIn(ctx context.Context, orgID uuid.UUID, attempt store.SignInAttempt, provider string, who asserted) (string, bool, error) {
+	// An org's provider speaks only for addresses in the domain the org has
+	// proven it owns. Users are global, so a provider that could assert any
+	// address would sign its owner in as anyone, in every org they belong to.
+	owns, err := s.ownsDomainOf(ctx, orgID, who.Email)
+	if err != nil {
+		return "", false, err
+	}
 	if !owns {
 		s.logger.Warn("identity provider asserted an address outside the organization's domain", "org_id", orgID)
-		return s.back(attempt.App, errProviderRefused), nil
+		return s.backURL(attempt.App, errProviderRefused, nil), false, nil
 	}
 
 	// The user service makes the user and the membership; the provider is the gate.
 	result, err := s.users.RecordSignIn(ctx, SignIn{
-		OrgID: orgID, Email: claims.Email, Name: nameOr(claims.Name, claims.Email), IdpSubject: claims.Subject,
-		Directory: directoryOf(claims),
+		OrgID: orgID, Email: who.Email, Name: nameOr(who.Name, who.Email), IdpSubject: who.Subject,
+		Directory: who.Directory,
 	})
 	var refusal *Refusal
 	if errors.As(err, &refusal) {
 		switch refusal.Code {
 		case "membership.inactive":
-			return s.backFor(attempt, errMembershipInactive, nil), nil
+			return s.backForURL(attempt, errMembershipInactive, nil), false, nil
 		case "plan.limit_reached":
-			return s.backFor(attempt, errPlanLimit, nil), nil
+			return s.backForURL(attempt, errPlanLimit, nil), false, nil
 		}
-		return nil, err
+		return "", false, err
 	}
 	if err != nil {
-		return nil, err
+		return "", false, err
 	}
 
 	// Where they land: the org that authenticated them first, then the rules.
 	screened, err := s.screen(ctx, result.Memberships)
 	if err != nil {
-		return nil, err
+		return "", false, err
 	}
 	land, ok := landing(memberships(screened), orgID, time.Now())
 	if code, _, purgeAfter, held := heldBack(screened); !ok && held {
@@ -394,12 +436,12 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 			if purgeAfter != nil {
 				extra.Set("purge_after", purgeAfter.UTC().Format("2006-01-02"))
 			}
-			return s.backFor(attempt, errOrgClosing, extra), nil
+			return s.backForURL(attempt, errOrgClosing, extra), false, nil
 		}
-		return s.backFor(attempt, errOrgSuspended, nil), nil
+		return s.backForURL(attempt, errOrgSuspended, nil), false, nil
 	}
 	if !ok {
-		return s.backFor(attempt, errNoMembership, nil), nil
+		return s.backForURL(attempt, errNoMembership, nil), false, nil
 	}
 	next := attempt.NextPath
 	if land == nil {
@@ -408,16 +450,15 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	// The desktop or mobile app started this in the system browser: the
 	// session is the app's, so the browser gets a one-time code for it instead.
 	if appClient(attempt.Client) {
-		raw, err := s.desktopCode(ctx, result.User.ID, orgID, land, idp.Preset, attempt.Client, attempt.AppChallenge.String)
+		raw, err := s.desktopCode(ctx, result.User.ID, orgID, land, provider, attempt.Client, attempt.AppChallenge.String)
 		if err != nil {
-			return nil, err
+			return "", false, err
 		}
-		location := s.cfg.DesktopScheme + "://auth/callback?" + url.Values{"code": {raw}, "next": {next}}.Encode()
-		return api.FinishSignIn302Response{Headers: api.FinishSignIn302ResponseHeaders{Location: &location}}, nil
+		return s.cfg.DesktopScheme + "://auth/callback?" + url.Values{"code": {raw}, "next": {next}}.Encode(), true, nil
 	}
 	session, raw, err := s.startSession(ctx, result.User.ID, orgID, land)
 	if err != nil {
-		return nil, err
+		return "", false, err
 	}
 	setCookie(ctx, sessionCookie, raw, time.Until(session.ExpiresAt))
 	if land != nil {
@@ -427,15 +468,14 @@ func (s *Server) FinishSignIn(ctx context.Context, req api.FinishSignInRequestOb
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
 		OrgID: orgID.String(), Action: "session.signed_in", TargetType: "session", TargetID: session.ID.String(),
-		Details: map[string]any{"user_id": result.User.ID.String(), "provider": idp.Preset, "chooser": land == nil},
+		Details: map[string]any{"user_id": result.User.ID.String(), "provider": provider, "chooser": land == nil},
 		Actor:   db.UserActor(result.User.ID.String()),
 	}); err != nil {
-		return nil, err
+		return "", false, err
 	}
 
 	origin, _ := s.appOrigin(attempt.App)
-	location := origin + next
-	return api.FinishSignIn302Response{Headers: api.FinishSignIn302ResponseHeaders{Location: &location}}, nil
+	return origin + next, true, nil
 }
 
 // ownsDomainOf reports whether the address's domain is the one the org has

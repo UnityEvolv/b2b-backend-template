@@ -157,6 +157,28 @@ func (s *Server) SignInLocal(ctx context.Context, req api.SignInLocalRequestObje
 	if err != nil {
 		return nil, err
 	}
+	// The org that owns the address's domain may require its provider. Its
+	// Owners keep the password, with the second factor they already have,
+	// so a broken provider never locks the org out (break glass).
+	if org, required, err := s.ssoRequiredBy(ctx, address); err != nil {
+		return nil, err
+	} else if required {
+		if !activeOwner(all, org) {
+			s.logger.Info("password sign-in refused: single sign-on is required", "org_id", org, "user_id", account.UserID)
+			return api.SignInLocal403JSONResponse{Code: codeSSORequired, Message: "Your organization signs in with single sign-on. Sign in through your organization's identity provider instead of a password."}, nil
+		}
+		if !enrolled {
+			s.logger.Info("password sign-in refused: an Owner without a second factor where single sign-on is required", "org_id", org, "user_id", account.UserID)
+			return api.SignInLocal403JSONResponse{Code: codeSSORequired, Message: "Your organization requires single sign-on. As an Owner you may still use your password, but only with a second factor: sign in through single sign-on and set one up."}, nil
+		}
+		if err := s.recorder.Record(ctx, audit.Event{
+			OrgID: org.String(), Action: "session.sso_bypassed", TargetType: "user", TargetID: account.UserID.String(),
+			Details: map[string]any{"user_id": account.UserID.String(), "reason": "owner_break_glass"},
+			Actor:   db.UserActor(account.UserID.String()),
+		}); err != nil {
+			return nil, err
+		}
+	}
 	p, err := s.policyFor(ctx, signedIn)
 	if err != nil {
 		return nil, err

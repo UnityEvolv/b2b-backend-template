@@ -2116,6 +2116,330 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/support-access:
+    get:
+      operationId: getSupportAccess
+      summary: Whether platform operators may see the organization without asking each time
+      description: |
+        Standing support access lets a platform operator start an
+        impersonation without an Owner's consent each time, for an hour at
+        a time; without it every impersonation needs an Owner's time-boxed
+        consent. Needs the settings permission. Off until an Owner turns it
+        on.
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportAccess'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: setSupportAccess
+      summary: Turn standing support access on or off (an Owner of the organization)
+      description: |
+        An Owner of the organization only: never an Admin, a platform
+        operator, a key or a support session. Turning it off, or taking the
+        Owners out of it, ends every impersonation it no longer covers at
+        once. Audited (support_access.changed).
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportAccessUpdate'
+      responses:
+        '200':
+          description: The setting as saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportAccess'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/impersonation-grants:
+    get:
+      operationId: listImpersonationGrants
+      summary: The organization's consents to support impersonation, newest first
+      description: The last 200, ended and revoked ones included. Needs the settings permission.
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The consents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationGrantList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createImpersonationGrant
+      summary: Consent to support impersonation for a while (an Owner of the organization)
+      description: |
+        Any platform operator may then see the organization as one of its
+        people, read-only, until the consent ends (15 minutes to 24 hours
+        from now) or is revoked. An Owner is seen as only when
+        include_owners says so. It cannot be extended: a longer look needs
+        a new consent. Audited (impersonation.granted).
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewImpersonationGrant'
+      responses:
+        '201':
+          description: The consent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationGrant'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/impersonation-grants/{grant_id}:
+    delete:
+      operationId: revokeImpersonationGrant
+      summary: Withdraw a consent now (an Owner of the organization)
+      description: |
+        Every impersonation running under it ends at once and its open tabs
+        are told (session.revoked). Audited (impersonation.grant_revoked).
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/GrantId'
+      responses:
+        '204':
+          description: Withdrawn
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/impersonations:
+    get:
+      operationId: listImpersonations
+      summary: Who from the platform saw the organization as whom, newest first
+      description: |
+        The last 200 impersonations, running and ended. What each one did
+        is in the audit log as impersonation.request entries, one per
+        request. Needs the settings permission.
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The impersonations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/impersonations/{impersonation_id}:
+    delete:
+      operationId: endImpersonation
+      summary: End one impersonation now (an Owner of the organization)
+      description: Its open tabs are told (session.revoked). Audited (impersonation.ended).
+      security:
+        - bearer: []
+      tags: [impersonation]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/ImpersonationId'
+      responses:
+        '204':
+          description: Ended
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/platform/impersonation-grants:
+    get:
+      operationId: listUsableImpersonationGrants
+      summary: Where a platform operator may start an impersonation now (platform operators)
+      description: Every consent open now, in every organization, and every organization with standing support access.
+      security:
+        - bearer: []
+      tags: [impersonation]
+      responses:
+        '200':
+          description: The consents and standing access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsableImpersonationGrants'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/platform/impersonations:
+    post:
+      operationId: startImpersonation
+      summary: See an organization as one of its people (platform operators)
+      description: |
+        Under an Owner's open consent (grant_id), until it ends, or under
+        the organization's standing support access (no grant_id), for an
+        hour. The person must be an active member, and not an Owner unless
+        the consent or the standing access includes Owners. Sets the
+        support session cookie (<prefix>_impersonation), apart from the
+        operator's own session, and answers its first access token; the app
+        refreshes it with POST /v1/session/impersonation/refresh. The
+        session is read-only, every request it makes is audited in the
+        organization's log, and it ends at its time box without extension.
+        Audited (impersonation.started).
+      security:
+        - bearer: []
+      tags: [impersonation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewImpersonation'
+      responses:
+        '201':
+          description: The impersonation and its first access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationStarted'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/session/impersonation/refresh:
+    post:
+      operationId: refreshImpersonation
+      summary: An access token for the support session in the support cookie
+      description: |
+        Rotates the support session's refresh token. The answer's
+        impersonation says the session is a platform operator's, for the
+        banner. Refused (401) once the time box has passed, the consent was
+        withdrawn, standing access turned off, the person left, or the
+        operator is no longer one; the access token never outlives the time
+        box.
+      security: []
+      tags: [impersonation]
+      responses:
+        '200':
+          description: The access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessToken'
+        '401':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/session/impersonation/end:
+    post:
+      operationId: endOwnImpersonation
+      summary: End the support session in the support cookie, and clear it
+      description: Always 204. Audited (impersonation.ended) when there was one.
+      security: []
+      tags: [impersonation]
+      responses:
+        '204':
+          description: Ended
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/onboarding/{step_id}:
+    get:
+      operationId: getOnboardingStep
+      summary: Whether one of this service's onboarding steps is done (the organization service only)
+      description: |
+        Derived now, never stored (docs/onboarding.md). invite_teammates:
+        the organization has sent at least one invite, whatever became of
+        it, or has a second active member. set_up_sso: its identity
+        provider is saved and active. Any other step is not this service's
+        (404).
+      security:
+        - bearer: []
+      tags: [onboarding]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: step_id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 51
+      responses:
+        '200':
+          description: Whether it is done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStatus'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearer:
@@ -2123,6 +2447,20 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    GrantId:
+      name: grant_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ImpersonationId:
+      name: impersonation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     OrgId:
       name: org_id
       in: path
@@ -2335,6 +2673,8 @@ components:
         choose_organization:
           type: boolean
           description: True when no organization is active yet and the app must show the chooser.
+        impersonation:
+          $ref: '#/components/schemas/ImpersonationMarker'
     SessionMembership:
       type: object
       required: [org_id, membership_id, status, active]
@@ -2389,6 +2729,10 @@ components:
           type: string
           format: date-time
           description: When it ends if not used before then.
+        impersonation_id:
+          type: string
+          format: uuid
+          description: Set when the session is a platform operator seeing the organization as this person (docs/impersonation.md). It can be ended like any other.
     SessionPolicy:
       type: object
       required: [org_id, lifetime_seconds, idle_timeout_seconds, mfa_required, configured, limits]
@@ -2787,3 +3131,179 @@ components:
           type: object
           additionalProperties:
             type: string
+    SupportAccess:
+      type: object
+      required: [org_id, standing, include_owners]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        standing:
+          type: boolean
+          description: Platform operators may start an impersonation without a consent, for an hour at a time.
+        include_owners:
+          type: boolean
+          description: Standing access reaches the Owners too.
+    SupportAccessUpdate:
+      type: object
+      required: [standing]
+      properties:
+        standing:
+          type: boolean
+        include_owners:
+          type: boolean
+    NewImpersonationGrant:
+      type: object
+      required: [duration_minutes]
+      properties:
+        duration_minutes:
+          type: integer
+          description: How long from now the consent lasts, 15 minutes to 24 hours.
+        include_owners:
+          type: boolean
+          description: An Owner may be seen as too. False when left out.
+    ImpersonationGrant:
+      type: object
+      required: [id, org_id, granted_by, created_at, expires_at, include_owners, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        granted_by:
+          type: string
+          description: The Owner who gave it, as an actor (membership:<id>).
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        include_owners:
+          type: boolean
+        revoked_at:
+          type: string
+          format: date-time
+        active:
+          type: boolean
+          description: Neither revoked nor past its end.
+    ImpersonationGrantList:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImpersonationGrant'
+    UsableImpersonationGrants:
+      type: object
+      required: [grants, standing]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImpersonationGrant'
+        standing:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportAccess'
+    NewImpersonation:
+      type: object
+      required: [org_id, user_id]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          description: The person to see as; their membership in the organization is the target.
+        grant_id:
+          type: string
+          format: uuid
+          description: The Owner's consent to start under; left out, the organization's standing support access.
+    Impersonation:
+      type: object
+      required: [id, org_id, impersonator_id, user_id, membership_id, started_at, ends_at, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        grant_id:
+          type: string
+          format: uuid
+          description: The consent it runs under; absent under standing support access.
+        impersonator_id:
+          type: string
+          format: uuid
+          description: The platform operator's user id.
+        user_id:
+          type: string
+          format: uuid
+          description: The person seen as.
+        membership_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          description: The time box; it is never extended.
+        ended_at:
+          type: string
+          format: date-time
+          description: When it was ended before its time box, if it was.
+        ended_reason:
+          type: string
+        active:
+          type: boolean
+          description: Neither ended nor past its time box.
+    ImpersonationList:
+      type: object
+      required: [impersonations]
+      properties:
+        impersonations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Impersonation'
+    ImpersonationStarted:
+      type: object
+      required: [impersonation, token]
+      properties:
+        impersonation:
+          $ref: '#/components/schemas/Impersonation'
+        token:
+          $ref: '#/components/schemas/AccessToken'
+    ImpersonationMarker:
+      type: object
+      description: The session is a platform operator seeing the organization as this person; the app shows a banner until ends_at.
+      required: [impersonation_id, impersonator_id, ends_at, read_only]
+      properties:
+        impersonation_id:
+          type: string
+          format: uuid
+        impersonator_id:
+          type: string
+          format: uuid
+        grant_id:
+          type: string
+          format: uuid
+        ends_at:
+          type: string
+          format: date-time
+        read_only:
+          type: boolean
+          description: Always true in the template; every write is refused with impersonation.read_only.
+    OnboardingStatus:
+      type: object
+      required: [done]
+      properties:
+        done:
+          type: boolean

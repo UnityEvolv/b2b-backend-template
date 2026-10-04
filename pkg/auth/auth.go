@@ -37,6 +37,14 @@ const (
 	ClaimMembership = "mbr" // membership id in that org
 	ClaimSession    = "sid" // session, for revocation
 	ClaimService    = "svc" // a service calling another service, by name
+
+	// An impersonation session's token (docs/impersonation.md) says who is
+	// really behind it, spelled out because people read it too: the
+	// platform operator's user id, the impersonation, and the Owner's
+	// consent it runs under (absent under standing support access).
+	ClaimImpersonator       = "impersonator_id"
+	ClaimImpersonation      = "impersonation_id"
+	ClaimImpersonationGrant = "impersonation_grant_id"
 )
 
 // Caller is who is making the request. Ids only: never a name or an email.
@@ -51,16 +59,33 @@ type Caller struct {
 	// Service is the calling service's name as registered in pkg/db, for an
 	// internal call. Such a caller is in no org and is not rate limited.
 	Service string
+	// ImpersonatorID is the platform operator seeing the org as UserID
+	// sees it, in an impersonation session; empty otherwise. Such a caller
+	// is read-only, and every request it makes is audited
+	// (impersonation.go).
+	ImpersonatorID string
+	// ImpersonationID is that impersonation, and ImpersonationGrantID the
+	// Owner's consent it runs under (empty under standing support access).
+	ImpersonationID      string
+	ImpersonationGrantID string
 }
+
+// Impersonated reports whether a platform operator is behind the caller.
+func (c Caller) Impersonated() bool { return c.ImpersonatorID != "" }
 
 // IsService reports whether the caller is another service, not a person.
 func (c Caller) IsService() bool { return c.Service != "" }
 
 // Actor is the caller as the author of a change: the membership when acting
-// in an org, the user otherwise.
+// in an org, the user otherwise. In an impersonation session it is the
+// platform operator, never the person they see as: whatever is recorded
+// is theirs.
 func (c Caller) Actor() db.Actor {
 	if c.Service != "" {
 		return db.SystemActor(c.Service)
+	}
+	if c.ImpersonatorID != "" {
+		return db.UserActor(c.ImpersonatorID)
 	}
 	if c.MembershipID != "" {
 		return db.MembershipActor(c.MembershipID)
@@ -75,6 +100,7 @@ type callerKey struct{}
 func WithCaller(ctx context.Context, c Caller) context.Context {
 	ctx = errtrack.WithTags(ctx, map[string]string{
 		"user_id": c.UserID, "org_id": c.OrgID, "membership_id": c.MembershipID, "caller_service": c.Service,
+		"impersonator_id": c.ImpersonatorID,
 	})
 	return db.WithActor(context.WithValue(ctx, callerKey{}, c), c.Actor())
 }
@@ -132,6 +158,9 @@ type Verifier struct {
 	// resolver says what an API key or personal access token is; nil
 	// refuses them (WithKeys).
 	resolver KeyResolver
+	// auditor records every request an impersonation session makes; nil
+	// refuses impersonation tokens (WithImpersonationAudit).
+	auditor ImpersonationAuditor
 }
 
 // Skew tolerated between the issuer's clock and ours.
@@ -195,7 +224,7 @@ func (v *Verifier) Verify(raw string) (Caller, error) {
 		if !KnownService(c.Service) || sub != "service:"+c.Service {
 			return Caller{}, fmt.Errorf("%w: unknown service", ErrUnauthenticated)
 		}
-		for _, claim := range []string{ClaimOrg, ClaimMembership, ClaimSession} {
+		for _, claim := range []string{ClaimOrg, ClaimMembership, ClaimSession, ClaimImpersonator, ClaimImpersonation, ClaimImpersonationGrant} {
 			if token.Has(claim) {
 				return Caller{}, fmt.Errorf("%w: a service token carries no %s", ErrUnauthenticated, claim)
 			}
@@ -206,6 +235,9 @@ func (v *Verifier) Verify(raw string) (Caller, error) {
 	_ = token.Get(ClaimOrg, &c.OrgID)
 	_ = token.Get(ClaimMembership, &c.MembershipID)
 	_ = token.Get(ClaimSession, &c.SessionID)
+	_ = token.Get(ClaimImpersonator, &c.ImpersonatorID)
+	_ = token.Get(ClaimImpersonation, &c.ImpersonationID)
+	_ = token.Get(ClaimImpersonationGrant, &c.ImpersonationGrantID)
 
 	if uuid.Validate(c.UserID) != nil {
 		return Caller{}, fmt.Errorf("%w: sub is not a user id", ErrUnauthenticated)
@@ -213,10 +245,13 @@ func (v *Verifier) Verify(raw string) (Caller, error) {
 	if (c.OrgID == "") != (c.MembershipID == "") {
 		return Caller{}, fmt.Errorf("%w: org and membership come together", ErrUnauthenticated)
 	}
-	for _, id := range []string{c.OrgID, c.MembershipID} {
+	for _, id := range []string{c.OrgID, c.MembershipID, c.ImpersonatorID, c.ImpersonationID, c.ImpersonationGrantID} {
 		if id != "" && uuid.Validate(id) != nil {
 			return Caller{}, fmt.Errorf("%w: malformed id claim", ErrUnauthenticated)
 		}
+	}
+	if err := checkImpersonation(c); err != nil {
+		return Caller{}, err
 	}
 	return c, nil
 }
@@ -240,6 +275,11 @@ func Require(v *Verifier, next http.Handler) http.Handler {
 			return
 		}
 		ctx := WithCaller(r.Context(), caller)
+		if caller.Impersonated() {
+			// Read-only and audited, whatever the handler (impersonation.go).
+			v.impersonated(w, r.WithContext(ctx), caller, next)
+			return
+		}
 		if caller.IsService() {
 			// Internal calls are not rate limited; the token is what admits them.
 			ctx = httpx.WithInternalCall(ctx)
@@ -292,7 +332,7 @@ func RequirePlatform(ctx context.Context) error {
 	if !ok {
 		return noCaller(ctx)
 	}
-	if c.IsService() || !strings.EqualFold(c.OrgID, PlatformOrg) {
+	if c.IsService() || c.Impersonated() || !strings.EqualFold(c.OrgID, PlatformOrg) {
 		return ErrForbidden
 	}
 	return nil

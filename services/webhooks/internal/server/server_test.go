@@ -215,6 +215,8 @@ func newFixture(t *testing.T, opts ...options) *fixture {
 	}
 	f := &fixture{t: t, pool: pool, issuer: issuer, keys: keyring, grants: authz.Static{}, bands: plan.Static{}, audit: &recorder{},
 		clock: &clock{t: time.Now().UTC()}}
+	// A support session is read-only and audited, as main wires it.
+	verifier.WithImpersonationAudit(audit.Impersonation(f.audit, "webhooks"))
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	deps := server.Deps{
 		Cluster: db.SingleShard(pool), Logger: logger, Authz: f.grants, Plans: f.bands,

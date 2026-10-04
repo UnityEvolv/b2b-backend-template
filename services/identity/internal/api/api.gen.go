@@ -276,11 +276,14 @@ type AccessToken struct {
 	ChooseOrganization bool `json:"choose_organization"`
 
 	// ExpiresIn Seconds until the access token expires; refresh before then.
-	ExpiresIn    int                  `json:"expires_in"`
-	MembershipId *openapi_types.UUID  `json:"membership_id,omitempty"`
-	OrgId        *openapi_types.UUID  `json:"org_id,omitempty"`
-	TokenType    AccessTokenTokenType `json:"token_type"`
-	UserId       openapi_types.UUID   `json:"user_id"`
+	ExpiresIn int `json:"expires_in"`
+
+	// Impersonation The session is a platform operator seeing the organization as this person; the app shows a banner until ends_at.
+	Impersonation *ImpersonationMarker `json:"impersonation,omitempty"`
+	MembershipId  *openapi_types.UUID  `json:"membership_id,omitempty"`
+	OrgId         *openapi_types.UUID  `json:"org_id,omitempty"`
+	TokenType     AccessTokenTokenType `json:"token_type"`
+	UserId        openapi_types.UUID   `json:"user_id"`
 }
 
 // AccessTokenTokenType defines model for AccessToken.TokenType.
@@ -440,6 +443,74 @@ type IdentityProviderTest struct {
 	RedirectUri string `json:"redirect_uri"`
 }
 
+// Impersonation defines model for Impersonation.
+type Impersonation struct {
+	// Active Neither ended nor past its time box.
+	Active bool `json:"active"`
+
+	// EndedAt When it was ended before its time box, if it was.
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
+	EndedReason *string    `json:"ended_reason,omitempty"`
+
+	// EndsAt The time box; it is never extended.
+	EndsAt time.Time `json:"ends_at"`
+
+	// GrantId The consent it runs under; absent under standing support access.
+	GrantId *openapi_types.UUID `json:"grant_id,omitempty"`
+	Id      openapi_types.UUID  `json:"id"`
+
+	// ImpersonatorId The platform operator's user id.
+	ImpersonatorId openapi_types.UUID `json:"impersonator_id"`
+	MembershipId   openapi_types.UUID `json:"membership_id"`
+	OrgId          openapi_types.UUID `json:"org_id"`
+	StartedAt      time.Time          `json:"started_at"`
+
+	// UserId The person seen as.
+	UserId openapi_types.UUID `json:"user_id"`
+}
+
+// ImpersonationGrant defines model for ImpersonationGrant.
+type ImpersonationGrant struct {
+	// Active Neither revoked nor past its end.
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// GrantedBy The Owner who gave it, as an actor (membership:<id>).
+	GrantedBy     string             `json:"granted_by"`
+	Id            openapi_types.UUID `json:"id"`
+	IncludeOwners bool               `json:"include_owners"`
+	OrgId         openapi_types.UUID `json:"org_id"`
+	RevokedAt     *time.Time         `json:"revoked_at,omitempty"`
+}
+
+// ImpersonationGrantList defines model for ImpersonationGrantList.
+type ImpersonationGrantList struct {
+	Grants []ImpersonationGrant `json:"grants"`
+}
+
+// ImpersonationList defines model for ImpersonationList.
+type ImpersonationList struct {
+	Impersonations []Impersonation `json:"impersonations"`
+}
+
+// ImpersonationMarker The session is a platform operator seeing the organization as this person; the app shows a banner until ends_at.
+type ImpersonationMarker struct {
+	EndsAt          time.Time           `json:"ends_at"`
+	GrantId         *openapi_types.UUID `json:"grant_id,omitempty"`
+	ImpersonationId openapi_types.UUID  `json:"impersonation_id"`
+	ImpersonatorId  openapi_types.UUID  `json:"impersonator_id"`
+
+	// ReadOnly Always true in the template; every write is refused with impersonation.read_only.
+	ReadOnly bool `json:"read_only"`
+}
+
+// ImpersonationStarted defines model for ImpersonationStarted.
+type ImpersonationStarted struct {
+	Impersonation Impersonation `json:"impersonation"`
+	Token         AccessToken   `json:"token"`
+}
+
 // Invite defines model for Invite.
 type Invite struct {
 	AcceptedAt            *time.Time          `json:"accepted_at,omitempty"`
@@ -579,6 +650,25 @@ type NewIdentityProvider struct {
 	TenantId *string `json:"tenant_id,omitempty"`
 }
 
+// NewImpersonation defines model for NewImpersonation.
+type NewImpersonation struct {
+	// GrantId The Owner's consent to start under; left out, the organization's standing support access.
+	GrantId *openapi_types.UUID `json:"grant_id,omitempty"`
+	OrgId   openapi_types.UUID  `json:"org_id"`
+
+	// UserId The person to see as; their membership in the organization is the target.
+	UserId openapi_types.UUID `json:"user_id"`
+}
+
+// NewImpersonationGrant defines model for NewImpersonationGrant.
+type NewImpersonationGrant struct {
+	// DurationMinutes How long from now the consent lasts, 15 minutes to 24 hours.
+	DurationMinutes int `json:"duration_minutes"`
+
+	// IncludeOwners An Owner may be seen as too. False when left out.
+	IncludeOwners *bool `json:"include_owners,omitempty"`
+}
+
 // NewInternalInvite defines model for NewInternalInvite.
 type NewInternalInvite struct {
 	// App Which web app the link opens, one of the configured apps; the main app when left out.
@@ -601,6 +691,11 @@ type NewInvite struct {
 
 	// Role user, admin, billing_admin; owner only by a platform operator.
 	Role *string `json:"role,omitempty"`
+}
+
+// OnboardingStatus defines model for OnboardingStatus.
+type OnboardingStatus struct {
+	Done bool `json:"done"`
 }
 
 // RecoveryCodes defines model for RecoveryCodes.
@@ -634,7 +729,10 @@ type Session struct {
 
 	// IdleExpiresAt When it ends if not used before then.
 	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
-	LastSeenAt    time.Time  `json:"last_seen_at"`
+
+	// ImpersonationId Set when the session is a platform operator seeing the organization as this person (docs/impersonation.md). It can be ended like any other.
+	ImpersonationId *openapi_types.UUID `json:"impersonation_id,omitempty"`
+	LastSeenAt      time.Time           `json:"last_seen_at"`
 
 	// OrgId The organization active in it, when one is.
 	OrgId     *openapi_types.UUID `json:"org_id,omitempty"`
@@ -689,6 +787,22 @@ type SessionPolicyUpdate struct {
 	MfaRequired *bool `json:"mfa_required,omitempty"`
 }
 
+// SupportAccess defines model for SupportAccess.
+type SupportAccess struct {
+	// IncludeOwners Standing access reaches the Owners too.
+	IncludeOwners bool               `json:"include_owners"`
+	OrgId         openapi_types.UUID `json:"org_id"`
+
+	// Standing Platform operators may start an impersonation without a consent, for an hour at a time.
+	Standing bool `json:"standing"`
+}
+
+// SupportAccessUpdate defines model for SupportAccessUpdate.
+type SupportAccessUpdate struct {
+	IncludeOwners *bool `json:"include_owners,omitempty"`
+	Standing      bool  `json:"standing"`
+}
+
 // TotpEnrolment defines model for TotpEnrolment.
 type TotpEnrolment struct {
 	// OtpauthUri For showing as a QR code.
@@ -698,8 +812,20 @@ type TotpEnrolment struct {
 	Secret string `json:"secret"`
 }
 
+// UsableImpersonationGrants defines model for UsableImpersonationGrants.
+type UsableImpersonationGrants struct {
+	Grants   []ImpersonationGrant `json:"grants"`
+	Standing []SupportAccess      `json:"standing"`
+}
+
+// GrantId defines model for GrantId.
+type GrantId = openapi_types.UUID
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
+
+// ImpersonationId defines model for ImpersonationId.
+type ImpersonationId = openapi_types.UUID
 
 // InviteId defines model for InviteId.
 type InviteId = openapi_types.UUID
@@ -977,6 +1103,9 @@ type SetIdentityProviderJSONRequestBody = NewIdentityProvider
 // TestIdentityProviderJSONRequestBody defines body for TestIdentityProvider for application/json ContentType.
 type TestIdentityProviderJSONRequestBody = NewIdentityProvider
 
+// CreateImpersonationGrantJSONRequestBody defines body for CreateImpersonationGrant for application/json ContentType.
+type CreateImpersonationGrantJSONRequestBody = NewImpersonationGrant
+
 // CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
 type CreateInviteJSONRequestBody = NewInvite
 
@@ -988,6 +1117,12 @@ type CreatePersonalAccessTokenJSONRequestBody = NewApiKey
 
 // SetSessionPolicyJSONRequestBody defines body for SetSessionPolicy for application/json ContentType.
 type SetSessionPolicyJSONRequestBody = SessionPolicyUpdate
+
+// SetSupportAccessJSONRequestBody defines body for SetSupportAccess for application/json ContentType.
+type SetSupportAccessJSONRequestBody = SupportAccessUpdate
+
+// StartImpersonationJSONRequestBody defines body for StartImpersonation for application/json ContentType.
+type StartImpersonationJSONRequestBody = NewImpersonation
 
 // SwitchOrganizationJSONRequestBody defines body for SwitchOrganization for application/json ContentType.
 type SwitchOrganizationJSONRequestBody SwitchOrganizationJSONBody
@@ -1045,6 +1180,9 @@ type ServerInterface interface {
 	// ExportOrgData Everything this service keeps for an org, for its export (the organization service only)
 	// (GET /v1/internal/organizations/{org_id}/data)
 	ExportOrgData(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// GetOnboardingStep Whether one of this service's onboarding steps is done (the organization service only)
+	// (GET /v1/internal/organizations/{org_id}/onboarding/{step_id})
+	GetOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId string)
 	// RevokeOrgSessions End every session working in an organization (the organization service only)
 	// (POST /v1/internal/organizations/{org_id}/sessions/revoke)
 	RevokeOrgSessions(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1108,6 +1246,21 @@ type ServerInterface interface {
 	// TestIdentityProvider Test identity provider settings without saving them
 	// (POST /v1/organizations/{org_id}/identity-provider/test)
 	TestIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// ListImpersonationGrants The organization's consents to support impersonation, newest first
+	// (GET /v1/organizations/{org_id}/impersonation-grants)
+	ListImpersonationGrants(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// CreateImpersonationGrant Consent to support impersonation for a while (an Owner of the organization)
+	// (POST /v1/organizations/{org_id}/impersonation-grants)
+	CreateImpersonationGrant(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RevokeImpersonationGrant Withdraw a consent now (an Owner of the organization)
+	// (DELETE /v1/organizations/{org_id}/impersonation-grants/{grant_id})
+	RevokeImpersonationGrant(w http.ResponseWriter, r *http.Request, orgId OrgId, grantId GrantId)
+	// ListImpersonations Who from the platform saw the organization as whom, newest first
+	// (GET /v1/organizations/{org_id}/impersonations)
+	ListImpersonations(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// EndImpersonation End one impersonation now (an Owner of the organization)
+	// (DELETE /v1/organizations/{org_id}/impersonations/{impersonation_id})
+	EndImpersonation(w http.ResponseWriter, r *http.Request, orgId OrgId, impersonationId ImpersonationId)
 	// ListInvites The organization's invites
 	// (GET /v1/organizations/{org_id}/invites)
 	ListInvites(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListInvitesParams)
@@ -1144,6 +1297,24 @@ type ServerInterface interface {
 	// SetSessionPolicy Change how long the organization's sessions last
 	// (PUT /v1/organizations/{org_id}/session-policy)
 	SetSessionPolicy(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// GetSupportAccess Whether platform operators may see the organization without asking each time
+	// (GET /v1/organizations/{org_id}/support-access)
+	GetSupportAccess(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// SetSupportAccess Turn standing support access on or off (an Owner of the organization)
+	// (PUT /v1/organizations/{org_id}/support-access)
+	SetSupportAccess(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// ListUsableImpersonationGrants Where a platform operator may start an impersonation now (platform operators)
+	// (GET /v1/platform/impersonation-grants)
+	ListUsableImpersonationGrants(w http.ResponseWriter, r *http.Request)
+	// StartImpersonation See an organization as one of its people (platform operators)
+	// (POST /v1/platform/impersonations)
+	StartImpersonation(w http.ResponseWriter, r *http.Request)
+	// EndOwnImpersonation End the support session in the support cookie, and clear it
+	// (POST /v1/session/impersonation/end)
+	EndOwnImpersonation(w http.ResponseWriter, r *http.Request)
+	// RefreshImpersonation An access token for the support session in the support cookie
+	// (POST /v1/session/impersonation/refresh)
+	RefreshImpersonation(w http.ResponseWriter, r *http.Request)
 	// ListSessionMemberships The organizations the signed-in person may switch to
 	// (GET /v1/session/memberships)
 	ListSessionMemberships(w http.ResponseWriter, r *http.Request)
@@ -1422,6 +1593,41 @@ func (siw *ServerInterfaceWrapper) ExportOrgData(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ExportOrgData(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOnboardingStep operation middleware
+func (siw *ServerInterfaceWrapper) GetOnboardingStep(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "step_id" -------------
+	var stepId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "step_id", r.PathValue("step_id"), &stepId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "step_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOnboardingStep(w, r, orgId, stepId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1894,6 +2100,154 @@ func (siw *ServerInterfaceWrapper) TestIdentityProvider(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListImpersonationGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListImpersonationGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImpersonationGrants(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateImpersonationGrant operation middleware
+func (siw *ServerInterfaceWrapper) CreateImpersonationGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateImpersonationGrant(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeImpersonationGrant operation middleware
+func (siw *ServerInterfaceWrapper) RevokeImpersonationGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "grant_id" -------------
+	var grantId GrantId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "grant_id", r.PathValue("grant_id"), &grantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grant_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeImpersonationGrant(w, r, orgId, grantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImpersonations operation middleware
+func (siw *ServerInterfaceWrapper) ListImpersonations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImpersonations(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EndImpersonation operation middleware
+func (siw *ServerInterfaceWrapper) EndImpersonation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "impersonation_id" -------------
+	var impersonationId ImpersonationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "impersonation_id", r.PathValue("impersonation_id"), &impersonationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "impersonation_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndImpersonation(w, r, orgId, impersonationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListInvites operation middleware
 func (siw *ServerInterfaceWrapper) ListInvites(w http.ResponseWriter, r *http.Request) {
 
@@ -2330,6 +2684,114 @@ func (siw *ServerInterfaceWrapper) SetSessionPolicy(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetSessionPolicy(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSupportAccess operation middleware
+func (siw *ServerInterfaceWrapper) GetSupportAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSupportAccess(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSupportAccess operation middleware
+func (siw *ServerInterfaceWrapper) SetSupportAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSupportAccess(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsableImpersonationGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListUsableImpersonationGrants(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsableImpersonationGrants(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartImpersonation operation middleware
+func (siw *ServerInterfaceWrapper) StartImpersonation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartImpersonation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EndOwnImpersonation operation middleware
+func (siw *ServerInterfaceWrapper) EndOwnImpersonation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndOwnImpersonation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshImpersonation operation middleware
+func (siw *ServerInterfaceWrapper) RefreshImpersonation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshImpersonation(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2915,6 +3377,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/personal-access-tokens", wrapper.CreatePersonalAccessToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/personal-access-tokens/{key_id}", wrapper.RevokePersonalAccessToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/internal/api-keys/resolve", wrapper.ResolveApiKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/support-access", wrapper.GetSupportAccess)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/support-access", wrapper.SetSupportAccess)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/impersonation-grants", wrapper.ListImpersonationGrants)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/impersonation-grants", wrapper.CreateImpersonationGrant)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/impersonation-grants/{grant_id}", wrapper.RevokeImpersonationGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/impersonations", wrapper.ListImpersonations)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/impersonations/{impersonation_id}", wrapper.EndImpersonation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/platform/impersonation-grants", wrapper.ListUsableImpersonationGrants)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/platform/impersonations", wrapper.StartImpersonation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/session/impersonation/refresh", wrapper.RefreshImpersonation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/session/impersonation/end", wrapper.EndOwnImpersonation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/onboarding/{step_id}", wrapper.GetOnboardingStep)
 
 	return m
 }
@@ -3735,6 +4209,74 @@ type ExportOrgDatadefaultJSONResponse struct {
 }
 
 func (response ExportOrgDatadefaultJSONResponse) VisitExportOrgDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStepRequestObject struct {
+	OrgId  OrgId  `json:"org_id"`
+	StepId string `json:"step_id"`
+}
+
+type GetOnboardingStepResponseObject interface {
+	VisitGetOnboardingStepResponse(w http.ResponseWriter) error
+}
+
+type GetOnboardingStep200JSONResponse OnboardingStatus
+
+func (response GetOnboardingStep200JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStep403JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetOnboardingStep403JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStep404JSONResponse Error
+
+func (response GetOnboardingStep404JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStepdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetOnboardingStepdefaultJSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5226,6 +5768,374 @@ func (response TestIdentityProviderdefaultJSONResponse) VisitTestIdentityProvide
 	return err
 }
 
+type ListImpersonationGrantsRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type ListImpersonationGrantsResponseObject interface {
+	VisitListImpersonationGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListImpersonationGrants200JSONResponse ImpersonationGrantList
+
+func (response ListImpersonationGrants200JSONResponse) VisitListImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonationGrants401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListImpersonationGrants401JSONResponse) VisitListImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonationGrants403JSONResponse Error
+
+func (response ListImpersonationGrants403JSONResponse) VisitListImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonationGrantsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListImpersonationGrantsdefaultJSONResponse) VisitListImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImpersonationGrantRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *CreateImpersonationGrantJSONRequestBody
+}
+
+type CreateImpersonationGrantResponseObject interface {
+	VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error
+}
+
+type CreateImpersonationGrant201JSONResponse ImpersonationGrant
+
+func (response CreateImpersonationGrant201JSONResponse) VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImpersonationGrant400JSONResponse struct{ ErrorJSONResponse }
+
+func (response CreateImpersonationGrant400JSONResponse) VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImpersonationGrant401JSONResponse Error
+
+func (response CreateImpersonationGrant401JSONResponse) VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImpersonationGrant403JSONResponse Error
+
+func (response CreateImpersonationGrant403JSONResponse) VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateImpersonationGrantdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateImpersonationGrantdefaultJSONResponse) VisitCreateImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeImpersonationGrantRequestObject struct {
+	OrgId   OrgId   `json:"org_id"`
+	GrantId GrantId `json:"grant_id"`
+}
+
+type RevokeImpersonationGrantResponseObject interface {
+	VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error
+}
+
+type RevokeImpersonationGrant204Response struct {
+}
+
+func (response RevokeImpersonationGrant204Response) VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeImpersonationGrant401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RevokeImpersonationGrant401JSONResponse) VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeImpersonationGrant403JSONResponse Error
+
+func (response RevokeImpersonationGrant403JSONResponse) VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeImpersonationGrant404JSONResponse Error
+
+func (response RevokeImpersonationGrant404JSONResponse) VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeImpersonationGrantdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RevokeImpersonationGrantdefaultJSONResponse) VisitRevokeImpersonationGrantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonationsRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type ListImpersonationsResponseObject interface {
+	VisitListImpersonationsResponse(w http.ResponseWriter) error
+}
+
+type ListImpersonations200JSONResponse ImpersonationList
+
+func (response ListImpersonations200JSONResponse) VisitListImpersonationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonations401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListImpersonations401JSONResponse) VisitListImpersonationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonations403JSONResponse Error
+
+func (response ListImpersonations403JSONResponse) VisitListImpersonationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListImpersonationsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListImpersonationsdefaultJSONResponse) VisitListImpersonationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndImpersonationRequestObject struct {
+	OrgId           OrgId           `json:"org_id"`
+	ImpersonationId ImpersonationId `json:"impersonation_id"`
+}
+
+type EndImpersonationResponseObject interface {
+	VisitEndImpersonationResponse(w http.ResponseWriter) error
+}
+
+type EndImpersonation204Response struct {
+}
+
+func (response EndImpersonation204Response) VisitEndImpersonationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EndImpersonation401JSONResponse struct{ ErrorJSONResponse }
+
+func (response EndImpersonation401JSONResponse) VisitEndImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndImpersonation403JSONResponse Error
+
+func (response EndImpersonation403JSONResponse) VisitEndImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndImpersonation404JSONResponse Error
+
+func (response EndImpersonation404JSONResponse) VisitEndImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndImpersonationdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response EndImpersonationdefaultJSONResponse) VisitEndImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListInvitesRequestObject struct {
 	OrgId  OrgId `json:"org_id"`
 	Params ListInvitesParams
@@ -6196,6 +7106,400 @@ func (response SetSessionPolicydefaultJSONResponse) VisitSetSessionPolicyRespons
 	return err
 }
 
+type GetSupportAccessRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type GetSupportAccessResponseObject interface {
+	VisitGetSupportAccessResponse(w http.ResponseWriter) error
+}
+
+type GetSupportAccess200JSONResponse SupportAccess
+
+func (response GetSupportAccess200JSONResponse) VisitGetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSupportAccess401JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetSupportAccess401JSONResponse) VisitGetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSupportAccess403JSONResponse Error
+
+func (response GetSupportAccess403JSONResponse) VisitGetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSupportAccessdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetSupportAccessdefaultJSONResponse) VisitGetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSupportAccessRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *SetSupportAccessJSONRequestBody
+}
+
+type SetSupportAccessResponseObject interface {
+	VisitSetSupportAccessResponse(w http.ResponseWriter) error
+}
+
+type SetSupportAccess200JSONResponse SupportAccess
+
+func (response SetSupportAccess200JSONResponse) VisitSetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSupportAccess400JSONResponse struct{ ErrorJSONResponse }
+
+func (response SetSupportAccess400JSONResponse) VisitSetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSupportAccess401JSONResponse Error
+
+func (response SetSupportAccess401JSONResponse) VisitSetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSupportAccess403JSONResponse Error
+
+func (response SetSupportAccess403JSONResponse) VisitSetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSupportAccessdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SetSupportAccessdefaultJSONResponse) VisitSetSupportAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsableImpersonationGrantsRequestObject struct {
+}
+
+type ListUsableImpersonationGrantsResponseObject interface {
+	VisitListUsableImpersonationGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListUsableImpersonationGrants200JSONResponse UsableImpersonationGrants
+
+func (response ListUsableImpersonationGrants200JSONResponse) VisitListUsableImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsableImpersonationGrants401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListUsableImpersonationGrants401JSONResponse) VisitListUsableImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsableImpersonationGrants403JSONResponse Error
+
+func (response ListUsableImpersonationGrants403JSONResponse) VisitListUsableImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsableImpersonationGrantsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListUsableImpersonationGrantsdefaultJSONResponse) VisitListUsableImpersonationGrantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonationRequestObject struct {
+	Body *StartImpersonationJSONRequestBody
+}
+
+type StartImpersonationResponseObject interface {
+	VisitStartImpersonationResponse(w http.ResponseWriter) error
+}
+
+type StartImpersonation201JSONResponse ImpersonationStarted
+
+func (response StartImpersonation201JSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonation400JSONResponse struct{ ErrorJSONResponse }
+
+func (response StartImpersonation400JSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonation401JSONResponse Error
+
+func (response StartImpersonation401JSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonation403JSONResponse Error
+
+func (response StartImpersonation403JSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonation404JSONResponse Error
+
+func (response StartImpersonation404JSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartImpersonationdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response StartImpersonationdefaultJSONResponse) VisitStartImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndOwnImpersonationRequestObject struct {
+}
+
+type EndOwnImpersonationResponseObject interface {
+	VisitEndOwnImpersonationResponse(w http.ResponseWriter) error
+}
+
+type EndOwnImpersonation204Response struct {
+}
+
+func (response EndOwnImpersonation204Response) VisitEndOwnImpersonationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EndOwnImpersonationdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response EndOwnImpersonationdefaultJSONResponse) VisitEndOwnImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshImpersonationRequestObject struct {
+}
+
+type RefreshImpersonationResponseObject interface {
+	VisitRefreshImpersonationResponse(w http.ResponseWriter) error
+}
+
+type RefreshImpersonation200JSONResponse AccessToken
+
+func (response RefreshImpersonation200JSONResponse) VisitRefreshImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshImpersonation401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RefreshImpersonation401JSONResponse) VisitRefreshImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshImpersonationdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RefreshImpersonationdefaultJSONResponse) VisitRefreshImpersonationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListSessionMembershipsRequestObject struct {
 }
 
@@ -7150,6 +8454,9 @@ type StrictServerInterface interface {
 	// ExportOrgData Everything this service keeps for an org, for its export (the organization service only)
 	// (GET /v1/internal/organizations/{org_id}/data)
 	ExportOrgData(ctx context.Context, request ExportOrgDataRequestObject) (ExportOrgDataResponseObject, error)
+	// GetOnboardingStep Whether one of this service's onboarding steps is done (the organization service only)
+	// (GET /v1/internal/organizations/{org_id}/onboarding/{step_id})
+	GetOnboardingStep(ctx context.Context, request GetOnboardingStepRequestObject) (GetOnboardingStepResponseObject, error)
 	// RevokeOrgSessions End every session working in an organization (the organization service only)
 	// (POST /v1/internal/organizations/{org_id}/sessions/revoke)
 	RevokeOrgSessions(ctx context.Context, request RevokeOrgSessionsRequestObject) (RevokeOrgSessionsResponseObject, error)
@@ -7213,6 +8520,21 @@ type StrictServerInterface interface {
 	// TestIdentityProvider Test identity provider settings without saving them
 	// (POST /v1/organizations/{org_id}/identity-provider/test)
 	TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error)
+	// ListImpersonationGrants The organization's consents to support impersonation, newest first
+	// (GET /v1/organizations/{org_id}/impersonation-grants)
+	ListImpersonationGrants(ctx context.Context, request ListImpersonationGrantsRequestObject) (ListImpersonationGrantsResponseObject, error)
+	// CreateImpersonationGrant Consent to support impersonation for a while (an Owner of the organization)
+	// (POST /v1/organizations/{org_id}/impersonation-grants)
+	CreateImpersonationGrant(ctx context.Context, request CreateImpersonationGrantRequestObject) (CreateImpersonationGrantResponseObject, error)
+	// RevokeImpersonationGrant Withdraw a consent now (an Owner of the organization)
+	// (DELETE /v1/organizations/{org_id}/impersonation-grants/{grant_id})
+	RevokeImpersonationGrant(ctx context.Context, request RevokeImpersonationGrantRequestObject) (RevokeImpersonationGrantResponseObject, error)
+	// ListImpersonations Who from the platform saw the organization as whom, newest first
+	// (GET /v1/organizations/{org_id}/impersonations)
+	ListImpersonations(ctx context.Context, request ListImpersonationsRequestObject) (ListImpersonationsResponseObject, error)
+	// EndImpersonation End one impersonation now (an Owner of the organization)
+	// (DELETE /v1/organizations/{org_id}/impersonations/{impersonation_id})
+	EndImpersonation(ctx context.Context, request EndImpersonationRequestObject) (EndImpersonationResponseObject, error)
 	// ListInvites The organization's invites
 	// (GET /v1/organizations/{org_id}/invites)
 	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
@@ -7249,6 +8571,24 @@ type StrictServerInterface interface {
 	// SetSessionPolicy Change how long the organization's sessions last
 	// (PUT /v1/organizations/{org_id}/session-policy)
 	SetSessionPolicy(ctx context.Context, request SetSessionPolicyRequestObject) (SetSessionPolicyResponseObject, error)
+	// GetSupportAccess Whether platform operators may see the organization without asking each time
+	// (GET /v1/organizations/{org_id}/support-access)
+	GetSupportAccess(ctx context.Context, request GetSupportAccessRequestObject) (GetSupportAccessResponseObject, error)
+	// SetSupportAccess Turn standing support access on or off (an Owner of the organization)
+	// (PUT /v1/organizations/{org_id}/support-access)
+	SetSupportAccess(ctx context.Context, request SetSupportAccessRequestObject) (SetSupportAccessResponseObject, error)
+	// ListUsableImpersonationGrants Where a platform operator may start an impersonation now (platform operators)
+	// (GET /v1/platform/impersonation-grants)
+	ListUsableImpersonationGrants(ctx context.Context, request ListUsableImpersonationGrantsRequestObject) (ListUsableImpersonationGrantsResponseObject, error)
+	// StartImpersonation See an organization as one of its people (platform operators)
+	// (POST /v1/platform/impersonations)
+	StartImpersonation(ctx context.Context, request StartImpersonationRequestObject) (StartImpersonationResponseObject, error)
+	// EndOwnImpersonation End the support session in the support cookie, and clear it
+	// (POST /v1/session/impersonation/end)
+	EndOwnImpersonation(ctx context.Context, request EndOwnImpersonationRequestObject) (EndOwnImpersonationResponseObject, error)
+	// RefreshImpersonation An access token for the support session in the support cookie
+	// (POST /v1/session/impersonation/refresh)
+	RefreshImpersonation(ctx context.Context, request RefreshImpersonationRequestObject) (RefreshImpersonationResponseObject, error)
 	// ListSessionMemberships The organizations the signed-in person may switch to
 	// (GET /v1/session/memberships)
 	ListSessionMemberships(ctx context.Context, request ListSessionMembershipsRequestObject) (ListSessionMembershipsResponseObject, error)
@@ -7680,6 +9020,33 @@ func (sh *strictHandler) ExportOrgData(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ExportOrgDataResponseObject); ok {
 		if err := validResponse.VisitExportOrgDataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOnboardingStep operation middleware
+func (sh *strictHandler) GetOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId string) {
+	var request GetOnboardingStepRequestObject
+
+	request.OrgId = orgId
+	request.StepId = stepId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOnboardingStep(ctx, request.(GetOnboardingStepRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOnboardingStep")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOnboardingStepResponseObject); ok {
+		if err := validResponse.VisitGetOnboardingStepResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8304,6 +9671,145 @@ func (sh *strictHandler) TestIdentityProvider(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// ListImpersonationGrants operation middleware
+func (sh *strictHandler) ListImpersonationGrants(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request ListImpersonationGrantsRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImpersonationGrants(ctx, request.(ListImpersonationGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImpersonationGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImpersonationGrantsResponseObject); ok {
+		if err := validResponse.VisitListImpersonationGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateImpersonationGrant operation middleware
+func (sh *strictHandler) CreateImpersonationGrant(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request CreateImpersonationGrantRequestObject
+
+	request.OrgId = orgId
+
+	var body CreateImpersonationGrantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateImpersonationGrant(ctx, request.(CreateImpersonationGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateImpersonationGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateImpersonationGrantResponseObject); ok {
+		if err := validResponse.VisitCreateImpersonationGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeImpersonationGrant operation middleware
+func (sh *strictHandler) RevokeImpersonationGrant(w http.ResponseWriter, r *http.Request, orgId OrgId, grantId GrantId) {
+	var request RevokeImpersonationGrantRequestObject
+
+	request.OrgId = orgId
+	request.GrantId = grantId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeImpersonationGrant(ctx, request.(RevokeImpersonationGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeImpersonationGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeImpersonationGrantResponseObject); ok {
+		if err := validResponse.VisitRevokeImpersonationGrantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListImpersonations operation middleware
+func (sh *strictHandler) ListImpersonations(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request ListImpersonationsRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImpersonations(ctx, request.(ListImpersonationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImpersonations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImpersonationsResponseObject); ok {
+		if err := validResponse.VisitListImpersonationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EndImpersonation operation middleware
+func (sh *strictHandler) EndImpersonation(w http.ResponseWriter, r *http.Request, orgId OrgId, impersonationId ImpersonationId) {
+	var request EndImpersonationRequestObject
+
+	request.OrgId = orgId
+	request.ImpersonationId = impersonationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EndImpersonation(ctx, request.(EndImpersonationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EndImpersonation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EndImpersonationResponseObject); ok {
+		if err := validResponse.VisitEndImpersonationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListInvites operation middleware
 func (sh *strictHandler) ListInvites(w http.ResponseWriter, r *http.Request, orgId OrgId, params ListInvitesParams) {
 	var request ListInvitesRequestObject
@@ -8648,6 +10154,168 @@ func (sh *strictHandler) SetSessionPolicy(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetSessionPolicyResponseObject); ok {
 		if err := validResponse.VisitSetSessionPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSupportAccess operation middleware
+func (sh *strictHandler) GetSupportAccess(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetSupportAccessRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSupportAccess(ctx, request.(GetSupportAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSupportAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSupportAccessResponseObject); ok {
+		if err := validResponse.VisitGetSupportAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetSupportAccess operation middleware
+func (sh *strictHandler) SetSupportAccess(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request SetSupportAccessRequestObject
+
+	request.OrgId = orgId
+
+	var body SetSupportAccessJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetSupportAccess(ctx, request.(SetSupportAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetSupportAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetSupportAccessResponseObject); ok {
+		if err := validResponse.VisitSetSupportAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUsableImpersonationGrants operation middleware
+func (sh *strictHandler) ListUsableImpersonationGrants(w http.ResponseWriter, r *http.Request) {
+	var request ListUsableImpersonationGrantsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUsableImpersonationGrants(ctx, request.(ListUsableImpersonationGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUsableImpersonationGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUsableImpersonationGrantsResponseObject); ok {
+		if err := validResponse.VisitListUsableImpersonationGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartImpersonation operation middleware
+func (sh *strictHandler) StartImpersonation(w http.ResponseWriter, r *http.Request) {
+	var request StartImpersonationRequestObject
+
+	var body StartImpersonationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartImpersonation(ctx, request.(StartImpersonationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartImpersonation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartImpersonationResponseObject); ok {
+		if err := validResponse.VisitStartImpersonationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EndOwnImpersonation operation middleware
+func (sh *strictHandler) EndOwnImpersonation(w http.ResponseWriter, r *http.Request) {
+	var request EndOwnImpersonationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EndOwnImpersonation(ctx, request.(EndOwnImpersonationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EndOwnImpersonation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EndOwnImpersonationResponseObject); ok {
+		if err := validResponse.VisitEndOwnImpersonationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshImpersonation operation middleware
+func (sh *strictHandler) RefreshImpersonation(w http.ResponseWriter, r *http.Request) {
+	var request RefreshImpersonationRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshImpersonation(ctx, request.(RefreshImpersonationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshImpersonation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshImpersonationResponseObject); ok {
+		if err := validResponse.VisitRefreshImpersonationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

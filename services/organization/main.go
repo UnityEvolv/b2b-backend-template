@@ -34,6 +34,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/kms/gcpkms"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/logging"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/onboarding"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/orgdata"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
@@ -134,6 +135,15 @@ func run() error {
 	if err := dataowner.Default.Locate(env.Lookup, dataowner.Owner.HoldsOrgData); err != nil {
 		return err
 	}
+	// The onboarding checklist: the core's steps and a product's
+	// (ONBOARDING_STEPS), each asked of the service that answers it, found
+	// by <SERVICE>_URL when the step names no url (docs/onboarding.md).
+	if err := onboarding.Default.Load(env.String("ONBOARDING_STEPS", "")); err != nil {
+		return fmt.Errorf("ONBOARDING_STEPS: %w", err)
+	}
+	if err := onboarding.Default.Locate(env.Lookup, name); err != nil {
+		return err
+	}
 	// Error tracking first, so the logger can forward to it. Off without a DSN.
 	flush, err := errtrack.Init(errtrack.Options{DSN: sentryDSN, Environment: environment, Service: name})
 	if err != nil {
@@ -198,6 +208,9 @@ func run() error {
 		// service on every request (docs/api-keys.md).
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
+	// A support session's every request is recorded in the org's log
+	// (docs/impersonation.md); a service without this refuses one.
+	verifier.WithImpersonationAudit(audit.Impersonation(audit.NewClient(auditURL, tokens, nil), name))
 	deps := server.Deps{
 		Email: email.NewClient(notificationURL, tokens, nil), Users: server.NewUsers(userURL, tokens, nil),
 		Accounts: server.NewAccounts(identityURL, tokens, nil), DNS: server.DNS{},
@@ -214,7 +227,8 @@ func run() error {
 			Owners:   dataowner.Default,
 			Live:     livebus.NewBus(rdb, redisNames.LiveEvents(), livebus.Default, logger),
 		}).
-		WithBranding(branding)
+		WithBranding(branding).
+		WithOnboarding(onboarding.Default, onboarding.NewClient(tokens, nil))
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	// The daily tick: closing orgs purged and audit retention applied. No

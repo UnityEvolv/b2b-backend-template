@@ -98,6 +98,9 @@ func (i *Issuer) issue(c auth.Caller, now time.Time, ttl time.Duration) (string,
 	if c.SessionID != "" {
 		b = b.Claim(auth.ClaimSession, c.SessionID)
 	}
+	for k, v := range auth.ImpersonationClaims(c) {
+		b = b.Claim(k, v)
+	}
 	token, err := b.Build()
 	if err != nil {
 		return "", err

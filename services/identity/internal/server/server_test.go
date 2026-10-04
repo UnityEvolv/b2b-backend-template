@@ -545,6 +545,8 @@ func newAPI(t *testing.T) *fixture {
 	for _, p := range server.PublicPaths {
 		root.Handle(p, api)
 	}
+	// A support session is audited as main wires it.
+	verifier.WithImpersonationAudit(audit.Impersonation(recorder, "identity"))
 	root.Handle("/", auth.Require(verifier, api))
 	return &fixture{logs: logs, srv: srv, t: t, h: httpx.Logged(logger, root), idp: idp, users: users, orgs: orgs, recorder: recorder, events: events, mail: mail, pool: pool, verifier: verifier, sig: sig, grants: grants, apps: apps, public: identityURL}
 }

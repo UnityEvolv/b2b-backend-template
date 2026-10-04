@@ -671,6 +671,100 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 			t.Errorf("after revoking: %s", r)
 		}
 	})
+
+	t.Run("onboarding: the product's step on the checklist, asked of the product at read time", func(t *testing.T) {
+		initech := s.org(operator, "Initech", "free")
+		founder := s.member(initech, "founder@initech.test", "owner")
+		checklist := s.url("organization") + "/v1/organizations/" + initech.String() + "/onboarding"
+		steps := func() map[string]map[string]any {
+			t.Helper()
+			r := s.call(http.MethodGet, checklist, founder.token, nil)
+			if r.status != http.StatusOK {
+				t.Fatalf("checklist: %s", r)
+			}
+			out := map[string]map[string]any{}
+			var order []string
+			for _, raw := range r.body["steps"].([]any) {
+				st := raw.(map[string]any)
+				out[st["id"].(string)] = st
+				order = append(order, st["id"].(string))
+			}
+			if strings.Join(order, ",") != "verify_domain,invite_teammates,set_up_sso,choose_plan,"+product.FirstProject {
+				t.Fatalf("steps in order: %v", order)
+			}
+			return out
+		}
+		got := steps()
+		for _, id := range []string{"invite_teammates", "set_up_sso", "choose_plan", product.FirstProject} {
+			if got[id]["done"] != false || got[id]["unknown"] != false {
+				t.Errorf("%s on a new org: %v", id, got[id])
+			}
+		}
+		if got[product.FirstProject]["label"] != product.OnboardingStep.Label || got[product.FirstProject]["href"] != "/projects/new" || got[product.FirstProject]["app"] != "projects" {
+			t.Errorf("the product's step: %v", got[product.FirstProject])
+		}
+
+		// Done is the data now: a project, a teammate, a band above the lowest.
+		if r := s.call(http.MethodPost, s.url(product.Name)+"/v1/organizations/"+initech.String()+"/projects", founder.token, map[string]any{"name": "TPS reports"}, "onb-1"); r.status != http.StatusCreated {
+			t.Fatalf("create: %s", r)
+		}
+		s.member(initech, "peter@initech.test", "user")
+		if r := s.call(http.MethodPut, s.url("organization")+"/v1/organizations/"+initech.String()+"/plan", operator, map[string]any{"plan": "team"}); r.status != http.StatusOK {
+			t.Fatalf("plan: %s", r)
+		}
+		got = steps()
+		for _, id := range []string{product.FirstProject, "invite_teammates", "choose_plan"} {
+			if got[id]["done"] != true {
+				t.Errorf("%s: %v", id, got[id])
+			}
+		}
+
+		// A member without the settings permission sees no checklist.
+		if r := s.call(http.MethodGet, checklist, s.member(initech, "milton@initech.test", "user").token, nil); r.status != http.StatusForbidden {
+			t.Errorf("a User reading the checklist: %s", r)
+		}
+
+		// Dismissed per org, step by step or all of it, and brought back.
+		step := checklist + "/steps/set_up_sso/dismissal"
+		if r := s.call(http.MethodPost, step, founder.token, nil); r.status != http.StatusNoContent {
+			t.Fatalf("dismiss: %s", r)
+		}
+		if got := steps(); got["set_up_sso"]["dismissed"] != true || got["set_up_sso"]["done"] != false {
+			t.Errorf("dismissed: %v", got["set_up_sso"])
+		}
+		if r := s.call(http.MethodPost, checklist+"/steps/no_such_step/dismissal", founder.token, nil); r.status != http.StatusNotFound {
+			t.Errorf("an unknown step: %s", r)
+		}
+		if r := s.call(http.MethodPost, checklist+"/dismissal", founder.token, nil); r.status != http.StatusNoContent {
+			t.Fatalf("dismiss all: %s", r)
+		}
+		if r := s.call(http.MethodGet, checklist, founder.token, nil); r.body["dismissed"] != true {
+			t.Errorf("all dismissed: %s", r)
+		}
+		for _, path := range []string{step, checklist + "/dismissal"} {
+			if r := s.call(http.MethodDelete, path, founder.token, nil); r.status != http.StatusNoContent {
+				t.Fatalf("restore %s: %s", path, r)
+			}
+		}
+		if r := s.call(http.MethodGet, checklist, founder.token, nil); r.body["dismissed"] != false {
+			t.Errorf("restored: %s", r)
+		}
+
+		// The product down: its step is unknown, the rest still answered.
+		s.stop(product.Name)
+		r := s.call(http.MethodGet, checklist, founder.token, nil)
+		s.start(product.Name)
+		s.waitReady(product.Name)
+		if r.status != http.StatusOK || r.body["complete"] != false {
+			t.Fatalf("with the product down: %s", r)
+		}
+		for _, raw := range r.body["steps"].([]any) {
+			st := raw.(map[string]any)
+			if want := st["id"] == product.FirstProject; st["unknown"] != want {
+				t.Errorf("with the product down, %s: %v", st["id"], st)
+			}
+		}
+	})
 }
 
 func connect(t *testing.T, url string, as *db.Service) *pgx.Conn {

@@ -15,6 +15,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/onboarding"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -57,6 +58,13 @@ func TestTheEnvIsTheCode(t *testing.T) {
 		if got := loaded.Describe(b.Name); got.Limits[string(product.Projects)] != b.Cap(product.Projects) || got.Limits["users"] != b.Cap(plan.Users) {
 			t.Errorf("%s from PLANS: %+v", b.Name, got)
 		}
+	}
+	steps, err := onboarding.Parse(env["ONBOARDING_STEPS"])
+	if err != nil || len(steps) != 1 || steps[0] != product.OnboardingStep {
+		t.Errorf("ONBOARDING_STEPS parses to %+v (%v), want %+v", steps, err, product.OnboardingStep)
+	}
+	if product.OnboardingStep.URLVar() != "PROJECTS_URL" {
+		t.Errorf("its step is asked at %s", product.OnboardingStep.URLVar())
 	}
 	if product.Owner.URLVar() != "PROJECTS_URL" {
 		t.Errorf("its URL is read from %s", product.Owner.URLVar())

@@ -74,6 +74,7 @@ template service to add to it.
 | notification categories, with their copy and default channels | `pkg/notifycat.Default` | `NOTIFICATION_CATEGORIES` |
 | what a SCIM group grants | `WithGroupSync` (user service) | `SCIM_GROUP_SYNC`, naming a data owner ([docs/users.md](docs/users.md#scim)) |
 | live-session event types | `pkg/livebus.Default` | |
+| onboarding checklist steps, with the service that answers each | `pkg/onboarding.Default` | `ONBOARDING_STEPS` ([docs/onboarding.md](docs/onboarding.md)) |
 | webhook event types an org's endpoints subscribe to | `pkg/webhook.Default` | `WEBHOOK_EVENTS` ([docs/webhooks.md](docs/webhooks.md)) |
 | storage purposes and rate-limit rules | `pkg/storage`, `pkg/ratelimit.Default` | |
 | its name, id, hostnames, apps, cookies and Redis prefix | | `PRODUCT_NAME`, `PRODUCT_ID`, `BASE_HOSTNAME`, `APP_NAMES`, `COOKIE_PREFIX`, `REDIS_PREFIX` (`pkg/config`) |
@@ -138,6 +139,11 @@ template as it was; `scripts/without-examples.sh` proves it in CI.
   calling service's own token. An API key or personal access token is
   resolved by the identity service on every request and reaches only what
   its permission groups gate ([docs/api-keys.md](docs/api-keys.md)).
+- A platform operator sees an org as one of its people only with the
+  org's consent, read-only, with every request in the org's audit log;
+  every service mounts the rule (`Verifier.WithImpersonationAudit`), and
+  one that does not refuses such a session
+  ([docs/impersonation.md](docs/impersonation.md)).
 - Sessions are HTTP-only cookies on the API host, never a parent domain. The
   access token is short-lived and refreshed against the session, and every
   revocation is pushed to the open session at once.

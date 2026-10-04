@@ -6,6 +6,7 @@
 //	PERMISSION_GROUPS        on the authorization service
 //	NOTIFICATION_CATEGORIES  on the notification service
 //	DATA_OWNERS              on every template service
+//	ONBOARDING_STEPS         on the organization service
 //	WEBHOOK_EVENTS           on the webhooks service
 //
 // as NAME='value' lines a shell or an env file reads. PROJECTS_URL, where

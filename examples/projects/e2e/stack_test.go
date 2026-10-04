@@ -160,8 +160,9 @@ func newStack(t *testing.T) *stack {
 	// What a deployment sets for the product, from the product's own
 	// declarations: DATA_OWNERS on every service, the permission group on the
 	// authorization service, the category on the notification service, the
-	// ladder with its projects caps on every service that reads plans, the
-	// webhook event type on the webhooks service.
+	// ladder with its projects caps on every service that reads plans, its
+	// onboarding step on the organization service, the webhook event type on
+	// the webhooks service.
 	productEnv := product.Env()
 	env["DATA_OWNERS"] = productEnv["DATA_OWNERS"]
 	for _, p := range s.procs {
@@ -179,6 +180,9 @@ func newStack(t *testing.T) *stack {
 			mine["PLANS"] = productEnv["PLANS"]
 			mine["WEBHOOK_EVENTS"] = productEnv["WEBHOOK_EVENTS"]
 			mine["WEBHOOKS_LOCAL_TARGETS"] = "true"
+		}
+		if p.name == "organization" {
+			mine["ONBOARDING_STEPS"] = productEnv["ONBOARDING_STEPS"]
 		}
 		p.env = os.Environ()
 		for k, v := range env {

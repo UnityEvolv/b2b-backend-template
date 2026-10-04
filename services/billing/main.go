@@ -151,6 +151,9 @@ func run() error {
 		// service on every request (docs/api-keys.md).
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
+	// A support session's every request is recorded in the org's log
+	// (docs/impersonation.md); a service without this refuses one.
+	verifier.WithImpersonationAudit(audit.Impersonation(audit.NewClient(auditURL, tokens, nil), name))
 	cluster := db.SingleShard(pool)
 	var payments provider.Provider
 	if stripeKey != "" {

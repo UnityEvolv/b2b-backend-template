@@ -31,9 +31,15 @@ type sse struct {
 // stream opens GET /v1/session/events as the browser b, and waits for ready.
 func stream(t *testing.T, srv *httptest.Server, b *browser) *sse {
 	t.Helper()
+	return streamAt(t, srv, b, "")
+}
+
+// streamAt is stream with a query: ?impersonation=true for a support session.
+func streamAt(t *testing.T, srv *httptest.Server, b *browser, query string) *sse {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/v1/session/events", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/v1/session/events"+query, nil)
 	for _, c := range b.cookies {
 		req.AddCookie(c)
 	}

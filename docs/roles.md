@@ -15,6 +15,13 @@ active membership and their org's configuration; nothing is cached.
 | Guest | a limited collaborator from outside the org: no admin permissions, finds only themselves in the directory, and does not count toward the plan's user cap |
 | Super Admin (platform operator) | a person signed in to the platform org: everything, in every org |
 
+A platform operator acts on an org from the platform app; seeing it as one
+of its people is a support session, which needs an Owner's consent or the
+org's standing support access, reads only and is audited request by
+request ([impersonation.md](impersonation.md)). Giving consent and turning
+standing access on are an Owner's, never an Admin's or an operator's;
+reading them, and the list of who looked, is `settings`.
+
 Owner only, never configurable: `assign_roles`, `configure_permissions`,
 `transfer_ownership`, `delete_organization`, `claim_domain`. `settings` is
 always the Admin's and is not a toggle.
@@ -79,12 +86,14 @@ user service and the org's configuration from its own table. Tests use
 `authz.Static{"org/membership": grant}`.
 
 Enforced today: people, invites, sessions and MFA resets (users), the plan
-and invoices (billing), the audit log (audit), organization settings and
-reading the domain claim (settings), the identity provider, read and
-changed (sso), the org's API keys (api_keys), webhook endpoints and
-deliveries (webhooks), role assignment, permission configuration,
-ownership transfer, deleting the organization and claiming or verifying
-its domain (Owner only).
+and invoices (billing), the audit log (audit), organization settings, the
+onboarding checklist and its dismissals, reading the domain claim, and
+reading support access, consents and who looked (settings), the identity
+provider, read and changed (sso), the org's API keys (api_keys), webhook
+endpoints and deliveries (webhooks), role assignment, permission
+configuration, ownership transfer, deleting the organization, claiming or
+verifying its domain, consenting to support impersonation and turning
+standing support access on (Owner only).
 
 ## API keys and personal access tokens
 

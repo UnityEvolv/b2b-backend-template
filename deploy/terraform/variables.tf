@@ -90,7 +90,7 @@ variable "service_schemas" {
 }
 
 variable "service_env" {
-  description = "Settings given to every service: a product's registrations (PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, SCIM_GROUP_SYNC) and anything else that is not a secret."
+  description = "Settings given to every service: a product's registrations (PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, ONBOARDING_STEPS, SCIM_GROUP_SYNC) and anything else that is not a secret."
   type        = map(string)
   default     = {}
 }

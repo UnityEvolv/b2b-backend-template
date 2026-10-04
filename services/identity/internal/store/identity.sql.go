@@ -77,6 +77,19 @@ func (q *Queries) ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (MfaTo
 	return i, err
 }
 
+const countInvitesOfOrg = `-- name: CountInvitesOfOrg :one
+SELECT count(*) FROM invites WHERE org_id = $1
+`
+
+// Every invite the org ever sent, whatever became of it: whether it has
+// invited anyone, for its onboarding checklist.
+func (q *Queries) CountInvitesOfOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countInvitesOfOrg, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOrgRows = `-- name: CountOrgRows :one
 SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = $1)
      + (SELECT count(*) FROM session_policies p WHERE p.org_id = $1)
@@ -85,7 +98,10 @@ SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = $1)
      + (SELECT count(*) FROM email_verifications e WHERE e.org_id = $1)
      + (SELECT count(*) FROM mfa_challenges c WHERE c.signed_in_org_id = $1 OR c.active_org_id = $1)
      + (SELECT count(*) FROM sessions s WHERE s.signed_in_org_id = $1 OR s.active_org_id = $1)
-     + (SELECT count(*) FROM api_keys k WHERE k.org_id = $1))::bigint AS remaining
+     + (SELECT count(*) FROM api_keys k WHERE k.org_id = $1)
+     + (SELECT count(*) FROM support_access s WHERE s.org_id = $1)
+     + (SELECT count(*) FROM impersonation_grants g WHERE g.org_id = $1)
+     + (SELECT count(*) FROM impersonations m WHERE m.org_id = $1))::bigint AS remaining
 `
 
 // What is left of an org after a purge: zero when it is gone.
@@ -547,7 +563,7 @@ func (q *Queries) GetMfaChallenge(ctx context.Context, tokenHash []byte) (MfaCha
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE id = $1
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id FROM sessions WHERE id = $1
 `
 
 // global: a session is a person's.
@@ -571,12 +587,13 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
 
 const getSessionByRefreshToken = `-- name: GetSessionByRefreshToken :one
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE refresh_token_hash = $1
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id FROM sessions WHERE refresh_token_hash = $1
 `
 
 // global: a session is a person's.
@@ -600,6 +617,7 @@ func (q *Queries) GetSessionByRefreshToken(ctx context.Context, refreshTokenHash
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
@@ -829,7 +847,7 @@ func (q *Queries) InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCode
 const insertSession = `-- name: InsertSession :one
 INSERT INTO sessions (id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type InsertSessionParams struct {
@@ -871,6 +889,7 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (S
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
@@ -878,7 +897,7 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (S
 const insertSessionWithPolicy = `-- name: InsertSessionWithPolicy :one
 INSERT INTO sessions (id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, idle_timeout_seconds, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9)
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type InsertSessionWithPolicyParams struct {
@@ -925,6 +944,7 @@ func (q *Queries) InsertSessionWithPolicy(ctx context.Context, arg InsertSession
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
@@ -1142,7 +1162,7 @@ func (q *Queries) ListInvitesOfOrg(ctx context.Context, orgID uuid.UUID) ([]Invi
 }
 
 const listLiveSessionsOfUser = `-- name: ListLiveSessionsOfUser :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id FROM sessions
 WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 ORDER BY last_seen_at DESC
 `
@@ -1175,6 +1195,7 @@ func (q *Queries) ListLiveSessionsOfUser(ctx context.Context, userID uuid.UUID) 
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
+			&i.ImpersonationID,
 		); err != nil {
 			return nil, err
 		}
@@ -1187,7 +1208,7 @@ func (q *Queries) ListLiveSessionsOfUser(ctx context.Context, userID uuid.UUID) 
 }
 
 const listLiveSessionsWithMembership = `-- name: ListLiveSessionsWithMembership :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id FROM sessions
 WHERE active_membership_id = $1 AND revoked_at IS NULL AND expires_at > now()
 `
 
@@ -1219,6 +1240,7 @@ func (q *Queries) ListLiveSessionsWithMembership(ctx context.Context, membership
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
+			&i.ImpersonationID,
 		); err != nil {
 			return nil, err
 		}
@@ -1231,7 +1253,7 @@ func (q *Queries) ListLiveSessionsWithMembership(ctx context.Context, membership
 }
 
 const listSessionsOfUser = `-- name: ListSessionsOfUser :many
-SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at FROM sessions WHERE user_id = $1 ORDER BY created_at
+SELECT id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id FROM sessions WHERE user_id = $1 ORDER BY created_at
 `
 
 // global: a session is a person's; every one still on record, ended or
@@ -1262,6 +1284,7 @@ func (q *Queries) ListSessionsOfUser(ctx context.Context, userID uuid.UUID) ([]S
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
+			&i.ImpersonationID,
 		); err != nil {
 			return nil, err
 		}
@@ -1366,7 +1389,7 @@ const moveSession = `-- name: MoveSession :one
 UPDATE sessions
 SET active_org_id = $1, active_membership_id = $2
 WHERE id = $3 AND revoked_at IS NULL
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type MoveSessionParams struct {
@@ -1398,6 +1421,7 @@ func (q *Queries) MoveSession(ctx context.Context, arg MoveSessionParams) (Sessi
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
@@ -1553,7 +1577,7 @@ func (q *Queries) RevokeSession(ctx context.Context, id uuid.UUID) (int64, error
 const revokeSessionFor = `-- name: RevokeSessionFor :one
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE id = $2 AND revoked_at IS NULL
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type RevokeSessionForParams struct {
@@ -1583,6 +1607,7 @@ func (q *Queries) RevokeSessionFor(ctx context.Context, arg RevokeSessionForPara
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }
@@ -1590,7 +1615,7 @@ func (q *Queries) RevokeSessionFor(ctx context.Context, arg RevokeSessionForPara
 const revokeSessionsOfOrg = `-- name: RevokeSessionsOfOrg :many
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE active_org_id = $2 AND revoked_at IS NULL AND expires_at > now()
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type RevokeSessionsOfOrgParams struct {
@@ -1626,6 +1651,7 @@ func (q *Queries) RevokeSessionsOfOrg(ctx context.Context, arg RevokeSessionsOfO
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
+			&i.ImpersonationID,
 		); err != nil {
 			return nil, err
 		}
@@ -1654,7 +1680,7 @@ const revokeSessionsOfUserFor = `-- name: RevokeSessionsOfUserFor :many
 UPDATE sessions SET revoked_at = now(), revoked_reason = $1
 WHERE user_id = $2 AND revoked_at IS NULL AND expires_at > now()
   AND ($3::uuid IS NULL OR id <> $3::uuid)
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type RevokeSessionsOfUserForParams struct {
@@ -1691,6 +1717,7 @@ func (q *Queries) RevokeSessionsOfUserFor(ctx context.Context, arg RevokeSession
 			&i.CreatedAt,
 			&i.LastModifiedBy,
 			&i.LastModifiedAt,
+			&i.ImpersonationID,
 		); err != nil {
 			return nil, err
 		}
@@ -1708,7 +1735,7 @@ SET refresh_token_hash = $1,
     active_org_id = $2, active_membership_id = $3,
     last_seen_at = now()
 WHERE id = $4 AND revoked_at IS NULL AND expires_at > now()
-RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at
+RETURNING id, user_id, active_org_id, active_membership_id, refresh_token_hash, signed_in_org_id, expires_at, last_seen_at, revoked_at, idle_timeout_seconds, user_agent, revoked_reason, created_by, created_at, last_modified_by, last_modified_at, impersonation_id
 `
 
 type RotateSessionParams struct {
@@ -1745,6 +1772,7 @@ func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) (S
 		&i.CreatedAt,
 		&i.LastModifiedBy,
 		&i.LastModifiedAt,
+		&i.ImpersonationID,
 	)
 	return i, err
 }

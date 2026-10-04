@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/UnityEvolv/b2b-backend-template/pkg/audit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/auth"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/authz"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/config"
@@ -140,6 +141,9 @@ func run() error {
 		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
 	}
 	srv := server.New(cluster, logger, authz.Client(authorizationURL, tokens, nil))
+	// A support session's every request is recorded (docs/impersonation.md);
+	// here, straight into the log.
+	verifier.WithImpersonationAudit(audit.Impersonation(srv, name))
 	if webhooksURL != "" {
 		srv.WithWebhooks(webhook.NewClient(webhooksURL, tokens, nil))
 	} else {

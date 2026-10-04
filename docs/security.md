@@ -100,6 +100,30 @@ few of its own ([api-keys.md](api-keys.md)):
 - **Audited:** made, first used, revoked (`api_key.*`); what an org's key
   does is recorded as `api_key:<id>`, what a token does as its person.
 
+## Support impersonation
+
+Platform staff see an org as one of its people only with the org's
+consent, and every step is visible to the org
+([impersonation.md](impersonation.md)):
+
+- **Consent first.** An Owner's, for 15 minutes to 24 hours, or the org's
+  standing support access, which only an Owner turns on. Owners themselves
+  are reached only when the consent says so. An Owner can withdraw it at
+  once, and the open support tab is closed.
+- **Read-only, in the middleware.** Every service's `auth.Require` refuses
+  any method but `GET`, `HEAD` and `OPTIONS` from a token carrying
+  `impersonator_id`; writes to security settings, billing, ownership and
+  the person's account are refused even if a write mode is added. A
+  support session never makes a key, never impersonates further and never
+  reaches the platform app.
+- **Every request audited** in the org's own log, reads included, before
+  it is served; one that cannot be recorded is refused.
+- **Time-boxed.** The session expires with the consent (or an hour under
+  standing access); no access token outlives it and the refresh is refused
+  after. It is never extended.
+- **Kept apart.** Its own cookie, never the operator's session or the
+  person's, so it cannot be moved to another org.
+
 ## Single sign-on hardening
 
 An admin types the identity provider's address, so the identity service

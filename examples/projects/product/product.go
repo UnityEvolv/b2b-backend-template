@@ -1,15 +1,16 @@
 // Package product is everything the example product declares to the
 // template, in one place: its service and schema, its plan limit, its
 // permission group, its notification category, its data owner entry, its
-// live event type, its webhook event type, its storage purpose and its
-// rate-limit rule.
+// live event type, its webhook event type, its storage purpose, its
+// rate-limit rule and its onboarding step.
 //
 // Some of it is registered in this product's own processes (Register, and
 // the package variables below). The rest is for the template's services,
 // which run unchanged and learn it from their configuration: Env renders
-// PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, DATA_OWNERS and
-// WEBHOOK_EVENTS from the same values, so what a deployment sets is exactly what the code declares. A
-// product that builds its own copy of one of those services registers the
+// PLANS, PERMISSION_GROUPS, NOTIFICATION_CATEGORIES, DATA_OWNERS,
+// ONBOARDING_STEPS and WEBHOOK_EVENTS from the same values, so what a
+// deployment sets is exactly what the code declares. A product that builds
+// its own copy of one of those services registers the
 // same values in code instead (authz.Default.Register(PermissionGroup), and
 // so on).
 package product
@@ -25,6 +26,7 @@ import (
 	"github.com/UnityEvolv/b2b-backend-template/pkg/db"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/livebus"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/notifycat"
+	"github.com/UnityEvolv/b2b-backend-template/pkg/onboarding"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/plan"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/ratelimit"
 	"github.com/UnityEvolv/b2b-backend-template/pkg/storage"
@@ -105,6 +107,16 @@ var CoverImage = storage.Default.Register(storage.Purpose{Name: "project-cover",
 // top of the plan's cap.
 var CreateRule = ratelimit.Default.Register(ratelimit.Rule{Name: "project-create", Limit: 20, Window: time.Minute}, ratelimit.PerMembership)
 
+// FirstProject is the onboarding step this product adds to the checklist,
+// after the core's: done once the org has a project. This service answers
+// it (GET /v1/internal/organizations/{org_id}/onboarding/create_project),
+// found by PROJECTS_URL.
+const FirstProject = "create_project"
+
+// OnboardingStep is the step as the organization service lists it: done
+// in the product's own web app (b2b-frontend-template/examples/projects).
+var OnboardingStep = onboarding.Step{ID: FirstProject, Label: "Create your first project", Href: "/projects/new", App: "projects", Service: Name}
+
 var once sync.Once
 
 // Register declares the product to the registries its own processes read:
@@ -161,6 +173,7 @@ func Env() map[string]string {
 		"PERMISSION_GROUPS":       mustJSON([]any{group}),
 		"NOTIFICATION_CATEGORIES": mustJSON([]any{category}),
 		"DATA_OWNERS":             mustJSON([]dataowner.Owner{Owner}),
+		"ONBOARDING_STEPS":        mustJSON([]onboarding.Step{OnboardingStep}),
 		"WEBHOOK_EVENTS":          mustJSON([]webhook.EventType{CreatedEventType}),
 	}
 }

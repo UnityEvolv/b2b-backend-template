@@ -176,6 +176,10 @@ func (s *Signer) Issue(c auth.Caller, ttl time.Duration) (string, error) {
 	if c.SessionID != "" {
 		b = b.Claim(auth.ClaimSession, c.SessionID)
 	}
+	// An impersonation session's token says who is really behind it.
+	for k, v := range auth.ImpersonationClaims(c) {
+		b = b.Claim(k, v)
+	}
 	token, err := b.Build()
 	if err != nil {
 		return "", err

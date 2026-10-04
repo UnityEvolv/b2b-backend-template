@@ -169,7 +169,7 @@ func (s *Server) PurgeOrgData(ctx context.Context, req api.PurgeOrgDataRequestOb
 		steps := []func(context.Context, uuid.UUID) (int64, error){
 			q.DeleteMfaChallengesOfOrg, q.DeleteSessionsOfOrg, q.DeleteEmailVerificationsOfOrg,
 			q.DeleteInvitesOfOrg, q.DeleteSignInAttemptsOfOrg, q.DeleteSessionPolicyOfOrg, q.DeleteIdentityProviderOfOrg,
-			q.DeleteAPIKeysOfOrg,
+			q.DeleteAPIKeysOfOrg, q.DeleteSupportAccessOfOrg, q.DeleteImpersonationGrantsOfOrg, q.DeleteImpersonationsOfOrg,
 		}
 		for _, step := range steps {
 			if _, err := step(ctx, org); err != nil {

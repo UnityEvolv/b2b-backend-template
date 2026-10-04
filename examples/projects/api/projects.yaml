@@ -378,6 +378,36 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/internal/organizations/{org_id}/onboarding/{step_id}:
+    get:
+      operationId: getOnboardingStep
+      summary: Whether this product's onboarding step is done for an org (the organization service only)
+      description: |
+        create_project: the organization has at least one project, now.
+        Derived at the moment of asking, never stored (docs/onboarding.md);
+        any other step is not this service's (404).
+      tags: [internal]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: step_id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 51
+      responses:
+        '200':
+          description: Whether it is done
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStatus'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearer:
@@ -426,6 +456,12 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    OnboardingStatus:
+      type: object
+      required: [done]
+      properties:
+        done:
+          type: boolean
     Project:
       type: object
       required: [id, org_id, name, description, member_count, created_by, created_at, last_modified_by, last_modified_at]

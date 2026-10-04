@@ -216,6 +216,9 @@ func run() error {
 	// service resolves them itself on its own routes.
 	srv.WithPlans(plan.Client(organizationURL, tokens, nil))
 	verifier.WithKeys(srv)
+	// A support session's every request is recorded in the org's log
+	// (docs/impersonation.md).
+	verifier.WithImpersonationAudit(audit.Impersonation(recorder, name))
 	api := srv.Handler(httpx.NewMux(), limiter.Routes(server.Limits))
 
 	go housekeeping(ctx, logger, srv)

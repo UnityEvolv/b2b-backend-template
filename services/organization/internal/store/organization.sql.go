@@ -74,7 +74,8 @@ const countOrgRows = `-- name: CountOrgRows :one
 SELECT (SELECT count(*) FROM organizations o WHERE o.org_id = $1)
      + (SELECT count(*) FROM org_data_keys k WHERE k.org_id = $1)
      + (SELECT count(*) FROM data_exports e WHERE e.org_id = $1)
-     + (SELECT count(*) FROM plan_overrides p WHERE p.org_id = $1) AS remaining
+     + (SELECT count(*) FROM plan_overrides p WHERE p.org_id = $1)
+     + (SELECT count(*) FROM onboarding_dismissals d WHERE d.org_id = $1) AS remaining
 `
 
 func (q *Queries) CountOrgRows(ctx context.Context, orgID uuid.UUID) (int32, error) {

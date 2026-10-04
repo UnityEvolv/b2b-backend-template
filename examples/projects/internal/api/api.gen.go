@@ -67,6 +67,11 @@ type NewProject struct {
 	Name string `json:"name"`
 }
 
+// OnboardingStatus defines model for OnboardingStatus.
+type OnboardingStatus struct {
+	Done bool `json:"done"`
+}
+
 // Project defines model for Project.
 type Project struct {
 	// CoverUrl A signed link to the cover image, valid for an hour; absent when there is none.
@@ -167,6 +172,9 @@ type ServerInterface interface {
 	// ForgetMembershipData Delete what this service keeps personally under one membership, for account deletion (the organization and user services only)
 	// (DELETE /v1/internal/organizations/{org_id}/memberships/{membership_id}/data)
 	ForgetMembershipData(w http.ResponseWriter, r *http.Request, orgId OrgId, membershipId MembershipId)
+	// GetOnboardingStep Whether this product's onboarding step is done for an org (the organization service only)
+	// (GET /v1/internal/organizations/{org_id}/onboarding/{step_id})
+	GetOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId string)
 	// ExportUserData What this service keeps about one person, for their own export (the organization service only)
 	// (GET /v1/internal/users/{user_id}/data)
 	ExportUserData(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID, params ExportUserDataParams)
@@ -289,6 +297,41 @@ func (siw *ServerInterfaceWrapper) ForgetMembershipData(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ForgetMembershipData(w, r, orgId, membershipId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOnboardingStep operation middleware
+func (siw *ServerInterfaceWrapper) GetOnboardingStep(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "step_id" -------------
+	var stepId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "step_id", r.PathValue("step_id"), &stepId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "step_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOnboardingStep(w, r, orgId, stepId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -881,6 +924,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/data", wrapper.ExportOrgData)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/users/{user_id}/data", wrapper.ExportUserData)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/memberships/{membership_id}/data", wrapper.ForgetMembershipData)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/internal/organizations/{org_id}/onboarding/{step_id}", wrapper.GetOnboardingStep)
 
 	return m
 }
@@ -1030,6 +1074,74 @@ type ForgetMembershipDatadefaultJSONResponse struct {
 }
 
 func (response ForgetMembershipDatadefaultJSONResponse) VisitForgetMembershipDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStepRequestObject struct {
+	OrgId  OrgId  `json:"org_id"`
+	StepId string `json:"step_id"`
+}
+
+type GetOnboardingStepResponseObject interface {
+	VisitGetOnboardingStepResponse(w http.ResponseWriter) error
+}
+
+type GetOnboardingStep200JSONResponse OnboardingStatus
+
+func (response GetOnboardingStep200JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStep403JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetOnboardingStep403JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStep404JSONResponse Error
+
+func (response GetOnboardingStep404JSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOnboardingStepdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetOnboardingStepdefaultJSONResponse) VisitGetOnboardingStepResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1997,6 +2109,9 @@ type StrictServerInterface interface {
 	// ForgetMembershipData Delete what this service keeps personally under one membership, for account deletion (the organization and user services only)
 	// (DELETE /v1/internal/organizations/{org_id}/memberships/{membership_id}/data)
 	ForgetMembershipData(ctx context.Context, request ForgetMembershipDataRequestObject) (ForgetMembershipDataResponseObject, error)
+	// GetOnboardingStep Whether this product's onboarding step is done for an org (the organization service only)
+	// (GET /v1/internal/organizations/{org_id}/onboarding/{step_id})
+	GetOnboardingStep(ctx context.Context, request GetOnboardingStepRequestObject) (GetOnboardingStepResponseObject, error)
 	// ExportUserData What this service keeps about one person, for their own export (the organization service only)
 	// (GET /v1/internal/users/{user_id}/data)
 	ExportUserData(ctx context.Context, request ExportUserDataRequestObject) (ExportUserDataResponseObject, error)
@@ -2143,6 +2258,33 @@ func (sh *strictHandler) ForgetMembershipData(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ForgetMembershipDataResponseObject); ok {
 		if err := validResponse.VisitForgetMembershipDataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOnboardingStep operation middleware
+func (sh *strictHandler) GetOnboardingStep(w http.ResponseWriter, r *http.Request, orgId OrgId, stepId string) {
+	var request GetOnboardingStepRequestObject
+
+	request.OrgId = orgId
+	request.StepId = stepId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOnboardingStep(ctx, request.(GetOnboardingStepRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOnboardingStep")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOnboardingStepResponseObject); ok {
+		if err := validResponse.VisitGetOnboardingStepResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

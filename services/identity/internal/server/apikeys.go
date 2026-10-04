@@ -180,8 +180,15 @@ func noKeys(ctx context.Context) bool {
 
 const keysOnlyBySession = "API keys and personal access tokens are managed when signed in, not with a key."
 
+// noKeysWhileImpersonating refuses a support session a key: a credential
+// that outlived the impersonation would outlive the consent.
+const noKeysWhileImpersonating = "A support session cannot make API keys or personal access tokens."
+
 // CreateApiKey makes an org's key, granted groups the caller holds.
 func (s *Server) CreateApiKey(ctx context.Context, req api.CreateApiKeyRequestObject) (api.CreateApiKeyResponseObject, error) {
+	if auth.Impersonating(ctx) {
+		return api.CreateApiKey403JSONResponse{Code: codeImpersonating, Message: noKeysWhileImpersonating}, nil
+	}
 	if noKeys(ctx) {
 		return api.CreateApiKey403JSONResponse{Code: httpx.CodeForbidden, Message: keysOnlyBySession}, nil
 	}
@@ -316,6 +323,9 @@ func member(ctx context.Context, org uuid.UUID) (auth.Caller, uuid.UUID, uuid.UU
 // CreatePersonalAccessToken makes the caller's own token in the org,
 // granted groups they hold now.
 func (s *Server) CreatePersonalAccessToken(ctx context.Context, req api.CreatePersonalAccessTokenRequestObject) (api.CreatePersonalAccessTokenResponseObject, error) {
+	if auth.Impersonating(ctx) {
+		return api.CreatePersonalAccessToken403JSONResponse{Code: codeImpersonating, Message: noKeysWhileImpersonating}, nil
+	}
 	_, user, membership, ok := member(ctx, req.OrgId)
 	if !ok {
 		return api.CreatePersonalAccessToken403JSONResponse{Code: httpx.CodeForbidden, Message: "Only a member signed in to the organization makes their own token."}, nil

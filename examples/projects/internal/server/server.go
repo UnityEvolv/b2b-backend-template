@@ -124,6 +124,7 @@ var Limits = map[string]ratelimit.Bound{
 	"DELETE /v1/internal/organizations/{org_id}/data":                                 ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
 	"GET /v1/internal/users/{user_id}/data":                                           ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 	"DELETE /v1/internal/organizations/{org_id}/memberships/{membership_id}/data":     ratelimit.On(ratelimit.AuthenticatedWrite, ratelimit.ByUser),
+	"GET /v1/internal/organizations/{org_id}/onboarding/{step_id}":                    ratelimit.On(ratelimit.AuthenticatedRead, ratelimit.ByUser),
 }
 
 // Handler is the API's routes, with bad requests and failures answered in

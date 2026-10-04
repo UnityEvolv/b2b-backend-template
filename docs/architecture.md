@@ -15,8 +15,8 @@ API.
 
 | service | schema | role | owns |
 | --- | --- | --- | --- |
-| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, the token issuer and its keys |
-| organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys |
+| identity | `identity` | `svc_identity` | sign-in (OpenID Connect and local accounts), sessions, MFA, invites, API keys and personal access tokens, support impersonation and its consents, the token issuer and its keys |
+| organization | `organization` | `svc_organization` | organizations, signup, domain claims, plans, suspension, offboarding, exports, the per-org data keys, the onboarding checklist |
 | user | `users` | `svc_users` | users, memberships, profiles, bulk import, SCIM 2.0 |
 | authorization | `authz` | `svc_authz` | each org's permission configuration, ownership transfer, the permission check |
 | audit | `audit` | `svc_audit` | the append-only audit log |
@@ -42,7 +42,7 @@ another service.
 | package | what |
 | --- | --- |
 | `audit` | the one call that records who did what, to the audit service |
-| `auth` | token verification, the caller in the context, the org and service checks, service tokens |
+| `auth` | token verification, the caller in the context, the org and service checks, service tokens, the support-session rules |
 | `authz` | roles, the permission-group registry, and the per-request permission check |
 | `captcha` | bot protection on public forms ([captcha.md](captcha.md)) |
 | `config` | settings from the environment: the brand, app origins, hostnames, cookie names, Redis names |
@@ -59,6 +59,7 @@ another service.
 | `livebus` | the live-session event bus and its type registry ([sessions.md](sessions.md#the-push)) |
 | `logging` | structured JSON logs, without personal data |
 | `notifycat` | the notification category registry ([notifications.md](notifications.md)) |
+| `onboarding` | the onboarding checklist's step registry and the endpoint each step's service answers ([onboarding.md](onboarding.md)) |
 | `orgdata` | the shapes of the export, purge and erase endpoints every data owner answers |
 | `plan` | the plan registry and the limit and feature checks ([plans.md](plans.md)) |
 | `ratelimit` | the rate limiter and its rule registry |
@@ -85,6 +86,7 @@ process at start, so a mistake never reaches a request.
 | dataowner | services that export, purge, erase or decrypt | `dataowner.Default.Register` | `DATA_OWNERS`, `<NAME>_URL` | every service; Terraform, through `cmd/dataowners` |
 | notifycat | notification categories, with copy and default channels | `notifycat.Default.Register` | `NOTIFICATION_CATEGORIES` | notification |
 | livebus | live-session event types | `livebus.Default.Register` | none | the process that publishes |
+| onboarding | first-run checklist steps, with the service that says whether each is done | `onboarding.Default.Register` | `ONBOARDING_STEPS`, `<SERVICE>_URL` | organization |
 | webhook | webhook event types an org's endpoints may subscribe to | `webhook.Default.Register` | `WEBHOOK_EVENTS` | webhooks |
 
 Storage purposes, rate-limit rules and event types have no environment seam
@@ -157,6 +159,10 @@ with a bearer access token.
      or a personal access token is resolved by the identity service instead,
      on every request, and put in the context as a key, not a caller
      ([api-keys.md](api-keys.md)).
+     A platform operator's support session (a token with
+     `impersonator_id`) is admitted only to read, and each of its requests
+     is recorded in the org's audit log before the handler runs
+     ([impersonation.md](impersonation.md)).
 3. **The route's rate limit.** Every endpoint has one line in the service's
    `Limits` table, binding it to a rule and to what is counted (address,
    user, membership or org).

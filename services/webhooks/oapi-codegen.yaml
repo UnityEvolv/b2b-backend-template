@@ -1,0 +1,9 @@
+# The server interface, generated from api/webhooks.yaml. Regenerate with
+# scripts/generate.sh; never edit the output by hand. CI fails on any difference.
+package: api
+output: internal/api/api.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: false

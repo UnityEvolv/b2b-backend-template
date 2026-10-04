@@ -201,13 +201,16 @@ paths:
       operationId: getOrganizationPlan
       summary: The org's plan, what it allows, and what the org uses now (its members, platform operators)
       description: |
-        The band the org is on, with its label, whether it is contractual,
-        its cap on every registered limit (0 means no cap) and the gated
-        features it includes, and the org's current usage of the limits the
-        template counts itself (users: active members). A product's own
-        limits have no usage here; the product counts them. Everything is
-        read at the moment of the request, never cached; the gate is the
-        action itself, which reads the plan again.
+        The band the org is on, with its label and whether it is
+        contractual; the effective cap on every registered limit (0 means no
+        cap) and the gated features on for the org, which is the band with
+        the org's overrides in force applied; those overrides, each with its
+        end, so the page marks what is the organization's agreement; and the
+        org's current usage of the limits the template counts itself (users:
+        active members). A product's own limits have no usage here; the
+        product counts them. Everything is read at the moment of the
+        request, never cached; the gate is the action itself, which reads
+        the plan again.
       tags: [plans]
       parameters:
         - $ref: '#/components/parameters/OrgId'
@@ -584,6 +587,94 @@ paths:
           $ref: '#/components/responses/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/plan-overrides:
+    get:
+      operationId: listPlanOverrides
+      summary: Every override set for the organization, in force or ended (platform operators)
+      description: |
+        A platform operator's exceptions to the org's band, for an
+        enterprise deal: a limit's cap raised or lowered, a feature granted
+        or taken away, each with an optional end. One past its end has
+        stopped applying and is listed with in_force false until it is
+        removed or set again; nothing sweeps it.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The overrides, limits first, each by key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOverrideList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/organizations/{org_id}/plan-overrides/{kind}/{key}:
+    put:
+      operationId: setPlanOverride
+      summary: Set the organization's override of one limit or feature (platform operators)
+      description: |
+        Replaces any override of the same limit or feature. The key must be
+        a registered limit (with cap) or feature (with allowed). Checked at
+        the moment of every action like the band itself: the band's value
+        first, then this. Audited on the org as
+        organization.plan.override_set, which the org's audit log shows.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/OverrideKind'
+        - $ref: '#/components/parameters/OverrideKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanOverrideInput'
+      responses:
+        '200':
+          description: The override as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOverride'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removePlanOverride
+      summary: Remove the organization's override of one limit or feature (platform operators)
+      description: |
+        The band's value applies again from the next action. Audited on the
+        org as organization.plan.override_removed.
+      tags: [plans]
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/OverrideKind'
+        - $ref: '#/components/parameters/OverrideKey'
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signups:
     post:
       operationId: startSignup
@@ -868,9 +959,10 @@ paths:
       operationId: getPlan
       summary: The org's plan and its limits, for a service gating an action (services only)
       description: |
-        Read at the moment of the action, never cached. The limits are the
-        platform's table for the band, so a service can refuse with a message
-        that names the plan and the next one up.
+        Read at the moment of the action, never cached. The band, what the
+        org may do with its overrides in force applied, and those overrides,
+        so a service checks the band's value then the override, and refuses
+        with a message that names the plan and the next one up.
       tags: [plans]
       parameters:
         - $ref: '#/components/parameters/OrgId'
@@ -994,6 +1086,22 @@ components:
       schema:
         type: string
         format: uuid
+    OverrideKind:
+      name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [limit, feature]
+    OverrideKey:
+      name: key
+      in: path
+      required: true
+      description: A registered limit's or feature's key, validated against the plan registry.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
   responses:
     Error:
       description: The error envelope
@@ -1022,7 +1130,7 @@ components:
       description: The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
     PlanLimits:
       type: object
-      required: [org_id, plan, contractual, limits, features]
+      required: [org_id, plan, contractual, limits, features, overrides]
       properties:
         org_id:
           type: string
@@ -1034,14 +1142,69 @@ components:
           description: Sold by contract rather than self-serve; billing never moves an organization into or out of it.
         limits:
           type: object
-          description: Every registered limit and its cap on this plan, by key (users is the one every deployment has). 0 means no cap in the product.
+          description: Every registered limit and its effective cap for this org, by key (users is the one every deployment has), its override's where one is in force, else the band's. 0 means no cap in the product.
           additionalProperties:
             type: integer
         features:
           type: array
-          description: The gated features this plan includes. Everything not gated is on every plan.
+          description: The gated features on for this org, the band's with its overrides applied. Everything not gated is on every plan.
           items:
             type: string
+        overrides:
+          type: array
+          description: |
+            The org's overrides in force now, which limits and features
+            already include. A gate checks the band's value first, then
+            these.
+          items:
+            $ref: '#/components/schemas/PlanOverride'
+    PlanOverride:
+      type: object
+      required: [kind, key, in_force]
+      properties:
+        kind:
+          type: string
+          enum: [limit, feature]
+        key:
+          type: string
+          description: The registered limit's or feature's key.
+        cap:
+          type: integer
+          description: For a limit, the cap that replaces the band's. 0 means no cap.
+        allowed:
+          type: boolean
+          description: For a feature, whether it is granted (true) or taken away (false), whatever the band says.
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the override stops applying; absent or null is never.
+        in_force:
+          type: boolean
+          description: Whether it applies now. One past its end has stopped.
+    PlanOverrideInput:
+      type: object
+      properties:
+        cap:
+          type: integer
+          minimum: 0
+          description: For a limit, the cap. 0 lifts it.
+        allowed:
+          type: boolean
+          description: For a feature, grant (true) or take away (false).
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When it stops applying, in the future; absent or null is never.
+    PlanOverrideList:
+      type: object
+      required: [overrides]
+      properties:
+        overrides:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanOverride'
     PlanCatalogue:
       type: object
       required: [bands, limits, features]
@@ -1103,7 +1266,7 @@ components:
           description: What a message calls it, such as SCIM provisioning.
     OrganizationPlan:
       type: object
-      required: [org_id, plan, label, contractual, limits, features, usage]
+      required: [org_id, plan, label, contractual, limits, features, overrides, usage]
       properties:
         org_id:
           type: string
@@ -1117,14 +1280,19 @@ components:
           type: boolean
         limits:
           type: object
-          description: Every registered limit's cap on this plan, by key. 0 means no cap.
+          description: Every registered limit's effective cap for this org, by key, its override's where it has one in force, else the band's. 0 means no cap.
           additionalProperties:
             type: integer
         features:
           type: array
-          description: The gated features this plan includes, by key.
+          description: The gated features on for this org, by key, the band's with its overrides applied.
           items:
             type: string
+        overrides:
+          type: array
+          description: The overrides in force now, limits first, each by key, with its end. The billing page marks these limits and features as the organization's agreement; the band's own values are in the catalogue.
+          items:
+            $ref: '#/components/schemas/PlanOverride'
         usage:
           type: object
           description: What the org uses now of each limit the template counts, by key (users, its active members). A product's own limits are absent; the product counts them.

@@ -112,14 +112,14 @@ func TestRequireIsPerMembership(t *testing.T) {
 	}
 }
 
-// The template's groups: billing for Billing Admin; users, audit, sso and
-// webhooks for Admin. Nothing of the product's.
+// The template's groups: billing for Billing Admin; users, audit, sso,
+// api_keys and webhooks for Admin. Nothing of the product's.
 func TestTemplateGroups(t *testing.T) {
-	if got := authz.New().Configurable(); !slices.Equal(got, []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.Webhooks}) {
+	if got := authz.New().Configurable(); !slices.Equal(got, []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks}) {
 		t.Errorf("groups: %v", got)
 	}
 	d := authz.New().Defaults()
-	if !slices.Equal(d.Admin, []authz.Permission{authz.Users, authz.Audit, authz.SSO, authz.Webhooks}) || !slices.Equal(d.BillingAdmin, []authz.Permission{authz.Billing}) {
+	if !slices.Equal(d.Admin, []authz.Permission{authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks}) || !slices.Equal(d.BillingAdmin, []authz.Permission{authz.Billing}) {
 		t.Errorf("defaults: %+v", d)
 	}
 	// Settings is always the Admin's, and is not a toggle.
@@ -153,10 +153,10 @@ func TestProductRegistersAGroup(t *testing.T) {
 
 	// Saved before "reports" existed, with projects off for Admin and a
 	// group since removed ("dashboards").
-	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.Webhooks, "projects", "dashboards"}
+	known := []authz.Permission{authz.Billing, authz.Users, authz.Audit, authz.SSO, authz.APIKeys, authz.Webhooks, "projects", "dashboards"}
 	r.Register(authz.Group{Key: "reports", Label: "Reports", Default: []authz.Role{authz.Admin}})
-	c := r.Stored([]authz.Permission{authz.Users, "dashboards"}, []authz.Permission{authz.Billing, "projects"}, known)
-	if !slices.Equal(c.Admin, []authz.Permission{authz.Users, "reports"}) || !slices.Equal(c.BillingAdmin, []authz.Permission{authz.Billing, "projects"}) {
+	c := r.Stored([]authz.Permission{authz.Users, authz.APIKeys, "dashboards"}, []authz.Permission{authz.Billing, "projects"}, known)
+	if !slices.Equal(c.Admin, []authz.Permission{authz.Users, authz.APIKeys, "reports"}) || !slices.Equal(c.BillingAdmin, []authz.Permission{authz.Billing, "projects"}) {
 		t.Errorf("stored: %+v", c)
 	}
 	if w := r.Warnings(c); len(w) != 3 {
@@ -198,5 +198,44 @@ func TestGroupsFromConfiguration(t *testing.T) {
 		if _, err := authz.ParseGroups(bad); err == nil {
 			t.Errorf("%s accepted", bad)
 		}
+	}
+}
+
+// A key passes the same check as a session, by its groups: an org's key
+// with an Admin's reach, a personal access token only within what its
+// person may do now.
+func TestRequireWithAKey(t *testing.T) {
+	const org1, org2, mbr = "o1", "o2", "m1"
+	checker := authz.Static{org1 + "/" + mbr: {Role: authz.Admin, Permissions: []authz.Permission{authz.Settings, authz.Users, authz.Audit}}}
+	orgKey := auth.WithKey(context.Background(), auth.Key{ID: "k1", Kind: auth.OrgKey, OrgID: org1, Groups: []string{"users", "billing"}})
+	if g, err := authz.Require(orgKey, checker, org1, authz.Billing); err != nil || g.Role != authz.Admin || !g.Has(authz.Users) {
+		t.Errorf("org key, its group: %+v %v", g, err)
+	}
+	if _, err := authz.Require(orgKey, checker, org1, authz.Audit); !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("org key, not its group: %v", err)
+	}
+	if _, err := authz.Require(orgKey, checker, org2, authz.Users); !errors.Is(err, auth.ErrForbidden) {
+		t.Errorf("org key, another org: %v", err)
+	}
+	if _, err := authz.Require(orgKey, checker, org1, authz.Settings); err == nil {
+		t.Error("org key, settings")
+	}
+
+	pat := auth.WithKey(context.Background(), auth.Key{ID: "k2", Kind: auth.PersonalKey, OrgID: org1, MembershipID: mbr, Groups: []string{"users", "billing"}})
+	if g, err := authz.Require(pat, checker, org1, authz.Users); err != nil || g.Role != authz.Admin || g.Has(authz.Billing) || g.Has(authz.Audit) {
+		t.Errorf("token, in both: %+v %v", g, err)
+	}
+	// Granted billing, but its person does not hold it.
+	if _, err := authz.Require(pat, checker, org1, authz.Billing); !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("token, beyond its person: %v", err)
+	}
+	// The person's role drops, and the token's access with it.
+	checker[org1+"/"+mbr] = authz.Grant{Role: authz.User}
+	if _, err := authz.Require(pat, checker, org1, authz.Users); !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("token, after the role dropped: %v", err)
+	}
+	delete(checker, org1+"/"+mbr)
+	if _, err := authz.Require(pat, checker, org1, authz.Users); err == nil {
+		t.Error("token, after its person left")
 	}
 }

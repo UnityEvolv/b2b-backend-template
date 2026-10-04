@@ -38,6 +38,12 @@ var (
 	// generous; it is there to stop one org starving the service.
 	SCIM = Rule{Name: "scim", Limit: 2400, Window: time.Minute}
 
+	// Every request made with an API key or a personal access token, per
+	// key, across every service: counted where the key is resolved, by the
+	// identity service, so a script is held to one allowance wherever it
+	// calls. Fails open, as the ordinary limits do.
+	APIKey = Rule{Name: "api-key", Limit: 600, Window: time.Minute}
+
 	// Incoming webhooks from the billing and email providers, per address.
 	Webhook = Rule{Name: "webhook", Limit: 3000, Window: time.Minute}
 
@@ -59,8 +65,9 @@ const (
 	PerUser       Per = "user"
 	PerMembership Per = "membership"
 	PerOrg        Per = "org"
-	// PerCaller is a rule the code keys itself, with Check and Penalize: a
-	// sign-in counted by account. Only the template's own rules use it.
+	// PerCaller is a rule the code keys itself: a sign-in counted by account
+	// with Check and Penalize, a request counted by the API key it brought.
+	// Only the template's own rules use it.
 	PerCaller Per = ""
 )
 
@@ -102,6 +109,7 @@ func NewRegistry() *Registry {
 		{AuthenticatedRead, PerMembership}, {AuthenticatedWrite, PerMembership},
 		{FailedSignIn, PerCaller}, {PasswordReset, PerCaller},
 		{InviteSend, PerMembership}, {SCIM, PerOrg}, {Webhook, PerIP},
+		{APIKey, PerCaller},
 		{WebhookSend, PerMembership}, {WebhookEvents, PerOrg},
 	} {
 		r.add(x)

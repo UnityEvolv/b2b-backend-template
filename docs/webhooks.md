@@ -238,9 +238,13 @@ webhooks service always-allocated CPU if the first attempt must be prompt.
 - The admin API is gated by the `webhooks` permission group, which Admins
   hold by default and an Owner may move ([roles.md](roles.md)). Checked
   through the authorization service on every request.
+  An org's API key or a personal access token granted the `webhooks` group
+  manages endpoints the same way ([api-keys.md](api-keys.md)); the internal
+  send endpoint takes a service's token only.
 - Adding an endpoint, sending a test and resending need the `webhooks`
-  plan feature, on team and above in the template's ladder
-  ([plans.md](plans.md)); refused with `plan.limit_reached` (403) naming
+  plan feature, on team and above in the template's ladder, or a
+  platform operator's override for the org ([plans.md](plans.md));
+  refused with `plan.limit_reached` (403) naming
   the plan to move to. Changing, turning off and deleting endpoints work
   on any plan, so an org that moved down can tidy up. Deliveries stop the
   moment the plan loses the feature: the plan is read at every event.

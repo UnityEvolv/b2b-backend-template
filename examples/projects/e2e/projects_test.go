@@ -636,6 +636,41 @@ func TestProjectsThroughEverySeam(t *testing.T) {
 			t.Errorf("the project went with the member: %s", r)
 		}
 	})
+
+	t.Run("api keys: the product's group reaches its API with a key, resolved by the identity service", func(t *testing.T) {
+		// Acme is on team, which includes API access. The Owner makes the
+		// org a key for the projects group, and one for themself.
+		keys := s.url("identity") + "/v1/organizations/" + acme.String()
+		made := s.call(http.MethodPost, keys+"/api-keys", owner.token, map[string]any{"name": "sync", "groups": []string{string(product.Permission)}})
+		mine := s.call(http.MethodPost, keys+"/personal-access-tokens", owner.token, map[string]any{"name": "mine", "groups": []string{string(product.Permission)}})
+		if made.status != http.StatusCreated || mine.status != http.StatusCreated {
+			t.Fatalf("make: %s; %s", made, mine)
+		}
+		key, _ := made.body["key"].(map[string]any)
+		orgKey, personal := made.str("token"), mine.str("token")
+
+		// The product's own service, run as a product runs it, takes both:
+		// the org's key writes as itself, the token as its person.
+		r := s.call(http.MethodPost, projects, orgKey, map[string]any{"name": "Synced"}, "key-1")
+		if r.status != http.StatusCreated || r.str("created_by") != "api_key:"+key["id"].(string) {
+			t.Fatalf("create with the org's key: %s", r)
+		}
+		if r := s.call(http.MethodPost, projects, personal, map[string]any{"name": "Scripted"}, "pat-1"); r.status != http.StatusCreated || r.str("created_by") != "membership:"+owner.membership.String() {
+			t.Errorf("create with the token: %s", r)
+		}
+		// Reading needs only a membership, which a key is not: it reaches
+		// what its groups gate, nothing a member may do just by being one.
+		if r := s.call(http.MethodGet, projects, orgKey, nil); r.status != http.StatusForbidden {
+			t.Errorf("read with a key: %s", r)
+		}
+		// Revoked, it is refused on its next request.
+		if r := s.call(http.MethodDelete, keys+"/api-keys/"+key["id"].(string), owner.token, nil); r.status != http.StatusNoContent {
+			t.Fatalf("revoke: %s", r)
+		}
+		if r := s.call(http.MethodPost, projects, orgKey, map[string]any{"name": "Late"}, "key-2"); r.status != http.StatusUnauthorized {
+			t.Errorf("after revoking: %s", r)
+		}
+	})
 }
 
 func connect(t *testing.T, url string, as *db.Service) *pgx.Conn {

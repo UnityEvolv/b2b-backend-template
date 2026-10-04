@@ -2,7 +2,9 @@ package server_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -126,6 +128,39 @@ func TestUserCapIsASoftWall(t *testing.T) {
 	if status, out := f.do(t, http.MethodPost, "/v1/internal/memberships", f.service(t, "billing"),
 		map[string]any{"org_id": acme, "email": "guest@example.com", "source": "invite", "kind": "guest"}); status != http.StatusCreated {
 		t.Errorf("guest over the cap: %d %v", status, out)
+	}
+}
+
+// A platform operator's override is read with the band at the same moment:
+// a deal's higher seat cap lets members in past the band's, its own cap is
+// refused as the organization's agreement, and once it has ended the band's
+// cap is the wall again, with nothing run in between.
+func TestUserCapOverride(t *testing.T) {
+	f := newAPI(t)
+	cap := plan.For("free").Cap(plan.Users)
+	for i := 0; i < cap; i++ {
+		f.signIn(t, acme, "p"+string(rune('a'+i))+"@example.com", "Person", nil)
+	}
+	identity := f.service(t, "identity")
+	join := func(email string) (int, map[string]any) {
+		return f.do(t, http.MethodPost, "/v1/internal/sign-ins", identity, map[string]any{"org_id": acme, "email": email, "name": "Extra"})
+	}
+
+	ends := time.Now().Add(time.Hour)
+	setOverrides(t, acme, plan.Override{Limit: plan.Users, Cap: cap + 1, EndsAt: &ends})
+	if status, out := join("first-extra@example.com"); status != http.StatusOK {
+		t.Fatalf("past the band's cap under the deal: %d %v", status, out)
+	}
+	status, out := join("second-extra@example.com")
+	if status != http.StatusForbidden || out["code"] != plan.Code || !strings.Contains(out["message"].(string), "agreement") {
+		t.Errorf("past the deal's cap: %d %v", status, out)
+	}
+
+	ended := time.Now().Add(-time.Minute)
+	setOverrides(t, acme, plan.Override{Limit: plan.Users, Cap: 100, EndsAt: &ended})
+	status, out = join("third-extra@example.com")
+	if fields, _ := out["fields"].(map[string]any); status != http.StatusForbidden || fields["plan"] != "free" || fields["required_plan"] != "team" {
+		t.Errorf("after the deal ended: %d %v", status, out)
 	}
 }
 

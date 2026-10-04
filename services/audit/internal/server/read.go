@@ -36,11 +36,13 @@ func (s *Server) mayRead(ctx context.Context, orgID string) error {
 	if auth.RequirePlatform(ctx) == nil {
 		return nil
 	}
-	if err := auth.RequireOrg(ctx, orgID); err != nil {
+	// A person's token must be for this org; an API key's org is checked by
+	// authz.Require with its groups.
+	if _, isKey := auth.KeyFrom(ctx); !isKey && auth.RequireOrg(ctx, orgID) != nil {
 		return errNotPermitted
 	}
 	if _, err := authz.Require(ctx, s.authz, orgID, authz.Audit); err != nil {
-		if errors.Is(err, authz.ErrForbidden) {
+		if errors.Is(err, authz.ErrForbidden) || errors.Is(err, auth.ErrForbidden) {
 			return errNotPermitted
 		}
 		return err

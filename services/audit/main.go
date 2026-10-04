@@ -63,6 +63,9 @@ func run() error {
 		// asked with this service's own token.
 		authorizationURL = env.Required("AUTHORIZATION_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
 		// Where the core's webhook events go: the membership changes this
 		// log records are forwarded to the webhooks service. Unset, none are.
 		webhooksURL = env.String("WEBHOOKS_URL", "")
@@ -131,6 +134,11 @@ func run() error {
 
 	cluster := db.SingleShard(pool)
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md).
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	srv := server.New(cluster, logger, authz.Client(authorizationURL, tokens, nil))
 	if webhooksURL != "" {
 		srv.WithWebhooks(webhook.NewClient(webhooksURL, tokens, nil))

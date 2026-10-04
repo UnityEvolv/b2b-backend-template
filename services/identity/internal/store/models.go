@@ -11,6 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	OrgID          uuid.UUID
+	ID             uuid.UUID
+	Kind           string
+	Name           string
+	Prefix         string
+	TokenHash      []byte
+	Groups         []string
+	UserID         pgtype.UUID
+	MembershipID   pgtype.UUID
+	ExpiresAt      pgtype.Timestamptz
+	LastUsedAt     pgtype.Timestamptz
+	RevokedAt      pgtype.Timestamptz
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
 // global: a sign-in is a person's, who may belong to several orgs, like the session it becomes
 type DesktopSignInCode struct {
 	ID                 uuid.UUID

@@ -41,11 +41,11 @@ func (s *Server) scimAllowed(ctx context.Context, org uuid.UUID, change bool) (*
 	if !change {
 		return nil, nil
 	}
-	band, err := s.plans.Band(ctx, org.String())
+	ent, err := s.plans.Entitlements(ctx, org.String())
 	if err != nil {
 		return nil, err
 	}
-	if err := plan.CheckFeature(band, plan.SCIM); err != nil {
+	if err := ent.CheckFeature(plan.SCIM); err != nil {
 		if r, ok := plan.AsRefusal(err); ok {
 			e := refused(r)
 			return &e, nil
@@ -57,11 +57,11 @@ func (s *Server) scimAllowed(ctx context.Context, org uuid.UUID, change bool) (*
 
 func (s *Server) scimSettings(ctx context.Context, org uuid.UUID) (api.ScimSettings, error) {
 	out := api.ScimSettings{BaseUrl: s.scimBase(org), Tokens: []api.ScimToken{}}
-	band, err := s.plans.Band(ctx, org.String())
+	ent, err := s.plans.Entitlements(ctx, org.String())
 	if err != nil {
 		return out, err
 	}
-	out.Available = plan.CheckFeature(band, plan.SCIM) == nil
+	out.Available = ent.CheckFeature(plan.SCIM) == nil
 	err = s.cluster.Read(ctx, org.String(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		tokens, err := q.ListScimTokens(ctx, org)

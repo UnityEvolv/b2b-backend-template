@@ -30,11 +30,11 @@ func (s *Server) ListWebhookEventTypes(ctx context.Context, req api.ListWebhookE
 	for _, t := range s.types.Types() {
 		out.EventTypes = append(out.EventTypes, api.EventType{Type: string(t.Type), Description: t.Description})
 	}
-	band, err := s.plans.Band(ctx, org)
+	ent, err := s.plans.Entitlements(ctx, org)
 	if err != nil {
 		return nil, err
 	}
-	if err := plan.CheckFeature(band, plan.Webhooks); err != nil {
+	if err := ent.CheckFeature(plan.Webhooks); err != nil {
 		out.Available = false
 		if r, ok := plan.AsRefusal(err); ok && r.Required != "" {
 			required := string(r.Required)

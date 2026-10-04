@@ -4,8 +4,8 @@
 // protected action. Enforced on the server, never on the client.
 //
 // The groups are a registry the product fills at start (see Registry): the
-// template registers billing, users, audit, sso and webhooks, and a
-// product adds its own ("projects"), each with the roles that hold it by
+// template registers billing, users, audit, sso, api_keys and webhooks, and
+// a product adds its own ("projects"), each with the roles that hold it by
 // default. The Owner-only actions and the Admin's settings are fixed.
 //
 // Roles live on the membership, one per org: the same person can be an
@@ -59,6 +59,10 @@ const (
 	Users   Permission = "users"   // invite, deactivate, edit, bulk import
 	Audit   Permission = "audit"   // audit log access
 	SSO     Permission = "sso"     // the org's single sign-on identity provider
+	// APIKeys is the org's API keys: making one, granted only groups the
+	// maker holds, and listing and revoking every key and personal access
+	// token in the org.
+	APIKeys Permission = "api_keys"
 	// Webhooks is the org's outbound webhook endpoints and their deliveries.
 	Webhooks Permission = "webhooks"
 	// Settings is the org's own settings: name, time zone, and reading the
@@ -107,13 +111,14 @@ type Registry struct {
 }
 
 // New is a registry with the template's own groups: billing for Billing
-// Admin, and users, audit, sso and webhooks for Admin.
+// Admin, and users, audit, sso, api_keys and webhooks for Admin.
 func New() *Registry {
 	r := &Registry{}
 	r.Register(Group{Key: Billing, Label: "Billing", Description: "The plan, invoices, payment method and usage against the allowance.", Default: []Role{BillingAdmin}})
 	r.Register(Group{Key: Users, Label: "Users", Description: "Invite, deactivate and edit people, import them in bulk, and end their sessions.", Default: []Role{Admin}})
 	r.Register(Group{Key: Audit, Label: "Audit log", Description: "Read the audit log.", Default: []Role{Admin}})
 	r.Register(Group{Key: SSO, Label: "Single sign-on", Description: "Configure the organization's identity provider.", Default: []Role{Admin}})
+	r.Register(Group{Key: APIKeys, Label: "API keys", Description: "Make the organization's API keys, and list and revoke every key and personal access token.", Default: []Role{Admin}})
 	r.Register(Group{Key: Webhooks, Label: "Webhooks", Description: "Add, change and remove webhook endpoints, rotate their secrets, and see and resend deliveries.", Default: []Role{Admin}})
 	return r
 }
@@ -265,8 +270,8 @@ type Config struct {
 }
 
 // Defaults is the configuration a new org starts with, from Default: Admin
-// gets users, audit, sso and webhooks with billing off; Billing Admin
-// gets billing; a product's groups go where they default to.
+// gets users, audit, sso, api_keys and webhooks with billing off; Billing
+// Admin gets billing; a product's groups go where they default to.
 func Defaults() Config { return Default.Defaults() }
 
 // Validate refuses a group that is not registered in Default.
@@ -352,6 +357,9 @@ const Code = "forbidden"
 // always may; a person's active membership must be in orgID and hold p;
 // a service never may (internal endpoints check the service by name).
 func Require(ctx context.Context, checker Checker, orgID string, p Permission) (Grant, error) {
+	if k, ok := auth.KeyFrom(ctx); ok {
+		return requireKey(ctx, checker, k, orgID, p)
+	}
 	c, ok := auth.CallerFrom(ctx)
 	if !ok {
 		return Grant{}, auth.ErrUnauthenticated
@@ -370,6 +378,42 @@ func Require(ctx context.Context, checker Checker, orgID string, p Permission) (
 		return g, ErrForbidden
 	}
 	return g, nil
+}
+
+// requireKey is Require for an API key or personal access token: the key
+// must be for orgID and granted p. An org's key then acts with an Admin's
+// reach over people (MayManage), within its groups. A personal access
+// token is also its person's grant, asked now: it has p only while the
+// person does, so a role that drops takes the token's access with it on
+// the next request.
+func requireKey(ctx context.Context, checker Checker, k auth.Key, orgID string, p Permission) (Grant, error) {
+	if !strings.EqualFold(k.OrgID, orgID) {
+		return Grant{}, auth.ErrForbidden
+	}
+	if !slices.Contains(k.Groups, string(p)) {
+		return Grant{}, ErrForbidden
+	}
+	granted := make([]Permission, 0, len(k.Groups))
+	for _, g := range k.Groups {
+		granted = append(granted, Permission(g))
+	}
+	if k.Kind != auth.PersonalKey {
+		return Grant{Role: Admin, Permissions: granted}, nil
+	}
+	g, err := checker.Grant(ctx, orgID, k.MembershipID)
+	if err != nil {
+		return Grant{}, err
+	}
+	both := Grant{Role: g.Role}
+	for _, x := range granted {
+		if g.Has(x) {
+			both.Permissions = append(both.Permissions, x)
+		}
+	}
+	if !both.Has(p) {
+		return both, ErrForbidden
+	}
+	return both, nil
 }
 
 // WriteRefusal answers a request the permission check refused.

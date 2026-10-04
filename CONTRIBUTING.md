@@ -135,7 +135,9 @@ template as it was; `scripts/without-examples.sh` proves it in CI.
 
 - Every request carries a verified token, except health and the few public
   sign-in paths each service lists. Service-to-service calls carry the
-  calling service's own token.
+  calling service's own token. An API key or personal access token is
+  resolved by the identity service on every request and reaches only what
+  its permission groups gate ([docs/api-keys.md](docs/api-keys.md)).
 - Sessions are HTTP-only cookies on the API host, never a parent domain. The
   access token is short-lived and refreshed against the session, and every
   revocation is pushed to the open session at once.

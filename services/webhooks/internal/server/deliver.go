@@ -83,12 +83,13 @@ func (s *Server) EmitWebhookEvent(ctx context.Context, req api.EmitWebhookEventR
 	if len(endpoints) == 0 {
 		return accepted, nil
 	}
-	// The plan, read now: a downgrade stops deliveries on the next event.
-	band, err := s.plans.Band(ctx, org)
+	// The plan and its overrides, read now: a downgrade or an ended
+	// override stops deliveries on the next event.
+	ent, err := s.plans.Entitlements(ctx, org)
 	if err != nil {
 		return nil, err
 	}
-	if plan.CheckFeature(band, plan.Webhooks) != nil {
+	if ent.CheckFeature(plan.Webhooks) != nil {
 		return accepted, nil
 	}
 	if s.limiter != nil {

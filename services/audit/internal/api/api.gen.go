@@ -88,7 +88,7 @@ type NewAuditEvent struct {
 	// Example: organization.plan.changed
 	Action string `json:"action"`
 
-	// Actor membership:<uuid>, user:<uuid> or system:<service>. Never a name or an email.
+	// Actor membership:<uuid>, user:<uuid>, api_key:<uuid> (an org's API key) or system:<service>. Never a name or an email.
 	//
 	// Example: membership:01922b5e-0000-7000-8000-0000000000c1
 	Actor string `json:"actor"`

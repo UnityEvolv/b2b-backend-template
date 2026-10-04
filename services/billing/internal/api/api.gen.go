@@ -131,7 +131,7 @@ type Billing struct {
 	TrialAvailable     bool         `json:"trial_available"`
 	TrialEndsAt        *time.Time   `json:"trial_ends_at,omitempty"`
 
-	// UsersCap 0 means no cap.
+	// UsersCap The org's seat cap, its override's where a platform operator set one, else its band's. 0 means no cap.
 	UsersCap int `json:"users_cap"`
 }
 

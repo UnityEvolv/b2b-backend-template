@@ -35,7 +35,7 @@ template's services, rendered from the same values by `product.Env()`.
 | seam | what the product declares | where | how the template learns it |
 | --- | --- | --- | --- |
 | its own service, schema and role | `projects`, schema `projects`, role `svc_projects`, its own migrations | `product.Service`, `migrations/` | `product.Register()` puts it in `pkg/db.Default`; `cmd/projects-migrate` runs `pkg/db/dbcmd` over it |
-| plan limit | `projects`: 3 on free, 25 on team, 100 on business, none on enterprise | `product.ProjectsLimit`, `product.Caps`, `product.Plans()` | `PLANS` on the organization, user, billing and webhooks services; `product.Register()` in its own process, checked in `CreateProject` |
+| plan limit | `projects`: 3 on free, 25 on team, 100 on business, none on enterprise | `product.ProjectsLimit`, `product.Caps`, `product.Plans()` | `PLANS` on the organization, user, billing, identity and webhooks services; `product.Register()` in its own process, checked in `CreateProject` |
 | permission group | `projects`, held by Admins by default | `product.PermissionGroup` | `PERMISSION_GROUPS` on the authorization service |
 | notification category | `project_shared`, to the feed and push, held for quiet hours | `product.SharedCategory` | `NOTIFICATION_CATEGORIES` on the notification service |
 | data owner | export, purge and erase | `product.Owner` | `DATA_OWNERS` on every template service, and `PROJECTS_URL` |
@@ -85,10 +85,11 @@ pass, and asks `plan.CheckLimit`. Over the cap it answers the template's
 refusal, 403 `plan.limit_reached` with the plan, the limit and the band that
 would allow it. A plan change applies to the next create.
 
-The organization, user and billing services run unchanged and learn the
-limit and the ladder from `PLANS`, rendered from `product.Plans()`: the same
-values `product.Register()` puts in the product's own process. So the
-organization service's plan endpoint names the projects cap on every band,
+The organization, user, billing and identity services run unchanged and
+learn the limit and the ladder from `PLANS`, rendered from
+`product.Plans()`: the same values `product.Register()` puts in the
+product's own process. So the organization service's plan endpoint names
+the projects cap on every band,
 and its downgrade checklist says what tightens (`projects_over_cap_kept`).
 A product that builds its own copy of those services registers the same in
 code instead (`plan.Default.RegisterLimit(product.ProjectsLimit)`,
@@ -178,7 +179,7 @@ On the template's services, which run unchanged:
 | --- | --- | --- |
 | `DATA_OWNERS` | every template service | `[{"name":"projects","export":true,"purge":true,"erase":true,"decrypt":false}]` |
 | `PROJECTS_URL` | organization, user | where the projects service runs |
-| `PLANS` | organization, user, billing | the `projects` limit and the ladder with its caps |
+| `PLANS` | organization, user, billing, identity | the `projects` limit and the ladder with its caps |
 | `PERMISSION_GROUPS` | authorization | the `projects` group |
 | `NOTIFICATION_CATEGORIES` | notification | the `project_shared` category |
 

@@ -153,7 +153,7 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 	if len(fields) > 0 {
 		return api.CreateProject400JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse(invalid("Some fields are not valid.", fields))}, nil
 	}
-	band, err := s.deps.Plans.Band(ctx, req.OrgId.String())
+	ent, err := s.deps.Plans.Entitlements(ctx, req.OrgId.String())
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 		if err != nil {
 			return err
 		}
-		if err := plan.CheckLimit(band, product.Projects, int(n)); err != nil {
+		if err := ent.CheckLimit(product.Projects, int(n)); err != nil {
 			rf, ok := plan.AsRefusal(err)
 			if !ok {
 				return err
@@ -202,7 +202,7 @@ func (s *Server) CreateProject(ctx context.Context, req api.CreateProjectRequest
 		}
 		// In the transaction: an entry that cannot be recorded undoes the
 		// create rather than dropping the record.
-		if err := s.record(ctx, req.OrgId, p.ID, "project.created", map[string]any{"plan": string(band)}); err != nil {
+		if err := s.record(ctx, req.OrgId, p.ID, "project.created", map[string]any{"plan": string(ent.Band)}); err != nil {
 			return err
 		}
 		out = s.toAPI(ctx, p, 0)

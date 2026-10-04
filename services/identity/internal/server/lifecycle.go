@@ -156,8 +156,8 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 
 // PurgeOrgData deletes everything this service keeps for an org: its
 // provider, policy, sign-ins in flight, invites, links sent on its behalf,
-// and the sessions working in it or signed in by it. Then counts what is
-// left. Idempotent.
+// its API keys and personal access tokens, and the sessions working in it or
+// signed in by it. Then counts what is left. Idempotent.
 func (s *Server) PurgeOrgData(ctx context.Context, req api.PurgeOrgDataRequestObject) (api.PurgeOrgDataResponseObject, error) {
 	if err := auth.RequireService(ctx, orgdata.Caller); err != nil {
 		return api.PurgeOrgData403JSONResponse{ErrorJSONResponse: api.ErrorJSONResponse{Code: httpx.CodeForbidden, Message: "The organization service only."}}, nil
@@ -169,6 +169,7 @@ func (s *Server) PurgeOrgData(ctx context.Context, req api.PurgeOrgDataRequestOb
 		steps := []func(context.Context, uuid.UUID) (int64, error){
 			q.DeleteMfaChallengesOfOrg, q.DeleteSessionsOfOrg, q.DeleteEmailVerificationsOfOrg,
 			q.DeleteInvitesOfOrg, q.DeleteSignInAttemptsOfOrg, q.DeleteSessionPolicyOfOrg, q.DeleteIdentityProviderOfOrg,
+			q.DeleteAPIKeysOfOrg,
 		}
 		for _, step := range steps {
 			if _, err := step(ctx, org); err != nil {
@@ -279,7 +280,7 @@ func (s *Server) DeleteUserAccount(ctx context.Context, req api.DeleteUserAccoun
 		q := store.New(tx)
 		steps := []func(context.Context, uuid.UUID) (int64, error){
 			q.DeleteMfaChallengesOfUser, q.DeleteRecoveryCodes, q.DeleteTotp, q.DeleteEmailVerificationsOfUser,
-			q.DeleteSessionsOfUser, q.DeleteLocalAccount,
+			q.DeleteSessionsOfUser, q.DeleteAPIKeysOfUser, q.DeleteLocalAccount,
 		}
 		for _, step := range steps {
 			if _, err := step(ctx, req.UserId); err != nil {

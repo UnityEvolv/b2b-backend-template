@@ -82,6 +82,24 @@ func (e OrganizationStatus) Valid() bool {
 	}
 }
 
+// Defines values for PlanOverrideKind.
+const (
+	PlanOverrideKindFeature PlanOverrideKind = "feature"
+	PlanOverrideKindLimit   PlanOverrideKind = "limit"
+)
+
+// Valid indicates whether the value is a known member of the PlanOverrideKind enum.
+func (e PlanOverrideKind) Valid() bool {
+	switch e {
+	case PlanOverrideKindFeature:
+		return true
+	case PlanOverrideKindLimit:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RetentionClassesClass.
 const (
 	Audit     RetentionClassesClass = "audit"
@@ -100,6 +118,24 @@ func (e RetentionClassesClass) Valid() bool {
 	case Identity:
 		return true
 	case Transient:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OverrideKind.
+const (
+	OverrideKindFeature OverrideKind = "feature"
+	OverrideKindLimit   OverrideKind = "limit"
+)
+
+// Valid indicates whether the value is a known member of the OverrideKind enum.
+func (e OverrideKind) Valid() bool {
+	switch e {
+	case OverrideKindFeature:
+		return true
+	case OverrideKindLimit:
 		return true
 	default:
 		return false
@@ -166,6 +202,42 @@ func (e ListOrganizationsParamsOrder) Valid() bool {
 	case Asc:
 		return true
 	case Desc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RemovePlanOverrideParamsKind.
+const (
+	RemovePlanOverrideParamsKindFeature RemovePlanOverrideParamsKind = "feature"
+	RemovePlanOverrideParamsKindLimit   RemovePlanOverrideParamsKind = "limit"
+)
+
+// Valid indicates whether the value is a known member of the RemovePlanOverrideParamsKind enum.
+func (e RemovePlanOverrideParamsKind) Valid() bool {
+	switch e {
+	case RemovePlanOverrideParamsKindFeature:
+		return true
+	case RemovePlanOverrideParamsKindLimit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SetPlanOverrideParamsKind.
+const (
+	SetPlanOverrideParamsKindFeature SetPlanOverrideParamsKind = "feature"
+	SetPlanOverrideParamsKindLimit   SetPlanOverrideParamsKind = "limit"
+)
+
+// Valid indicates whether the value is a known member of the SetPlanOverrideParamsKind enum.
+func (e SetPlanOverrideParamsKind) Valid() bool {
+	switch e {
+	case SetPlanOverrideParamsKindFeature:
+		return true
+	case SetPlanOverrideParamsKindLimit:
 		return true
 	default:
 		return false
@@ -311,15 +383,18 @@ type OrganizationPage struct {
 type OrganizationPlan struct {
 	Contractual bool `json:"contractual"`
 
-	// Features The gated features this plan includes, by key.
+	// Features The gated features on for this org, by key, the band's with its overrides applied.
 	Features []string `json:"features"`
 
 	// Label The band's label.
 	Label string `json:"label"`
 
-	// Limits Every registered limit's cap on this plan, by key. 0 means no cap.
+	// Limits Every registered limit's effective cap for this org, by key, its override's where it has one in force, else the band's. 0 means no cap.
 	Limits map[string]int     `json:"limits"`
 	OrgId  openapi_types.UUID `json:"org_id"`
+
+	// Overrides The overrides in force now, limits first, each by key, with its end. The billing page marks these limits and features as the organization's agreement; the band's own values are in the catalogue.
+	Overrides []PlanOverride `json:"overrides"`
 
 	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
@@ -419,15 +494,59 @@ type PlanLimits struct {
 	// Contractual Sold by contract rather than self-serve; billing never moves an organization into or out of it.
 	Contractual bool `json:"contractual"`
 
-	// Features The gated features this plan includes. Everything not gated is on every plan.
+	// Features The gated features on for this org, the band's with its overrides applied. Everything not gated is on every plan.
 	Features []string `json:"features"`
 
-	// Limits Every registered limit and its cap on this plan, by key (users is the one every deployment has). 0 means no cap in the product.
+	// Limits Every registered limit and its effective cap for this org, by key (users is the one every deployment has), its override's where one is in force, else the band's. 0 means no cap in the product.
 	Limits map[string]int     `json:"limits"`
 	OrgId  openapi_types.UUID `json:"org_id"`
 
+	// Overrides The org's overrides in force now, which limits and features
+	// already include. A gate checks the band's value first, then
+	// these.
+	Overrides []PlanOverride `json:"overrides"`
+
 	// Plan The plan band, one of the bands the deployment registers (free, team, business and enterprise unless the product names others). What each band allows is read at the moment of every action.
 	Plan Plan `json:"plan"`
+}
+
+// PlanOverride defines model for PlanOverride.
+type PlanOverride struct {
+	// Allowed For a feature, whether it is granted (true) or taken away (false), whatever the band says.
+	Allowed *bool `json:"allowed,omitempty"`
+
+	// Cap For a limit, the cap that replaces the band's. 0 means no cap.
+	Cap *int `json:"cap,omitempty"`
+
+	// EndsAt When the override stops applying; absent or null is never.
+	EndsAt nullable.Nullable[time.Time] `json:"ends_at,omitempty"`
+
+	// InForce Whether it applies now. One past its end has stopped.
+	InForce bool `json:"in_force"`
+
+	// Key The registered limit's or feature's key.
+	Key  string           `json:"key"`
+	Kind PlanOverrideKind `json:"kind"`
+}
+
+// PlanOverrideKind defines model for PlanOverride.Kind.
+type PlanOverrideKind string
+
+// PlanOverrideInput defines model for PlanOverrideInput.
+type PlanOverrideInput struct {
+	// Allowed For a feature, grant (true) or take away (false).
+	Allowed *bool `json:"allowed,omitempty"`
+
+	// Cap For a limit, the cap. 0 lifts it.
+	Cap *int `json:"cap,omitempty"`
+
+	// EndsAt When it stops applying, in the future; absent or null is never.
+	EndsAt nullable.Nullable[time.Time] `json:"ends_at,omitempty"`
+}
+
+// PlanOverrideList defines model for PlanOverrideList.
+type PlanOverrideList struct {
+	Overrides []PlanOverride `json:"overrides"`
 }
 
 // Retention defines model for Retention.
@@ -482,6 +601,12 @@ type IdempotencyKey = string
 
 // OrgId defines model for OrgId.
 type OrgId = openapi_types.UUID
+
+// OverrideKey defines model for OverrideKey.
+type OverrideKey = string
+
+// OverrideKind defines model for OverrideKind.
+type OverrideKind string
 
 // SetPlanInternalJSONBody defines parameters for SetPlanInternal.
 type SetPlanInternalJSONBody struct {
@@ -565,6 +690,12 @@ type PreviewPlanChangeParams struct {
 	Plan Plan `form:"plan" json:"plan"`
 }
 
+// RemovePlanOverrideParamsKind defines parameters for RemovePlanOverride.
+type RemovePlanOverrideParamsKind string
+
+// SetPlanOverrideParamsKind defines parameters for SetPlanOverride.
+type SetPlanOverrideParamsKind string
+
 // ReopenOrganizationJSONBody defines parameters for ReopenOrganization.
 type ReopenOrganizationJSONBody struct {
 	Token string `json:"token"`
@@ -604,6 +735,9 @@ type SetDomainJSONRequestBody SetDomainJSONBody
 
 // ChangePlanJSONRequestBody defines body for ChangePlan for application/json ContentType.
 type ChangePlanJSONRequestBody ChangePlanJSONBody
+
+// SetPlanOverrideJSONRequestBody defines body for SetPlanOverride for application/json ContentType.
+type SetPlanOverrideJSONRequestBody = PlanOverrideInput
 
 // ReopenOrganizationJSONRequestBody defines body for ReopenOrganization for application/json ContentType.
 type ReopenOrganizationJSONRequestBody ReopenOrganizationJSONBody
@@ -688,6 +822,15 @@ type ServerInterface interface {
 	// PreviewPlanChange What a move to another plan would close, for the admin to confirm
 	// (GET /v1/organizations/{org_id}/plan-change)
 	PreviewPlanChange(w http.ResponseWriter, r *http.Request, orgId OrgId, params PreviewPlanChangeParams)
+	// ListPlanOverrides Every override set for the organization, in force or ended (platform operators)
+	// (GET /v1/organizations/{org_id}/plan-overrides)
+	ListPlanOverrides(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// RemovePlanOverride Remove the organization's override of one limit or feature (platform operators)
+	// (DELETE /v1/organizations/{org_id}/plan-overrides/{kind}/{key})
+	RemovePlanOverride(w http.ResponseWriter, r *http.Request, orgId OrgId, kind RemovePlanOverrideParamsKind, key OverrideKey)
+	// SetPlanOverride Set the organization's override of one limit or feature (platform operators)
+	// (PUT /v1/organizations/{org_id}/plan-overrides/{kind}/{key})
+	SetPlanOverride(w http.ResponseWriter, r *http.Request, orgId OrgId, kind SetPlanOverrideParamsKind, key OverrideKey)
 	// ReopenOrganization Reopen a closing organization with the emailed link (public; the link is the proof)
 	// (POST /v1/organizations/{org_id}/reopen)
 	ReopenOrganization(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1459,6 +1602,120 @@ func (siw *ServerInterfaceWrapper) PreviewPlanChange(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListPlanOverrides operation middleware
+func (siw *ServerInterfaceWrapper) ListPlanOverrides(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlanOverrides(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemovePlanOverride operation middleware
+func (siw *ServerInterfaceWrapper) RemovePlanOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind RemovePlanOverrideParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key OverrideKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemovePlanOverride(w, r, orgId, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetPlanOverride operation middleware
+func (siw *ServerInterfaceWrapper) SetPlanOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind SetPlanOverrideParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key OverrideKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetPlanOverride(w, r, orgId, kind, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReopenOrganization operation middleware
 func (siw *ServerInterfaceWrapper) ReopenOrganization(w http.ResponseWriter, r *http.Request) {
 
@@ -1769,6 +2026,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/me/exports", wrapper.CreatePersonalExport)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/status", wrapper.SetOrganizationStatus)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/plan-change", wrapper.PreviewPlanChange)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/plan-overrides", wrapper.ListPlanOverrides)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{org_id}/plan-overrides/{kind}/{key}", wrapper.RemovePlanOverride)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/plan-overrides/{kind}/{key}", wrapper.SetPlanOverride)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/signups", wrapper.StartSignup)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/signups/complete", wrapper.CompleteSignup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/domain", wrapper.GetDomain)
@@ -3731,6 +3991,262 @@ func (response PreviewPlanChangedefaultJSONResponse) VisitPreviewPlanChangeRespo
 	return err
 }
 
+type ListPlanOverridesRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type ListPlanOverridesResponseObject interface {
+	VisitListPlanOverridesResponse(w http.ResponseWriter) error
+}
+
+type ListPlanOverrides200JSONResponse PlanOverrideList
+
+func (response ListPlanOverrides200JSONResponse) VisitListPlanOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlanOverrides401JSONResponse struct{ ErrorJSONResponse }
+
+func (response ListPlanOverrides401JSONResponse) VisitListPlanOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlanOverrides403JSONResponse Error
+
+func (response ListPlanOverrides403JSONResponse) VisitListPlanOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlanOverrides404JSONResponse Error
+
+func (response ListPlanOverrides404JSONResponse) VisitListPlanOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlanOverridesdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListPlanOverridesdefaultJSONResponse) VisitListPlanOverridesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemovePlanOverrideRequestObject struct {
+	OrgId OrgId                        `json:"org_id"`
+	Kind  RemovePlanOverrideParamsKind `json:"kind"`
+	Key   OverrideKey                  `json:"key"`
+}
+
+type RemovePlanOverrideResponseObject interface {
+	VisitRemovePlanOverrideResponse(w http.ResponseWriter) error
+}
+
+type RemovePlanOverride204Response struct {
+}
+
+func (response RemovePlanOverride204Response) VisitRemovePlanOverrideResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemovePlanOverride401JSONResponse struct{ ErrorJSONResponse }
+
+func (response RemovePlanOverride401JSONResponse) VisitRemovePlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemovePlanOverride403JSONResponse Error
+
+func (response RemovePlanOverride403JSONResponse) VisitRemovePlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemovePlanOverride404JSONResponse Error
+
+func (response RemovePlanOverride404JSONResponse) VisitRemovePlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemovePlanOverridedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response RemovePlanOverridedefaultJSONResponse) VisitRemovePlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverrideRequestObject struct {
+	OrgId OrgId                     `json:"org_id"`
+	Kind  SetPlanOverrideParamsKind `json:"kind"`
+	Key   OverrideKey               `json:"key"`
+	Body  *SetPlanOverrideJSONRequestBody
+}
+
+type SetPlanOverrideResponseObject interface {
+	VisitSetPlanOverrideResponse(w http.ResponseWriter) error
+}
+
+type SetPlanOverride200JSONResponse PlanOverride
+
+func (response SetPlanOverride200JSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverride400JSONResponse struct{ ErrorJSONResponse }
+
+func (response SetPlanOverride400JSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverride401JSONResponse Error
+
+func (response SetPlanOverride401JSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverride403JSONResponse Error
+
+func (response SetPlanOverride403JSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverride404JSONResponse Error
+
+func (response SetPlanOverride404JSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPlanOverridedefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SetPlanOverridedefaultJSONResponse) VisitSetPlanOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReopenOrganizationRequestObject struct {
 	OrgId OrgId `json:"org_id"`
 	Body  *ReopenOrganizationJSONRequestBody
@@ -4384,6 +4900,15 @@ type StrictServerInterface interface {
 	// PreviewPlanChange What a move to another plan would close, for the admin to confirm
 	// (GET /v1/organizations/{org_id}/plan-change)
 	PreviewPlanChange(ctx context.Context, request PreviewPlanChangeRequestObject) (PreviewPlanChangeResponseObject, error)
+	// ListPlanOverrides Every override set for the organization, in force or ended (platform operators)
+	// (GET /v1/organizations/{org_id}/plan-overrides)
+	ListPlanOverrides(ctx context.Context, request ListPlanOverridesRequestObject) (ListPlanOverridesResponseObject, error)
+	// RemovePlanOverride Remove the organization's override of one limit or feature (platform operators)
+	// (DELETE /v1/organizations/{org_id}/plan-overrides/{kind}/{key})
+	RemovePlanOverride(ctx context.Context, request RemovePlanOverrideRequestObject) (RemovePlanOverrideResponseObject, error)
+	// SetPlanOverride Set the organization's override of one limit or feature (platform operators)
+	// (PUT /v1/organizations/{org_id}/plan-overrides/{kind}/{key})
+	SetPlanOverride(ctx context.Context, request SetPlanOverrideRequestObject) (SetPlanOverrideResponseObject, error)
 	// ReopenOrganization Reopen a closing organization with the emailed link (public; the link is the proof)
 	// (POST /v1/organizations/{org_id}/reopen)
 	ReopenOrganization(ctx context.Context, request ReopenOrganizationRequestObject) (ReopenOrganizationResponseObject, error)
@@ -5057,6 +5582,95 @@ func (sh *strictHandler) PreviewPlanChange(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PreviewPlanChangeResponseObject); ok {
 		if err := validResponse.VisitPreviewPlanChangeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlanOverrides operation middleware
+func (sh *strictHandler) ListPlanOverrides(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request ListPlanOverridesRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlanOverrides(ctx, request.(ListPlanOverridesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlanOverrides")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlanOverridesResponseObject); ok {
+		if err := validResponse.VisitListPlanOverridesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemovePlanOverride operation middleware
+func (sh *strictHandler) RemovePlanOverride(w http.ResponseWriter, r *http.Request, orgId OrgId, kind RemovePlanOverrideParamsKind, key OverrideKey) {
+	var request RemovePlanOverrideRequestObject
+
+	request.OrgId = orgId
+	request.Kind = kind
+	request.Key = key
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemovePlanOverride(ctx, request.(RemovePlanOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemovePlanOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemovePlanOverrideResponseObject); ok {
+		if err := validResponse.VisitRemovePlanOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetPlanOverride operation middleware
+func (sh *strictHandler) SetPlanOverride(w http.ResponseWriter, r *http.Request, orgId OrgId, kind SetPlanOverrideParamsKind, key OverrideKey) {
+	var request SetPlanOverrideRequestObject
+
+	request.OrgId = orgId
+	request.Kind = kind
+	request.Key = key
+
+	var body SetPlanOverrideJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetPlanOverride(ctx, request.(SetPlanOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetPlanOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetPlanOverrideResponseObject); ok {
+		if err := validResponse.VisitSetPlanOverrideResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

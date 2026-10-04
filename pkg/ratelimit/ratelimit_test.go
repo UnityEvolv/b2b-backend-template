@@ -148,7 +148,7 @@ func TestProductRuleIsEnforced(t *testing.T) {
 	for _, x := range ratelimit.NewRegistry().Rules() {
 		names = append(names, x.Name)
 	}
-	if strings.Join(names, ",") != "address,unauthenticated,read,write,signin-failed,password-reset,invite-send,scim,webhook,webhook-send,webhook-events" {
+	if strings.Join(names, ",") != "address,unauthenticated,read,write,signin-failed,password-reset,invite-send,scim,webhook,api-key,webhook-send,webhook-events" {
 		t.Errorf("template rules: %v", names)
 	}
 
@@ -302,5 +302,24 @@ func TestRedisDownFailsOpenOrClosedByRule(t *testing.T) {
 	}
 	if _, err := l.Take(ctx, ratelimit.FailedSignIn, "k"); !errors.Is(err, ratelimit.ErrUnavailable) {
 		t.Fatalf("fail-closed rule: %v", err)
+	}
+}
+
+// A request made with a key counts against the key, whatever the route
+// counts by, so a script never spends its person's allowance; a per-org
+// limit still counts the org.
+func TestKeysCountAgainstThemselves(t *testing.T) {
+	k := auth.Key{ID: "k1", Kind: auth.PersonalKey, OrgID: "o1", UserID: "u1", MembershipID: "m1"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(auth.WithKey(context.Background(), k))
+	for name, fn := range map[string]ratelimit.KeyFunc{"user": ratelimit.ByUser, "membership": ratelimit.ByMembership} {
+		if key, ok := fn(req); !ok || key != "key:k1" {
+			t.Errorf("%s: %q %v", name, key, ok)
+		}
+	}
+	if key, ok := ratelimit.ByOrg(req); !ok || key != "org:o1" {
+		t.Errorf("org: %q %v", key, ok)
+	}
+	if r, ok := ratelimit.NewRegistry().Lookup("api-key"); !ok || r.Rule != ratelimit.APIKey || r.Per != ratelimit.PerCaller {
+		t.Errorf("the template's rule for keys: %+v %v", r, ok)
 	}
 }

@@ -76,10 +76,13 @@ func run() error {
 		organizationURL  = env.Required("ORGANIZATION_URL")
 		auditURL         = env.Required("AUDIT_URL")
 		tokenURL         = env.Required("SERVICE_TOKEN_URL")
-		sentryDSN        = env.String("SENTRY_DSN", "")
-		environment      = env.String("ENVIRONMENT", "local")
-		baseHost         = env.String("BASE_HOSTNAME", "")
-		origins          = config.AllowedOrigins(env, baseHost)
+		// The identity service, which says what an API key or a personal
+		// access token is on every request that brings one. Unset refuses keys.
+		identityURL = env.String("IDENTITY_URL", "")
+		sentryDSN   = env.String("SENTRY_DSN", "")
+		environment = env.String("ENVIRONMENT", "local")
+		baseHost    = env.String("BASE_HOSTNAME", "")
+		origins     = config.AllowedOrigins(env, baseHost)
 		// The master key the org data keys are wrapped under: signing
 		// secrets are sealed under the org's key.
 		kmsProvider = env.String("KMS_PROVIDER", "file")
@@ -166,6 +169,12 @@ func run() error {
 
 	cluster := db.SingleShard(pool)
 	tokens := auth.IssuerTokenSource(tokenURL, name, nil)
+	if identityURL != "" {
+		// API keys and personal access tokens, resolved by the identity
+		// service on every request (docs/api-keys.md): a key granted the
+		// webhooks group manages endpoints through authz.Require.
+		verifier.WithKeys(auth.KeyClient(identityURL, tokens, nil))
+	}
 	srv := server.New(server.Deps{
 		Cluster:  cluster,
 		Logger:   logger,

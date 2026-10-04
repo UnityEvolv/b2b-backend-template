@@ -69,6 +69,7 @@ or schema registered twice panics at start.
 | Writes carry an org and an actor | `db.Cluster.Tx`, and the provenance trigger |
 | Every API request carries a valid token; health is public | `auth.Require` around the API in `main.go` |
 | A token only reaches its own org | `auth.RequireOrg` in each handler that takes an `org_id` |
+| An API key or personal access token reaches only what its permission groups gate, resolved on every request | `auth.Require` with `Verifier.WithKeys(auth.KeyClient(IDENTITY_URL, ...))` in `main.go`; `authz.Require`; `auth.RequireOrg` and the other person checks refuse a key ([docs/api-keys.md](../docs/api-keys.md)) |
 | Every endpoint is rate limited, one line each | `server.Limits` + `ratelimit.Routes`; `PerAddress` in front of auth |
 | Admin actions are audited: one call, ids only, fails rather than drops | `audit.Recorder` passed to `server.New`; the audit service owns the append-only store |
 | A service calls another service with its own token | `auth.IssuerTokenSource` + `auth.Authorize`; `auth.RequireService` on internal endpoints |
@@ -89,10 +90,12 @@ rule and what to count by:
 The rules are a registry. The template's own are in
 [pkg/ratelimit/defaults.go](../pkg/ratelimit/defaults.go) and in
 `ratelimit.Default`: per address, unauthenticated, authenticated read and
-write, failed sign-in, password reset, invite send, SCIM and incoming
-webhooks. A product registers its own, each with a limit, a window and what
-it counts by (`PerIP`, `PerUser`, `PerMembership` or `PerOrg`), and gets back
-the line for its table:
+write, failed sign-in, password reset, invite send, SCIM, incoming
+webhooks, and requests per API key (`api-key`, counted by the identity
+service where a key is resolved). A request made with a key counts against
+the key on every route, not its person. A product registers its own, each
+with a limit, a window and what it counts by (`PerIP`, `PerUser`,
+`PerMembership` or `PerOrg`), and gets back the line for its table:
 
 ```go
 var ProjectCreate = ratelimit.Default.Register(
@@ -116,13 +119,15 @@ configuration:
 
 | setting | read by | what |
 |---|---|---|
-| `PLANS` | organization, user, billing, webhooks | the product's plan ladder, limits and features, JSON ([docs/plans.md](../docs/plans.md)) |
+| `PLANS` | organization, user, billing, identity, webhooks | the product's plan ladder, limits and features, JSON ([docs/plans.md](../docs/plans.md)) |
 | `PERMISSION_GROUPS` | authorization | the product's permission groups, JSON ([docs/roles.md](../docs/roles.md)) |
 | `DATA_OWNERS` | every service | the product's services that hold org or member data, or call the template's: JSON ([docs/data-owners.md](../docs/data-owners.md)) |
 | `NOTIFICATION_CATEGORIES` | notification | the product's notification categories, JSON ([docs/notifications.md](../docs/notifications.md)) |
 | `WEBHOOK_EVENTS` | webhooks | the product's webhook event types, JSON ([docs/webhooks.md](../docs/webhooks.md)) |
 | `WEBHOOKS_URL` | audit, organization, a product's services | the webhooks service: where the audit service forwards the core's events and a product sends its own; on the organization service, as a data owner's URL |
 | `SCIM_GROUP_SYNC` | user | the data owner that carries a SCIM group to what it grants: its name in `DATA_OWNERS` ([docs/users.md](../docs/users.md#scim)). Unset, groups grant nothing |
+| `IDENTITY_URL` | every service | where API keys and personal access tokens are resolved, on every request that brings one ([docs/api-keys.md](../docs/api-keys.md)); unset, a service refuses keys. Required by organization and user already |
+| `API_KEY_PREFIX`, `PAT_PREFIX` | identity | what API keys and personal access tokens start with: `<PRODUCT_ID>_ak_` and `<PRODUCT_ID>_pat_` by default ([docs/rebranding.md](../docs/rebranding.md)) |
 | `<NAME>_URL` | organization, user | a data owner's base URL when its `DATA_OWNERS` entry has none; the template's own (`NOTIFICATION_URL`, `BILLING_URL`, `AUTHORIZATION_URL`, `IDENTITY_URL`, `USER_URL`, `WEBHOOKS_URL`, `AUDIT_URL`) are these |
 
 The organization service needs the URL of every owner that exports or

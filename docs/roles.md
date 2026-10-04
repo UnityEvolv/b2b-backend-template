@@ -9,7 +9,7 @@ active membership and their org's configuration; nothing is cached.
 | role | has |
 | --- | --- |
 | Owner | everything, always; not configurable, transferable; at least one active Owner must exist |
-| Admin | the org's settings, plus the groups the Owner grants (default: users, audit, sso, webhooks, and any product group that defaults to Admin) |
+| Admin | the org's settings, plus the groups the Owner grants (default: users, audit, sso, api_keys, webhooks, and any product group that defaults to Admin) |
 | Billing Admin | the groups the Owner grants (default: billing) |
 | User | no admin permissions |
 | Guest | a limited collaborator from outside the org: no admin permissions, finds only themselves in the directory, and does not count toward the plan's user cap |
@@ -34,6 +34,7 @@ service read. The template registers:
 | `users` | Users | invite, deactivate, edit, bulk import, end sessions, reset MFA | Admin |
 | `audit` | Audit log | reading the audit log | Admin |
 | `sso` | Single sign-on | the org's identity provider | Admin |
+| `api_keys` | API keys | make the org's API keys, granted only groups the maker holds; list and revoke every key and personal access token ([api-keys.md](api-keys.md)) | Admin |
 | `webhooks` | Webhooks | the org's outbound webhook endpoints, their secrets, and seeing and resending deliveries ([webhooks.md](webhooks.md)) | Admin |
 
 A product adds its own, each with the roles that hold it by default, in the
@@ -80,9 +81,25 @@ user service and the org's configuration from its own table. Tests use
 Enforced today: people, invites, sessions and MFA resets (users), the plan
 and invoices (billing), the audit log (audit), organization settings and
 reading the domain claim (settings), the identity provider, read and
-changed (sso), webhook endpoints and deliveries (webhooks), role
-assignment, permission configuration, ownership transfer, deleting the
-organization and claiming or verifying its domain (Owner only).
+changed (sso), the org's API keys (api_keys), webhook endpoints and
+deliveries (webhooks), role assignment, permission configuration,
+ownership transfer, deleting the organization and claiming or verifying
+its domain (Owner only).
+
+## API keys and personal access tokens
+
+A script calls the API with an org's API key or a person's personal access
+token instead of a session ([api-keys.md](api-keys.md)). It goes through
+the same check: `authz.Require` admits it only to the groups it was
+granted, in its own org.
+
+- An org's key has an Admin's reach over people (`MayManage`) within its
+  groups, whoever made it, until it is revoked.
+- A personal access token is also its person's grant at that moment: it
+  has a group only while they do.
+- Neither ever has `settings`, `api_keys` or an Owner-only action, and
+  neither passes `auth.RequireOrg`: what any member may do just by being
+  one, a key may not.
 
 ## Endpoints
 

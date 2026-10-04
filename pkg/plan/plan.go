@@ -49,6 +49,10 @@ const (
 	SCIM                    Feature = "scim"
 	AuditExport             Feature = "audit_export"
 	CustomerHostedDataPlane Feature = "customer_hosted_data_plane"
+	// APIAccess is the org's API keys and its people's personal access
+	// tokens: made only while the plan has it, and each use checked against
+	// it.
+	APIAccess Feature = "api_access"
 	// Webhooks is outbound webhooks to the org's own endpoints.
 	Webhooks Feature = "webhooks"
 )
@@ -139,18 +143,19 @@ func New() *Registry {
 	r.RegisterFeature(FeatureSpec{Key: SCIM, Label: "SCIM provisioning", LostCode: "scim_stops", LostMessage: "SCIM provisioning stops; people already provisioned stay."})
 	r.RegisterFeature(FeatureSpec{Key: AuditExport, Label: "audit export", LostCode: "audit_export_stops", LostMessage: "Audit export is no longer available; the log itself is kept."})
 	r.RegisterFeature(FeatureSpec{Key: CustomerHostedDataPlane, Label: "a customer-hosted data plane", LostCode: "data_plane_contractual", LostMessage: "The customer-hosted data plane is contractual; talk to us before changing this."})
+	r.RegisterFeature(FeatureSpec{Key: APIAccess, Label: "API access", LostCode: "api_access_stops", LostMessage: "API keys and personal access tokens stop working; they are kept, and work again on a plan with API access."})
 	r.RegisterFeature(FeatureSpec{Key: Webhooks, Label: "webhooks", LostCode: "webhooks_stop", LostMessage: "Webhook deliveries stop and no endpoint can be added; the endpoints and their history are kept."})
 	return r
 }
 
 // DefaultBands is the template's own ladder: free, team, business, and
-// enterprise by contract.
+// enterprise by contract. API access is on every band above free.
 func DefaultBands() []BandSpec {
 	return []BandSpec{
 		{Name: "free", Limits: map[Limit]int{Users: 10}},
-		{Name: "team", Limits: map[Limit]int{Users: 50}, Features: []Feature{Webhooks}},
-		{Name: "business", Limits: map[Limit]int{Users: 200}, Features: []Feature{Webhooks}},
-		{Name: "enterprise", Contractual: true, Features: []Feature{Webhooks, SCIM, AuditExport, CustomerHostedDataPlane}},
+		{Name: "team", Limits: map[Limit]int{Users: 50}, Features: []Feature{APIAccess, Webhooks}},
+		{Name: "business", Limits: map[Limit]int{Users: 200}, Features: []Feature{APIAccess, Webhooks}},
+		{Name: "enterprise", Contractual: true, Features: []Feature{SCIM, AuditExport, CustomerHostedDataPlane, APIAccess, Webhooks}},
 	}
 }
 
@@ -556,13 +561,16 @@ func (r *Registry) Downgrade(from, to Band) []Consequence {
 }
 
 // Description is one band as the plan endpoint shows it: every registered
-// limit's cap (Unlimited for none) and the features on it.
+// limit's cap (Unlimited for none) and the features on it. Described for
+// one org (DescribeOf), the caps and features are what the org may do, and
+// Overrides is the overrides in force that changed them.
 type Description struct {
 	Band        Band
 	Label       string
 	Contractual bool
 	Limits      map[string]int
 	Features    []string
+	Overrides   []Override
 }
 
 // Describe is band b, described.

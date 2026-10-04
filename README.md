@@ -96,7 +96,7 @@ Start here:
 - [Operations](docs/operations.md): local development, the first deploy,
   secrets, releases and rollback, backups.
 - [Security](docs/security.md): encryption, rate limits, headers, sessions,
-  single sign-on hardening, and what CI checks.
+  API keys, single sign-on hardening, and what CI checks.
 - [Rebranding](docs/rebranding.md): the product's name, id, hostnames and
   emails.
 
@@ -109,11 +109,12 @@ How each part works:
 | [sso.md](docs/sso.md) | configuring an organisation's identity provider |
 | [local-accounts.md](docs/local-accounts.md) | email verification, passwords, MFA |
 | [sessions.md](docs/sessions.md) | cookies, lifetime, revocation, the live-session bus |
+| [api-keys.md](docs/api-keys.md) | API keys and personal access tokens for scripts |
 | [invites.md](docs/invites.md) | inviting people, and the first platform operator |
 | [signup.md](docs/signup.md) | self-serve signup and domain claims |
 | [users.md](docs/users.md) | users, memberships, profiles, bulk import |
 | [roles.md](docs/roles.md) | roles and permission groups |
-| [plans.md](docs/plans.md) | plan bands, limits and features |
+| [plans.md](docs/plans.md) | plan bands, limits and features, per-org overrides |
 | [notifications.md](docs/notifications.md) | categories, routing, the feed |
 | [email.md](docs/email.md) | the outbox, templates, transports |
 | [data-owners.md](docs/data-owners.md) | export, purge, erase and decrypt |

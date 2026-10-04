@@ -9,7 +9,8 @@ report a vulnerability, see [SECURITY.md](../SECURITY.md).
 - **Every token is for one org.** `auth.RequireOrg` refuses a token for
   another org before a handler reads anything. A platform operator
   reaches another org only where an endpoint allows it
-  (`auth.RequireOrgOrPlatform`).
+  (`auth.RequireOrgOrPlatform`). An API key is for one org too, checked
+  by `authz.Require` with its groups.
 - **Every query names its org.** Every tenant table leads its keys with
   `org_id`, every query names it, and every write goes through
   `db.Cluster.Tx` with the org ([tables.md](tables.md)). A test fails a
@@ -74,6 +75,30 @@ does.
   same time. Failed sign-ins are rate limited per account and per address.
   Passwords are argon2id. TOTP is available to every local account and can
   be required per org ([local-accounts.md](local-accounts.md)).
+
+## API keys and personal access tokens
+
+A script's bearer token is held to the same checks as a session, and to a
+few of its own ([api-keys.md](api-keys.md)):
+
+- **Shown once, stored hashed.** 32 random bytes behind a visible prefix
+  (`<product id>_ak_`, `<product id>_pat_`) that a secret scanner matches.
+  Only the SHA-256 is kept, compared in constant time; the token is never
+  logged.
+- **Resolved on every request,** by the identity service, at every
+  service: a revoked or expired key, or an org whose plan lost API access,
+  is refused on its next request. Nothing caches a key.
+- **Default deny.** A key is never an `auth.Caller`, so every person's and
+  service's check refuses it. It reaches only what `authz.Require` admits
+  by its permission groups, in its own org; never `settings`, `api_keys` or
+  an Owner-only action. A key never makes or revokes keys.
+- **Capped by people.** A key is granted only groups its maker holds. A
+  personal access token is also its person's grant at each request, so a
+  demotion or a deactivation ends what it can do at once.
+- **Rate limited per key** across every service, and the route's own
+  limits count the key, not its person.
+- **Audited:** made, first used, revoked (`api_key.*`); what an org's key
+  does is recorded as `api_key:<id>`, what a token does as its person.
 
 ## Single sign-on hardening
 
@@ -158,8 +183,8 @@ A product registers its own rules ([services/README.md](../services/README.md#ra
   never a name, an email or a token ([pkg/logging](../pkg/logging/logging.go),
   [pkg/errtrack](../pkg/errtrack)). The service that owns a person looks
   them up when it needs to.
-- The audit actor is a membership, user or service id; a write with no
-  actor is refused.
+- The audit actor is a membership, user, API key or service id; a write
+  with no actor is refused.
 - An email address lives in the outbox because it must, and nowhere else
   outside the user and identity services.
 - A failed audit write fails the action rather than dropping the record.

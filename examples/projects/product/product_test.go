@@ -47,7 +47,7 @@ func TestTheEnvIsTheCode(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(plans, product.Plans()) {
 		t.Errorf("PLANS parses to %+v (%v), want %+v", plans, err, product.Plans())
 	}
-	// Loaded as the organization, user and billing services load it, it is
+	// Loaded as the organization, user, billing and identity services load it, it is
 	// the ladder the product's own process registers.
 	loaded := plan.New()
 	if err := loaded.Load(env["PLANS"]); err != nil {

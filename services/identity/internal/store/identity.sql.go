@@ -84,7 +84,8 @@ SELECT ((SELECT count(*) FROM identity_providers i WHERE i.org_id = $1)
      + (SELECT count(*) FROM invites v WHERE v.org_id = $1)
      + (SELECT count(*) FROM email_verifications e WHERE e.org_id = $1)
      + (SELECT count(*) FROM mfa_challenges c WHERE c.signed_in_org_id = $1 OR c.active_org_id = $1)
-     + (SELECT count(*) FROM sessions s WHERE s.signed_in_org_id = $1 OR s.active_org_id = $1))::bigint AS remaining
+     + (SELECT count(*) FROM sessions s WHERE s.signed_in_org_id = $1 OR s.active_org_id = $1)
+     + (SELECT count(*) FROM api_keys k WHERE k.org_id = $1))::bigint AS remaining
 `
 
 // What is left of an org after a purge: zero when it is gone.

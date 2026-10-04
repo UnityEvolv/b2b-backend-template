@@ -118,19 +118,19 @@ func TestServicesReadThePlanAtTheMomentOfTheAction(t *testing.T) {
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 	source := plan.Client(srv.URL, auth.StaticToken(tokenForService(t, issuer, "user")), nil)
-	if band, err := source.Band(context.Background(), orgID); err != nil || band != plan.Band("free") {
-		t.Fatalf("before: %v %v", band, err)
+	if e, err := source.Entitlements(context.Background(), orgID); err != nil || e.Band != plan.Band("free") || len(e.Overrides) != 0 {
+		t.Fatalf("before: %v %v", e, err)
 	}
 	do(t, h, http.MethodPut, "/v1/organizations/"+orgID+"/plan", operator, map[string]any{"plan": "team"}, "")
-	band, err := source.Band(context.Background(), orgID)
-	if err != nil || band != plan.Band("team") {
-		t.Fatalf("after: %v %v", band, err)
+	e, err := source.Entitlements(context.Background(), orgID)
+	if err != nil || e.Band != plan.Band("team") {
+		t.Fatalf("after: %v %v", e, err)
 	}
 	// And the gate that reads it now refuses with a message naming the plan.
-	if r, ok := plan.AsRefusal(plan.CheckUsers(band, 50)); !ok || r.Required != plan.Band("business") {
+	if r, ok := plan.AsRefusal(e.CheckUsers(50)); !ok || r.Required != plan.Band("business") {
 		t.Errorf("fifty-first user on team: %v", r)
 	}
-	if _, err := source.Band(context.Background(), uuid.Must(uuid.NewV7()).String()); err != plan.ErrNoOrganization {
+	if _, err := source.Entitlements(context.Background(), uuid.Must(uuid.NewV7()).String()); err != plan.ErrNoOrganization {
 		t.Errorf("unknown org: %v", err)
 	}
 }

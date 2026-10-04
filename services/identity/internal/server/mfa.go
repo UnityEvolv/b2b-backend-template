@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -544,13 +545,14 @@ func (s *Server) ResetMemberMfa(ctx context.Context, req api.ResetMemberMfaReque
 	if !member || !found {
 		return api.ResetMemberMfa404JSONResponse{Code: codeMfaNone, Message: "No member of this organization with a second factor to reset."}, nil
 	}
-	actor, _ := auth.CallerFrom(ctx)
-	if err := s.removeAuthenticator(ctx, req.UserId, db.MembershipActor(actor.MembershipID)); err != nil {
+	// Whoever did it: the admin's membership, or the API key they made.
+	actor, _ := db.ActorFrom(ctx)
+	if err := s.removeAuthenticator(ctx, req.UserId, actor); err != nil {
 		return nil, err
 	}
 	// Whoever holds a session on the old factor is signed out; the person
 	// sets up a new one at their next sign-in.
-	if _, err := s.revokeAll(ctx, req.UserId, pgtype.UUID{}, "mfa_reset", db.MembershipActor(actor.MembershipID), scopeUser); err != nil {
+	if _, err := s.revokeAll(ctx, req.UserId, pgtype.UUID{}, "mfa_reset", actor, scopeUser); err != nil {
 		return nil, err
 	}
 	if err := s.recorder.Record(ctx, audit.Event{
@@ -560,7 +562,7 @@ func (s *Server) ResetMemberMfa(ctx context.Context, req api.ResetMemberMfaReque
 	}
 	// Told in this org, with the admin who did it named.
 	var by *uuid.UUID
-	if id, err := uuid.Parse(actor.MembershipID); err == nil {
+	if id, err := uuid.Parse(strings.TrimPrefix(string(actor), "membership:")); err == nil {
 		by = &id
 	}
 	s.mfaChanged(ctx, req.UserId, req.OrgId, activeIn(all, req.OrgId), mfaReset, by)

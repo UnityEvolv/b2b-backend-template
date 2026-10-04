@@ -223,11 +223,11 @@ func (s *Server) allowed(ctx context.Context, org string) (*failure, error) {
 
 // onPlan is nil when org's plan has webhooks, read now.
 func (s *Server) onPlan(ctx context.Context, org string) (*failure, error) {
-	band, err := s.plans.Band(ctx, org)
+	ent, err := s.plans.Entitlements(ctx, org)
 	if err != nil {
 		return nil, err
 	}
-	if err := plan.CheckFeature(band, plan.Webhooks); err != nil {
+	if err := ent.CheckFeature(plan.Webhooks); err != nil {
 		if r, ok := plan.AsRefusal(err); ok {
 			return &failure{http.StatusForbidden, errBody(plan.Code, r.Message, r.Fields())}, nil
 		}

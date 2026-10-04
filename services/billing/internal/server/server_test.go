@@ -36,19 +36,22 @@ func (recorder) Record(context.Context, audit.Event) error { return nil }
 
 // orgs is the organization and user services.
 type orgs struct {
-	mu      sync.Mutex
-	bands   map[uuid.UUID]plan.Band
-	reasons []string
-	members int
+	mu        sync.Mutex
+	bands     map[uuid.UUID]plan.Band
+	overrides map[uuid.UUID][]plan.Override
+	reasons   []string
+	members   int
 }
 
-func (o *orgs) Band(_ context.Context, org uuid.UUID) (plan.Band, error) {
+func (o *orgs) Entitlements(_ context.Context, org uuid.UUID) (plan.Entitlements, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	e := plan.Of("free")
 	if b, ok := o.bands[org]; ok {
-		return b, nil
+		e.Band = b
 	}
-	return plan.Band("free"), nil
+	e.Overrides = o.overrides[org]
+	return e, nil
 }
 
 func (o *orgs) SetPlan(_ context.Context, org uuid.UUID, band plan.Band, reason string) error {
@@ -228,7 +231,7 @@ func build(t *testing.T, payments bool) *fixture {
 	}
 	issuer, _ := stubissuer.New("test", "b2bapp")
 	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
-	f := &fixture{issuer: issuer, grants: authz.Static{}, orgs: &orgs{bands: map[uuid.UUID]plan.Band{}}, notices: &notices{},
+	f := &fixture{issuer: issuer, grants: authz.Static{}, orgs: &orgs{bands: map[uuid.UUID]plan.Band{}, overrides: map[uuid.UUID][]plan.Override{}}, notices: &notices{},
 		pay: &fake{subs: map[string]provider.Subscription{}}, clock: &clock{}, org: uuid.Must(uuid.NewV7())}
 	var p provider.Provider
 	if payments {
@@ -380,6 +383,32 @@ func TestAutomaticUpgrade(t *testing.T) {
 	g.pay.decline = true
 	if code, _ := g.do(t, http.MethodPost, "/v1/internal/organizations/"+g.org.String()+"/capacity", g.user, map[string]any{"members": 51}); code != http.StatusConflict || g.orgs.bands[g.org] != plan.Band("team") {
 		t.Errorf("declined: %d %v", code, g.orgs.bands[g.org])
+	}
+}
+
+// A seat cap a platform operator set is the organization's agreement: the
+// billing page shows it, and passing it never buys a band, which would not
+// move it.
+func TestOverriddenSeatCapIsNotAutoUpgraded(t *testing.T) {
+	f := newAPI(t)
+	owner := f.member(t, authz.Owner)
+	f.card(t, owner)
+	f.do(t, http.MethodPut, f.path("/billing/band"), owner, map[string]any{"band": "team"})
+	f.orgs.mu.Lock()
+	f.orgs.overrides[f.org] = []plan.Override{{Limit: plan.Users, Cap: 75}}
+	f.orgs.mu.Unlock()
+
+	if code, out := f.do(t, http.MethodGet, f.path("/billing"), owner, nil); code != http.StatusOK || out["users_cap"] != float64(75) {
+		t.Errorf("billing page: %d %v", code, out)
+	}
+	// Within the deal's cap, though past the band's, nothing moves.
+	if code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 60}); code != http.StatusOK || out["upgraded"] != false {
+		t.Errorf("within the deal: %d %v", code, out)
+	}
+	// Past it, the refusal is the agreement's, and the band stays.
+	code, out := f.do(t, http.MethodPost, "/v1/internal/organizations/"+f.org.String()+"/capacity", f.user, map[string]any{"members": 76})
+	if code != http.StatusConflict || out["code"] != plan.Code || !strings.Contains(out["message"].(string), "agreement") || f.orgs.bands[f.org] != plan.Band("team") {
+		t.Errorf("past the deal: %d %v", code, out)
 	}
 }
 

@@ -122,3 +122,38 @@ func SCIMTokenPrefixFrom(e *Env, b Brand) string {
 	}
 	return prefix
 }
+
+// KeyPrefixes is the start of every API key and personal access token the
+// identity service mints, so a secret scanner, or a person, can tell what a
+// leaked one is and which kind.
+type KeyPrefixes struct {
+	Org      string
+	Personal string
+}
+
+// KeyPrefixesFor is the prefixes under the brand id: "<id>_ak_" for an
+// org's API key and "<id>_pat_" for a personal access token, with any
+// hyphen as an underscore.
+func KeyPrefixesFor(id string) KeyPrefixes {
+	p := strings.ReplaceAll(id, "-", "_")
+	return KeyPrefixes{Org: p + "_ak_", Personal: p + "_pat_"}
+}
+
+// DefaultKeyPrefixes is the key prefixes under the default brand.
+var DefaultKeyPrefixes = KeyPrefixesFor(DefaultBrand.ID)
+
+// KeyPrefixesFrom reads API_KEY_PREFIX and PAT_PREFIX, the brand's when
+// unset. The two must differ.
+func KeyPrefixesFrom(e *Env, b Brand) KeyPrefixes {
+	def := KeyPrefixesFor(b.ID)
+	out := KeyPrefixes{Org: e.String("API_KEY_PREFIX", def.Org), Personal: e.String("PAT_PREFIX", def.Personal)}
+	for name, p := range map[string]*string{"API_KEY_PREFIX": &out.Org, "PAT_PREFIX": &out.Personal} {
+		if !cookiePrefix.MatchString(*p) {
+			e.problems = append(e.problems, fmt.Sprintf("%s: %q is not letters, digits, hyphens and underscores", name, *p))
+		}
+	}
+	if out.Org == out.Personal {
+		e.problems = append(e.problems, "API_KEY_PREFIX and PAT_PREFIX are the same")
+	}
+	return out
+}

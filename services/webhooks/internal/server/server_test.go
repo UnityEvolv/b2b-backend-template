@@ -154,6 +154,7 @@ type fixture struct {
 	clock    *clock
 	pristine *server.Server // the same database, deployed: public addresses only
 	papi     *httptest.Server
+	keys     apiKeys
 }
 
 type clock struct {
@@ -206,12 +207,13 @@ func newFixture(t *testing.T, opts ...options) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys())
+	keyring := apiKeys{}
+	verifier := auth.NewStaticVerifier("test", "b2bapp", issuer.PublicKeys()).WithKeys(keyring)
 	master, err := filekms.Open(filepath.Join(t.TempDir(), "kms.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{t: t, pool: pool, issuer: issuer, grants: authz.Static{}, bands: plan.Static{}, audit: &recorder{},
+	f := &fixture{t: t, pool: pool, issuer: issuer, keys: keyring, grants: authz.Static{}, bands: plan.Static{}, audit: &recorder{},
 		clock: &clock{t: time.Now().UTC()}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	deps := server.Deps{
@@ -836,5 +838,64 @@ func TestTablesFollowTheConventions(t *testing.T) {
 	}
 	for _, p := range problems {
 		t.Error(p)
+	}
+}
+
+// apiKeys is the identity service's key resolution in miniature: a raw
+// key to what it is.
+type apiKeys map[string]auth.Key
+
+func (k apiKeys) Resolve(_ context.Context, raw string) (auth.Key, error) {
+	if key, ok := k[raw]; ok {
+		return key, nil
+	}
+	return auth.Key{}, auth.ErrUnauthenticated
+}
+
+// key is a fresh org API key for org, granted groups.
+func (f *fixture) key(org string, groups ...string) string {
+	raw := "test_ak_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	f.keys[raw] = auth.Key{ID: uuid.NewString(), Kind: auth.OrgKey, OrgID: org, Groups: groups}
+	return raw
+}
+
+// An org's API key granted the webhooks group manages the org's endpoints
+// through authz.Require, as an Admin would, and acts as itself; one without
+// the group, or for another org, is refused. The plan gate still holds.
+func TestAnAPIKeyWithTheWebhooksGroupManagesEndpoints(t *testing.T) {
+	f := newFixture(t)
+	f.bands[orgA] = "team"
+	rcv := newReceiver(t)
+	key := f.key(orgA, "webhooks")
+	id, secret := f.create(orgA, key, rcv.URL)
+	if !strings.HasPrefix(secret, "whsec_") {
+		t.Fatalf("secret %q", secret)
+	}
+	if status, out := f.call(http.MethodGet, endpoints(orgA), key, nil); status != http.StatusOK || len(out["endpoints"].([]any)) != 1 {
+		t.Errorf("list with a key: %d %v", status, out)
+	}
+	if status, out := f.call(http.MethodPost, endpoints(orgA)+"/"+id+"/test", key, nil); status != http.StatusOK || out["status"] != "succeeded" {
+		t.Errorf("test with a key: %d %v", status, out)
+	}
+	var by string
+	if err := f.pool.QueryRow(context.Background(), "SELECT created_by FROM endpoints WHERE org_id = $1 AND id = $2", orgA, id).Scan(&by); err != nil || !strings.HasPrefix(by, "api_key:") {
+		t.Errorf("created by %q (%v), want the key", by, err)
+	}
+
+	without := f.key(orgA, "users")
+	if status, out := f.call(http.MethodGet, endpoints(orgA), without, nil); status != http.StatusForbidden || out["code"] != "forbidden" {
+		t.Errorf("a key without webhooks: %d %v", status, out)
+	}
+	other := f.key(orgB, "webhooks")
+	f.bands[orgB] = "team"
+	if status, _ := f.call(http.MethodGet, endpoints(orgA), other, nil); status != http.StatusForbidden {
+		t.Errorf("another org's key: %d", status)
+	}
+	if status, _ := f.call(http.MethodPost, "/v1/internal/organizations/"+orgA+"/events", key, added("m")); status != http.StatusForbidden {
+		t.Errorf("a key sends an event: %d", status)
+	}
+	f.bands[orgA] = "free"
+	if status, out := f.call(http.MethodPost, endpoints(orgA), key, map[string]any{"url": rcv.URL}); status != http.StatusForbidden || out["code"] != plan.Code {
+		t.Errorf("a key on a plan without webhooks: %d %v", status, out)
 	}
 }

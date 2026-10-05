@@ -78,11 +78,14 @@ func (q *Queries) ConfirmTotp(ctx context.Context, arg ConfirmTotpParams) (MfaTo
 }
 
 const countInvitesOfOrg = `-- name: CountInvitesOfOrg :one
-SELECT count(*) FROM invites WHERE org_id = $1
+SELECT count(*) FROM invites WHERE org_id = $1 AND role <> 'owner'
 `
 
-// Every invite the org ever sent, whatever became of it: whether it has
-// invited anyone, for its onboarding checklist.
+// Every invite to the org for a teammate, whatever became of it: whether it
+// has invited anyone, for its onboarding checklist. An invite as Owner is
+// not one: that is how the platform hands a new org to its first Owner (an
+// Owner never invites another), so it would tick the step before anyone
+// in the org has invited anybody.
 func (q *Queries) CountInvitesOfOrg(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countInvitesOfOrg, orgID)
 	var count int64

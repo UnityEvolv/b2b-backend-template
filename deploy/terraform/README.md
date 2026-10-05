@@ -94,9 +94,14 @@ whose DNS you can delegate a subdomain of.
      docker build --build-arg SERVICE=$s -f deploy/service.Dockerfile -t "$REGISTRY/$s:latest" . && docker push "$REGISTRY/$s:latest"
    done
    docker build --target tools -f deploy/service.Dockerfile -t "$REGISTRY/tools:latest" . && docker push "$REGISTRY/tools:latest"
-   # in the frontend checkout, each app with the API it calls:
+   # in the frontend checkout, each app with the API it calls and where
+   # the apps are, for links between them (the first at the base, every
+   # other at <app>.<base>):
    for a in account admin platform; do
      docker build --build-arg APP=$a --build-arg VITE_API_ORIGIN=https://api.app.example.com \
+       --build-arg VITE_ACCOUNT_ORIGIN=https://app.example.com \
+       --build-arg VITE_ADMIN_ORIGIN=https://admin.app.example.com \
+       --build-arg VITE_PLATFORM_ORIGIN=https://platform.app.example.com \
        -f deploy/web.Dockerfile -t "$REGISTRY/web-$a:latest" . && docker push "$REGISTRY/web-$a:latest"
    done
    ```

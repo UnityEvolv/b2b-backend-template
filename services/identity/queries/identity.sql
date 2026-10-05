@@ -416,6 +416,9 @@ UPDATE local_accounts SET email = @email, email_verified_at = now() WHERE user_i
 DELETE FROM sessions WHERE user_id = @user_id;
 
 -- name: CountInvitesOfOrg :one
--- Every invite the org ever sent, whatever became of it: whether it has
--- invited anyone, for its onboarding checklist.
-SELECT count(*) FROM invites WHERE org_id = @org_id;
+-- Every invite to the org for a teammate, whatever became of it: whether it
+-- has invited anyone, for its onboarding checklist. An invite as Owner is
+-- not one: that is how the platform hands a new org to its first Owner (an
+-- Owner never invites another), so it would tick the step before anyone
+-- in the org has invited anybody.
+SELECT count(*) FROM invites WHERE org_id = @org_id AND role <> 'owner';

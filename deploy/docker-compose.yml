@@ -94,6 +94,15 @@ x-web-build: &web-build
   context: ${FRONTEND_DIR:-../../b2b-frontend-template}
   dockerfile: deploy/web.Dockerfile
 
+# What each web app is built with: the API, and where the apps are, for
+# links between them (an onboarding step in another app, the support tab
+# the platform app opens).
+x-web-args: &web-args
+  VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
+  VITE_ACCOUNT_ORIGIN: http://localhost:${ACCOUNT_PORT:-5173}
+  VITE_ADMIN_ORIGIN: http://localhost:${ADMIN_PORT:-5174}
+  VITE_PLATFORM_ORIGIN: http://localhost:${PLATFORM_PORT:-5175}
+
 x-web-env: &web-env
   # Filled into the pages' Content-Security-Policy.
   API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
@@ -402,8 +411,8 @@ services:
     build:
       <<: *web-build
       args:
+        <<: *web-args
         APP: account
-        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
     environment: *web-env
     volumes:
       - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro
@@ -419,8 +428,8 @@ services:
     build:
       <<: *web-build
       args:
+        <<: *web-args
         APP: admin
-        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
     environment: *web-env
     volumes:
       - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro
@@ -432,8 +441,8 @@ services:
     build:
       <<: *web-build
       args:
+        <<: *web-args
         APP: platform
-        VITE_API_ORIGIN: http://localhost:${GATEWAY_PORT:-8000}
     environment: *web-env
     volumes:
       - ./local/web/50-local-http.sh:/docker-entrypoint.d/50-local-http.sh:ro

@@ -258,7 +258,8 @@ func TestProviderSettingsValidation(t *testing.T) {
 	// The presets, for the picker.
 	got := body(t, b.do(http.MethodGet, "/v1/identity-provider-presets", member, nil))
 	presets, _ := got["presets"].([]any)
-	if len(presets) != 3 || presets[0].(map[string]any)["preset"] != "entra" || !strings.Contains(presets[0].(map[string]any)["issuer"].(string), "{tenant_id}") {
+	if len(presets) != 4 || presets[0].(map[string]any)["preset"] != "entra" || !strings.Contains(presets[0].(map[string]any)["issuer"].(string), "{tenant_id}") ||
+		presets[3].(map[string]any)["preset"] != "saml" || presets[3].(map[string]any)["protocol"] != "saml" {
 		t.Errorf("presets: %v", got)
 	}
 }

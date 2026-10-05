@@ -52,10 +52,29 @@ func (e ApiKeyKind) Valid() bool {
 	}
 }
 
+// Defines values for IdentityProviderProtocol.
+const (
+	IdentityProviderProtocolOidc IdentityProviderProtocol = "oidc"
+	IdentityProviderProtocolSaml IdentityProviderProtocol = "saml"
+)
+
+// Valid indicates whether the value is a known member of the IdentityProviderProtocol enum.
+func (e IdentityProviderProtocol) Valid() bool {
+	switch e {
+	case IdentityProviderProtocolOidc:
+		return true
+	case IdentityProviderProtocolSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IdentityProviderStatus.
 const (
-	Active   IdentityProviderStatus = "active"
-	Disabled IdentityProviderStatus = "disabled"
+	Active             IdentityProviderStatus = "active"
+	Disabled           IdentityProviderStatus = "disabled"
+	PendingFirstSignIn IdentityProviderStatus = "pending_first_sign_in"
 )
 
 // Valid indicates whether the value is a known member of the IdentityProviderStatus enum.
@@ -64,6 +83,26 @@ func (e IdentityProviderStatus) Valid() bool {
 	case Active:
 		return true
 	case Disabled:
+		return true
+	case PendingFirstSignIn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IdentityProviderPresetProtocol.
+const (
+	IdentityProviderPresetProtocolOidc IdentityProviderPresetProtocol = "oidc"
+	IdentityProviderPresetProtocolSaml IdentityProviderPresetProtocol = "saml"
+)
+
+// Valid indicates whether the value is a known member of the IdentityProviderPresetProtocol enum.
+func (e IdentityProviderPresetProtocol) Valid() bool {
+	switch e {
+	case IdentityProviderPresetProtocolOidc:
+		return true
+	case IdentityProviderPresetProtocolSaml:
 		return true
 	default:
 		return false
@@ -367,45 +406,65 @@ type Error struct {
 
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
+	// ClientId The client id; for SAML, this service provider's entity id (the audience).
 	ClientId string `json:"client_id"`
 
-	// ClientSecretSet A secret is stored. The secret itself is never returned.
-	ClientSecretSet bool   `json:"client_secret_set"`
-	EmailClaim      string `json:"email_claim"`
+	// ClientSecretSet A secret is stored. The secret itself is never returned. Always false for SAML.
+	ClientSecretSet bool `json:"client_secret_set"`
+
+	// EmailClaim The claim the address is read from; for SAML, the attribute.
+	EmailClaim string `json:"email_claim"`
 
 	// HostedDomain google only.
 	HostedDomain *string `json:"hosted_domain,omitempty"`
 
-	// Issuer The issuer as its discovery document names it.
-	Issuer    string             `json:"issuer"`
+	// Issuer The issuer as its discovery document names it; for SAML, the identity provider's entity id.
+	Issuer string `json:"issuer"`
+
+	// NameClaim The claim the name is read from; for SAML, the attribute.
 	NameClaim string             `json:"name_claim"`
 	OrgId     openapi_types.UUID `json:"org_id"`
 
-	// Preset `entra`, `google` or `generic`.
-	Preset string `json:"preset"`
+	// Preset `entra`, `google`, `generic` or `saml`.
+	Preset   string                   `json:"preset"`
+	Protocol IdentityProviderProtocol `json:"protocol"`
 
-	// RedirectUri What to register with the provider as the redirect URI.
-	RedirectUri          string                 `json:"redirect_uri"`
-	RequireEmailVerified bool                   `json:"require_email_verified"`
-	Scopes               []string               `json:"scopes"`
-	Status               IdentityProviderStatus `json:"status"`
+	// RedirectUri What to register with the provider as the redirect URI; for SAML, the ACS URL.
+	RedirectUri          string        `json:"redirect_uri"`
+	RequireEmailVerified bool          `json:"require_email_verified"`
+	Saml                 *SamlProvider `json:"saml,omitempty"`
+
+	// Scopes Empty for SAML.
+	Scopes []string `json:"scopes"`
+
+	// SsoEnforced An Owner requires single sign-on for the organization's domain.
+	SsoEnforced bool `json:"sso_enforced"`
+
+	// SsoEnforcementActive It is required and in force now, the provider being active and verified.
+	SsoEnforcementActive bool `json:"sso_enforcement_active"`
+
+	// Status `pending_first_sign_in`: a SAML provider nobody has signed in through yet. It signs people in; it is not verified, so single sign-on cannot be required yet.
+	Status IdentityProviderStatus `json:"status"`
 
 	// TenantId entra only.
 	TenantId *string `json:"tenant_id,omitempty"`
 
-	// VerifiedAt When the settings last passed the test before saving.
+	// VerifiedAt When the settings last passed the test before saving; for SAML, when someone first signed in through the provider as saved.
 	VerifiedAt *time.Time `json:"verified_at,omitempty"`
 }
 
-// IdentityProviderStatus defines model for IdentityProvider.Status.
+// IdentityProviderProtocol defines model for IdentityProvider.Protocol.
+type IdentityProviderProtocol string
+
+// IdentityProviderStatus `pending_first_sign_in`: a SAML provider nobody has signed in through yet. It signs people in; it is not verified, so single sign-on cannot be required yet.
 type IdentityProviderStatus string
 
 // IdentityProviderCheck defines model for IdentityProviderCheck.
 type IdentityProviderCheck struct {
-	// Check `discovery`, `issuer`, `keys` or `client`.
+	// Check OpenID Connect: `discovery`, `issuer`, `keys`, `client`. SAML: `metadata`, `entity_id`, `sso_url`, `certificates`.
 	Check string `json:"check"`
 
-	// Field When it failed, the input to fix (issuer, tenant_id, client_id, client_secret). Absent when no input explains it, such as Google being unreachable.
+	// Field When it failed, the input to fix (issuer, tenant_id, client_id, client_secret; saml.metadata_url, saml.metadata_xml). Absent when no input explains it, such as Google being unreachable.
 	Field *string `json:"field,omitempty"`
 
 	// Message A sentence for the admin. Never a secret or a token.
@@ -417,29 +476,33 @@ type IdentityProviderCheck struct {
 type IdentityProviderPreset struct {
 	EmailClaim string `json:"email_claim"`
 
-	// Fields The inputs the preset asks for besides the client id and secret.
+	// Fields The inputs the preset asks for besides the client id and secret; for saml, the inputs of `saml`.
 	Fields []string `json:"fields"`
 
-	// Issuer The issuer the preset uses: `{tenant_id}` stands for Entra's tenant; empty for generic, which asks for it.
-	Issuer               string   `json:"issuer"`
-	NameClaim            string   `json:"name_claim"`
-	Preset               string   `json:"preset"`
-	RequireEmailVerified bool     `json:"require_email_verified"`
-	Scopes               []string `json:"scopes"`
+	// Issuer The issuer the preset uses: `{tenant_id}` stands for Entra's tenant; empty for generic, which asks for it, and for saml.
+	Issuer               string                         `json:"issuer"`
+	NameClaim            string                         `json:"name_claim"`
+	Preset               string                         `json:"preset"`
+	Protocol             IdentityProviderPresetProtocol `json:"protocol"`
+	RequireEmailVerified bool                           `json:"require_email_verified"`
+	Scopes               []string                       `json:"scopes"`
 }
+
+// IdentityProviderPresetProtocol defines model for IdentityProviderPreset.Protocol.
+type IdentityProviderPresetProtocol string
 
 // IdentityProviderTest defines model for IdentityProviderTest.
 type IdentityProviderTest struct {
 	// Checks In order; a check after a failed one is not run and not listed.
 	Checks []IdentityProviderCheck `json:"checks"`
 
-	// Issuer The issuer the discovery document named, once it was fetched.
+	// Issuer The issuer the discovery document named, once it was fetched; for SAML, the entity id the metadata named.
 	Issuer *string `json:"issuer,omitempty"`
 
 	// Ok Every check passed; a save with these settings would be accepted.
 	Ok bool `json:"ok"`
 
-	// RedirectUri What to register with the provider as the redirect URI.
+	// RedirectUri What to register with the provider as the redirect URI; for SAML, the ACS URL.
 	RedirectUri string `json:"redirect_uri"`
 }
 
@@ -613,10 +676,13 @@ type NewApiKey struct {
 	Name string `json:"name"`
 }
 
-// NewIdentityProvider An OpenID Connect provider. The preset fills in what is left out:
-// see `GET /v1/identity-provider-presets` and docs/sso.md.
+// NewIdentityProvider An OpenID Connect provider, or a SAML 2.0 identity provider. The
+// preset fills in what is left out: see
+// `GET /v1/identity-provider-presets` and docs/sso.md. With `saml`,
+// only `saml` is sent: any OpenID field is a 400 naming it.
 type NewIdentityProvider struct {
-	ClientId string `json:"client_id"`
+	// ClientId OpenID Connect presets only, and required there.
+	ClientId *string `json:"client_id,omitempty"`
 
 	// ClientSecret Required the first time; left out on a change, the stored secret is kept, but only while the preset, issuer (tenant, hosted domain) and client id stay the same.
 	ClientSecret *string `json:"client_secret,omitempty"`
@@ -636,12 +702,18 @@ type NewIdentityProvider struct {
 	// NameClaim The claim the display name is read from. The preset's when left out.
 	NameClaim *string `json:"name_claim,omitempty"`
 
-	// Preset `entra`, `google` or `generic`; checked by the server.
+	// Preset `entra`, `google` or `generic` (OpenID Connect), or `saml`; checked by the server.
 	Preset string `json:"preset"`
 
 	// RequireEmailVerified Refuse a token that does not say email_verified=true. A token that
 	// says false is refused either way. The preset's when left out.
 	RequireEmailVerified *bool `json:"require_email_verified,omitempty"`
+
+	// Saml A SAML 2.0 identity provider: its metadata, by URL or uploaded (one
+	// of them; neither keeps the saved metadata, its certificates checked
+	// again), and the attributes the address and name are read from (the
+	// profile's when left out).
+	Saml *NewSamlSettings `json:"saml,omitempty"`
 
 	// Scopes The scopes asked for; must include openid. The preset's when left out.
 	Scopes *[]string `json:"scopes,omitempty"`
@@ -693,6 +765,31 @@ type NewInvite struct {
 	Role *string `json:"role,omitempty"`
 }
 
+// NewSamlSettings A SAML 2.0 identity provider: its metadata, by URL or uploaded (one
+// of them; neither keeps the saved metadata, its certificates checked
+// again), and the attributes the address and name are read from (the
+// profile's when left out).
+type NewSamlSettings struct {
+	// EmailAttribute The attribute the address is read from. Without it in an assertion, the subject's NameID is used when it is an address.
+	EmailAttribute      *string `json:"email_attribute,omitempty"`
+	FamilyNameAttribute *string `json:"family_name_attribute,omitempty"`
+
+	// GivenNameAttribute With family_name_attribute, the name when name_attribute is absent. Empty reads none.
+	GivenNameAttribute *string `json:"given_name_attribute,omitempty"`
+
+	// MetadataUrl Fetched now, from a public https address. Kept, so the admin page can show it.
+	MetadataUrl *string `json:"metadata_url,omitempty"`
+
+	// MetadataXml The metadata document itself, at most 1 MB.
+	MetadataXml *string `json:"metadata_xml,omitempty"`
+
+	// NameAttribute The attribute the display name is read from.
+	NameAttribute *string `json:"name_attribute,omitempty"`
+
+	// Profile Whose attribute names fill in the mapping: `okta`, `entra`, `google`, `jumpcloud`, `adfs`, `onelogin` or `generic` (the default). Checked by the server.
+	Profile *string `json:"profile,omitempty"`
+}
+
 // OnboardingStatus defines model for OnboardingStatus.
 type OnboardingStatus struct {
 	Done bool `json:"done"`
@@ -716,6 +813,67 @@ type ResolvedApiKey struct {
 
 // ResolvedApiKeyKind defines model for ResolvedApiKey.Kind.
 type ResolvedApiKeyKind string
+
+// SamlCertificate defines model for SamlCertificate.
+type SamlCertificate struct {
+	NotAfter  time.Time `json:"not_after"`
+	NotBefore time.Time `json:"not_before"`
+
+	// Sha256 The SHA-256 fingerprint, hex, colon-separated, as providers show it.
+	Sha256  string `json:"sha256"`
+	Subject string `json:"subject"`
+}
+
+// SamlProfile defines model for SamlProfile.
+type SamlProfile struct {
+	EmailAttribute      string `json:"email_attribute"`
+	FamilyNameAttribute string `json:"family_name_attribute"`
+	GivenNameAttribute  string `json:"given_name_attribute"`
+	Label               string `json:"label"`
+	NameAttribute       string `json:"name_attribute"`
+	Profile             string `json:"profile"`
+}
+
+// SamlProvider defines model for SamlProvider.
+type SamlProvider struct {
+	// Certificates The signing certificates assertions are checked against.
+	Certificates []SamlCertificate `json:"certificates"`
+
+	// CertificatesExpireAt When the last certificate expires, and sign-in with it stops unless new metadata is saved.
+	CertificatesExpireAt time.Time `json:"certificates_expire_at"`
+	EmailAttribute       string    `json:"email_attribute"`
+
+	// EntityId The identity provider's entity id; the issuer of every assertion.
+	EntityId            string  `json:"entity_id"`
+	FamilyNameAttribute *string `json:"family_name_attribute,omitempty"`
+	GivenNameAttribute  *string `json:"given_name_attribute,omitempty"`
+
+	// MetadataUrl Where the metadata was fetched from; absent when it was uploaded.
+	MetadataUrl   *string `json:"metadata_url,omitempty"`
+	NameAttribute string  `json:"name_attribute"`
+	Profile       string  `json:"profile"`
+
+	// ServiceProvider What the identity provider is set up with for this organization.
+	ServiceProvider SamlServiceProvider `json:"service_provider"`
+
+	// SsoUrl Where the browser is sent to sign in (HTTP-Redirect binding).
+	SsoUrl string `json:"sso_url"`
+}
+
+// SamlServiceProvider What the identity provider is set up with for this organization.
+type SamlServiceProvider struct {
+	// AcsUrl The assertion consumer service URL (Reply URL, Single sign-on URL), HTTP-POST binding.
+	AcsUrl string `json:"acs_url"`
+
+	// EntityId The audience (Entity ID, Identifier) every assertion must name.
+	EntityId string `json:"entity_id"`
+
+	// MetadataUrl This service provider's metadata, for providers that read it.
+	MetadataUrl string `json:"metadata_url"`
+
+	// NameIdFormat The NameID format asked for; the email address is preferred.
+	NameIdFormat string `json:"name_id_format"`
+}
 
 // Session defines model for Session.
 type Session struct {
@@ -948,6 +1106,11 @@ type ConfirmTotpJSONBody struct {
 	Code string `json:"code"`
 }
 
+// SetSsoEnforcementJSONBody defines parameters for SetSsoEnforcement.
+type SetSsoEnforcementJSONBody struct {
+	Enforced bool `json:"enforced"`
+}
+
 // ListInvitesParams defines parameters for ListInvites.
 type ListInvitesParams struct {
 	Status *ListInvitesParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -1020,6 +1183,12 @@ type ConfirmMfaAtSignInJSONBody struct {
 // EnrollMfaAtSignInJSONBody defines parameters for EnrollMfaAtSignIn.
 type EnrollMfaAtSignInJSONBody struct {
 	EnrollmentToken string `json:"enrollment_token"`
+}
+
+// FinishSamlSignInFormdataBody defines parameters for FinishSamlSignIn.
+type FinishSamlSignInFormdataBody struct {
+	RelayState   *string `form:"RelayState,omitempty" json:"RelayState,omitempty"`
+	SAMLResponse *string `form:"SAMLResponse,omitempty" json:"SAMLResponse,omitempty"`
 }
 
 // StartSignInParams defines parameters for StartSignIn.
@@ -1100,6 +1269,9 @@ type CreateApiKeyJSONRequestBody = NewApiKey
 // SetIdentityProviderJSONRequestBody defines body for SetIdentityProvider for application/json ContentType.
 type SetIdentityProviderJSONRequestBody = NewIdentityProvider
 
+// SetSsoEnforcementJSONRequestBody defines body for SetSsoEnforcement for application/json ContentType.
+type SetSsoEnforcementJSONRequestBody SetSsoEnforcementJSONBody
+
 // TestIdentityProviderJSONRequestBody defines body for TestIdentityProvider for application/json ContentType.
 type TestIdentityProviderJSONRequestBody = NewIdentityProvider
 
@@ -1141,6 +1313,9 @@ type ConfirmMfaAtSignInJSONRequestBody ConfirmMfaAtSignInJSONBody
 
 // EnrollMfaAtSignInJSONRequestBody defines body for EnrollMfaAtSignIn for application/json ContentType.
 type EnrollMfaAtSignInJSONRequestBody EnrollMfaAtSignInJSONBody
+
+// FinishSamlSignInFormdataRequestBody defines body for FinishSamlSignIn for application/x-www-form-urlencoded ContentType.
+type FinishSamlSignInFormdataRequestBody FinishSamlSignInFormdataBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1243,6 +1418,12 @@ type ServerInterface interface {
 	// SetIdentityProvider Configure the organization's identity provider
 	// (PUT /v1/organizations/{org_id}/identity-provider)
 	SetIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// SetSsoEnforcement Require single sign-on for the organization's domain
+	// (PUT /v1/organizations/{org_id}/identity-provider/enforcement)
+	SetSsoEnforcement(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// GetSamlServiceProvider What to set up at a SAML identity provider for this organization
+	// (GET /v1/organizations/{org_id}/identity-provider/saml-service-provider)
+	GetSamlServiceProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// TestIdentityProvider Test identity provider settings without saving them
 	// (POST /v1/organizations/{org_id}/identity-provider/test)
 	TestIdentityProvider(w http.ResponseWriter, r *http.Request, orgId OrgId)
@@ -1357,6 +1538,12 @@ type ServerInterface interface {
 	// EnrollMfaAtSignIn Set up an authenticator before the first sign-in that requires one
 	// (POST /v1/sign-in/mfa/enroll)
 	EnrollMfaAtSignIn(w http.ResponseWriter, r *http.Request)
+	// FinishSamlSignIn The SAML identity provider posts the browser back here
+	// (POST /v1/sign-in/saml/{org_id}/acs)
+	FinishSamlSignIn(w http.ResponseWriter, r *http.Request, orgId OrgId)
+	// GetSamlServiceProviderMetadata This service's SAML metadata for an organization
+	// (GET /v1/sign-in/saml/{org_id}/metadata)
+	GetSamlServiceProviderMetadata(w http.ResponseWriter, r *http.Request, orgId OrgId)
 	// StartSignIn Begin sign-in through an organization's identity provider
 	// (GET /v1/sign-in/start)
 	StartSignIn(w http.ResponseWriter, r *http.Request, params StartSignInParams)
@@ -2065,6 +2252,58 @@ func (siw *ServerInterfaceWrapper) SetIdentityProvider(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetIdentityProvider(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSsoEnforcement operation middleware
+func (siw *ServerInterfaceWrapper) SetSsoEnforcement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSsoEnforcement(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSamlServiceProvider operation middleware
+func (siw *ServerInterfaceWrapper) GetSamlServiceProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSamlServiceProvider(w, r, orgId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3086,6 +3325,58 @@ func (siw *ServerInterfaceWrapper) EnrollMfaAtSignIn(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// FinishSamlSignIn operation middleware
+func (siw *ServerInterfaceWrapper) FinishSamlSignIn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FinishSamlSignIn(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSamlServiceProviderMetadata operation middleware
+func (siw *ServerInterfaceWrapper) GetSamlServiceProviderMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org_id" -------------
+	var orgId OrgId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org_id", r.PathValue("org_id"), &orgId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSamlServiceProviderMetadata(w, r, orgId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartSignIn operation middleware
 func (siw *ServerInterfaceWrapper) StartSignIn(w http.ResponseWriter, r *http.Request) {
 
@@ -3321,6 +3612,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sign-in/start", wrapper.StartSignIn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sign-in/methods", wrapper.SignInMethods)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sign-in/callback", wrapper.FinishSignIn)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign-in/saml/{org_id}/acs", wrapper.FinishSamlSignIn)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sign-in/saml/{org_id}/metadata", wrapper.GetSamlServiceProviderMetadata)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/session/refresh", wrapper.RefreshSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/session/memberships", wrapper.ListSessionMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/session/switch", wrapper.SwitchOrganization)
@@ -3328,6 +3621,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider", wrapper.GetIdentityProvider)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider", wrapper.SetIdentityProvider)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider/test", wrapper.TestIdentityProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider/saml-service-provider", wrapper.GetSamlServiceProvider)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/organizations/{org_id}/identity-provider/enforcement", wrapper.SetSsoEnforcement)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/identity-provider-presets", wrapper.ListIdentityProviderPresets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sessions", wrapper.RevokeOtherSessions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sessions", wrapper.ListSessions)
@@ -3646,7 +3941,8 @@ type ListIdentityProviderPresetsResponseObject interface {
 }
 
 type ListIdentityProviderPresets200JSONResponse struct {
-	Presets []IdentityProviderPreset `json:"presets"`
+	Presets      []IdentityProviderPreset `json:"presets"`
+	SamlProfiles []SamlProfile            `json:"saml_profiles"`
 }
 
 func (response ListIdentityProviderPresets200JSONResponse) VisitListIdentityProviderPresetsResponse(w http.ResponseWriter) error {
@@ -5675,6 +5971,183 @@ type SetIdentityProviderdefaultJSONResponse struct {
 }
 
 func (response SetIdentityProviderdefaultJSONResponse) VisitSetIdentityProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcementRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *SetSsoEnforcementJSONRequestBody
+}
+
+type SetSsoEnforcementResponseObject interface {
+	VisitSetSsoEnforcementResponse(w http.ResponseWriter) error
+}
+
+type SetSsoEnforcement200JSONResponse IdentityProvider
+
+func (response SetSsoEnforcement200JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcement400JSONResponse struct{ ErrorJSONResponse }
+
+func (response SetSsoEnforcement400JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcement401JSONResponse Error
+
+func (response SetSsoEnforcement401JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcement403JSONResponse Error
+
+func (response SetSsoEnforcement403JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcement404JSONResponse Error
+
+func (response SetSsoEnforcement404JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcement409JSONResponse Error
+
+func (response SetSsoEnforcement409JSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetSsoEnforcementdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response SetSsoEnforcementdefaultJSONResponse) VisitSetSsoEnforcementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlServiceProviderRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type GetSamlServiceProviderResponseObject interface {
+	VisitGetSamlServiceProviderResponse(w http.ResponseWriter) error
+}
+
+type GetSamlServiceProvider200JSONResponse SamlServiceProvider
+
+func (response GetSamlServiceProvider200JSONResponse) VisitGetSamlServiceProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlServiceProvider401JSONResponse struct{ ErrorJSONResponse }
+
+func (response GetSamlServiceProvider401JSONResponse) VisitGetSamlServiceProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlServiceProvider403JSONResponse Error
+
+func (response GetSamlServiceProvider403JSONResponse) VisitGetSamlServiceProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlServiceProviderdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetSamlServiceProviderdefaultJSONResponse) VisitGetSamlServiceProviderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8046,6 +8519,20 @@ func (response SignInLocal401JSONResponse) VisitSignInLocalResponse(w http.Respo
 	return err
 }
 
+type SignInLocal403JSONResponse Error
+
+func (response SignInLocal403JSONResponse) VisitSignInLocalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SignInLocal429JSONResponse Error
 
 func (response SignInLocal429JSONResponse) VisitSignInLocalResponse(w http.ResponseWriter) error {
@@ -8347,6 +8834,93 @@ func (response EnrollMfaAtSignIndefaultJSONResponse) VisitEnrollMfaAtSignInRespo
 	return err
 }
 
+type FinishSamlSignInRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+	Body  *FinishSamlSignInFormdataRequestBody
+}
+
+type FinishSamlSignInResponseObject interface {
+	VisitFinishSamlSignInResponse(w http.ResponseWriter) error
+}
+
+type FinishSamlSignIn302ResponseHeaders struct {
+	Location *string
+}
+
+type FinishSamlSignIn302Response struct {
+	Headers FinishSamlSignIn302ResponseHeaders
+}
+
+func (response FinishSamlSignIn302Response) VisitFinishSamlSignInResponse(w http.ResponseWriter) error {
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(302)
+	return nil
+}
+
+type FinishSamlSignIndefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response FinishSamlSignIndefaultJSONResponse) VisitFinishSamlSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSamlServiceProviderMetadataRequestObject struct {
+	OrgId OrgId `json:"org_id"`
+}
+
+type GetSamlServiceProviderMetadataResponseObject interface {
+	VisitGetSamlServiceProviderMetadataResponse(w http.ResponseWriter) error
+}
+
+type GetSamlServiceProviderMetadata200ApplicationsamlmetadataXmlResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetSamlServiceProviderMetadata200ApplicationsamlmetadataXmlResponse) VisitGetSamlServiceProviderMetadataResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/samlmetadata+xml")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetSamlServiceProviderMetadatadefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetSamlServiceProviderMetadatadefaultJSONResponse) VisitGetSamlServiceProviderMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartSignInRequestObject struct {
 	Params StartSignInParams
 }
@@ -8517,6 +9091,12 @@ type StrictServerInterface interface {
 	// SetIdentityProvider Configure the organization's identity provider
 	// (PUT /v1/organizations/{org_id}/identity-provider)
 	SetIdentityProvider(ctx context.Context, request SetIdentityProviderRequestObject) (SetIdentityProviderResponseObject, error)
+	// SetSsoEnforcement Require single sign-on for the organization's domain
+	// (PUT /v1/organizations/{org_id}/identity-provider/enforcement)
+	SetSsoEnforcement(ctx context.Context, request SetSsoEnforcementRequestObject) (SetSsoEnforcementResponseObject, error)
+	// GetSamlServiceProvider What to set up at a SAML identity provider for this organization
+	// (GET /v1/organizations/{org_id}/identity-provider/saml-service-provider)
+	GetSamlServiceProvider(ctx context.Context, request GetSamlServiceProviderRequestObject) (GetSamlServiceProviderResponseObject, error)
 	// TestIdentityProvider Test identity provider settings without saving them
 	// (POST /v1/organizations/{org_id}/identity-provider/test)
 	TestIdentityProvider(ctx context.Context, request TestIdentityProviderRequestObject) (TestIdentityProviderResponseObject, error)
@@ -8631,6 +9211,12 @@ type StrictServerInterface interface {
 	// EnrollMfaAtSignIn Set up an authenticator before the first sign-in that requires one
 	// (POST /v1/sign-in/mfa/enroll)
 	EnrollMfaAtSignIn(ctx context.Context, request EnrollMfaAtSignInRequestObject) (EnrollMfaAtSignInResponseObject, error)
+	// FinishSamlSignIn The SAML identity provider posts the browser back here
+	// (POST /v1/sign-in/saml/{org_id}/acs)
+	FinishSamlSignIn(ctx context.Context, request FinishSamlSignInRequestObject) (FinishSamlSignInResponseObject, error)
+	// GetSamlServiceProviderMetadata This service's SAML metadata for an organization
+	// (GET /v1/sign-in/saml/{org_id}/metadata)
+	GetSamlServiceProviderMetadata(ctx context.Context, request GetSamlServiceProviderMetadataRequestObject) (GetSamlServiceProviderMetadataResponseObject, error)
 	// StartSignIn Begin sign-in through an organization's identity provider
 	// (GET /v1/sign-in/start)
 	StartSignIn(ctx context.Context, request StartSignInRequestObject) (StartSignInResponseObject, error)
@@ -9631,6 +10217,65 @@ func (sh *strictHandler) SetIdentityProvider(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetIdentityProviderResponseObject); ok {
 		if err := validResponse.VisitSetIdentityProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetSsoEnforcement operation middleware
+func (sh *strictHandler) SetSsoEnforcement(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request SetSsoEnforcementRequestObject
+
+	request.OrgId = orgId
+
+	var body SetSsoEnforcementJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetSsoEnforcement(ctx, request.(SetSsoEnforcementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetSsoEnforcement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetSsoEnforcementResponseObject); ok {
+		if err := validResponse.VisitSetSsoEnforcementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSamlServiceProvider operation middleware
+func (sh *strictHandler) GetSamlServiceProvider(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetSamlServiceProviderRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSamlServiceProvider(ctx, request.(GetSamlServiceProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSamlServiceProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSamlServiceProviderResponseObject); ok {
+		if err := validResponse.VisitGetSamlServiceProviderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -10700,6 +11345,69 @@ func (sh *strictHandler) EnrollMfaAtSignIn(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EnrollMfaAtSignInResponseObject); ok {
 		if err := validResponse.VisitEnrollMfaAtSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FinishSamlSignIn operation middleware
+func (sh *strictHandler) FinishSamlSignIn(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request FinishSamlSignInRequestObject
+
+	request.OrgId = orgId
+
+	if err := r.ParseForm(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode formdata: %w", err))
+		return
+	}
+	var body FinishSamlSignInFormdataRequestBody
+	if err := runtime.BindForm(&body, r.Form, nil, nil); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't bind formdata: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.FinishSamlSignIn(ctx, request.(FinishSamlSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FinishSamlSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(FinishSamlSignInResponseObject); ok {
+		if err := validResponse.VisitFinishSamlSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSamlServiceProviderMetadata operation middleware
+func (sh *strictHandler) GetSamlServiceProviderMetadata(w http.ResponseWriter, r *http.Request, orgId OrgId) {
+	var request GetSamlServiceProviderMetadataRequestObject
+
+	request.OrgId = orgId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSamlServiceProviderMetadata(ctx, request.(GetSamlServiceProviderMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSamlServiceProviderMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSamlServiceProviderMetadataResponseObject); ok {
+		if err := validResponse.VisitGetSamlServiceProviderMetadataResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

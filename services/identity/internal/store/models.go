@@ -67,24 +67,32 @@ type EmailVerification struct {
 }
 
 type IdentityProvider struct {
-	OrgID                uuid.UUID
-	ID                   uuid.UUID
-	Preset               string
-	Issuer               string
-	TenantID             pgtype.Text
-	HostedDomain         pgtype.Text
-	ClientID             string
-	ClientSecret         []byte
-	Scopes               []string
-	EmailClaim           string
-	NameClaim            string
-	RequireEmailVerified bool
-	Status               string
-	VerifiedAt           pgtype.Timestamptz
-	CreatedBy            string
-	CreatedAt            time.Time
-	LastModifiedBy       string
-	LastModifiedAt       time.Time
+	OrgID                    uuid.UUID
+	ID                       uuid.UUID
+	Preset                   string
+	Issuer                   string
+	TenantID                 pgtype.Text
+	HostedDomain             pgtype.Text
+	ClientID                 string
+	ClientSecret             []byte
+	Scopes                   []string
+	EmailClaim               string
+	NameClaim                string
+	RequireEmailVerified     bool
+	Status                   string
+	VerifiedAt               pgtype.Timestamptz
+	CreatedBy                string
+	CreatedAt                time.Time
+	LastModifiedBy           string
+	LastModifiedAt           time.Time
+	SamlSsoUrl               pgtype.Text
+	SamlCertificates         [][]byte
+	SamlCertificatesExpireAt pgtype.Timestamptz
+	SamlMetadataUrl          pgtype.Text
+	SamlProfile              pgtype.Text
+	SamlGivenNameAttribute   pgtype.Text
+	SamlFamilyNameAttribute  pgtype.Text
+	SsoEnforced              bool
 }
 
 type Impersonation struct {
@@ -190,6 +198,16 @@ type MfaTotp struct {
 	LastModifiedAt time.Time
 }
 
+type SamlAssertion struct {
+	OrgID          uuid.UUID
+	AssertionID    string
+	ExpiresAt      time.Time
+	CreatedBy      string
+	CreatedAt      time.Time
+	LastModifiedBy string
+	LastModifiedAt time.Time
+}
+
 // global: a session is a person's, who may belong to several orgs
 type Session struct {
 	ID                 uuid.UUID
@@ -237,6 +255,7 @@ type SignInAttempt struct {
 	CreatedAt      time.Time
 	LastModifiedBy string
 	LastModifiedAt time.Time
+	SamlRequestID  pgtype.Text
 }
 
 // global: the platform's token signing keys, not an org's

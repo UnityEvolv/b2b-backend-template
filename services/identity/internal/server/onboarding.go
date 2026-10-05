@@ -54,7 +54,8 @@ func (s *Server) GetOnboardingStep(ctx context.Context, req api.GetOnboardingSte
 		if err != nil {
 			return nil, err
 		}
-		return api.GetOnboardingStep200JSONResponse{Done: p.Status == "active"}, nil
+		// A SAML provider counts once someone has signed in through it.
+		return api.GetOnboardingStep200JSONResponse{Done: verified(p)}, nil
 	}
 	return api.GetOnboardingStep404JSONResponse{Code: "onboarding.step_not_found", Message: "Not a step this service answers."}, nil
 }

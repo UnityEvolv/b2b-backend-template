@@ -23,8 +23,10 @@ standing access on are an Owner's, never an Admin's or an operator's;
 reading them, and the list of who looked, is `settings`.
 
 Owner only, never configurable: `assign_roles`, `configure_permissions`,
-`transfer_ownership`, `delete_organization`, `claim_domain`. `settings` is
-always the Admin's and is not a toggle.
+`transfer_ownership`, `delete_organization`, `claim_domain`, and requiring
+single sign-on of the domain (`PUT .../identity-provider/enforcement`,
+[sso.md](sso.md#requiring-single-sign-on)). `settings` is always the
+Admin's and is not a toggle.
 
 An Admin manages Users and Guests only, never another Admin, a Billing
 Admin or the Owner.
@@ -40,7 +42,7 @@ service read. The template registers:
 | `billing` | Billing | plan, invoices, payment method, usage against the allowance | Billing Admin |
 | `users` | Users | invite, deactivate, edit, bulk import, end sessions, reset MFA | Admin |
 | `audit` | Audit log | reading the audit log | Admin |
-| `sso` | Single sign-on | the org's identity provider | Admin |
+| `sso` | Single sign-on | the org's identity provider, OpenID Connect or SAML ([sso.md](sso.md)); requiring single sign-on of the domain is the Owner's alone | Admin |
 | `api_keys` | API keys | make the org's API keys, granted only groups the maker holds; list and revoke every key and personal access token ([api-keys.md](api-keys.md)) | Admin |
 | `webhooks` | Webhooks | the org's outbound webhook endpoints, their secrets, and seeing and resending deliveries ([webhooks.md](webhooks.md)) | Admin |
 
@@ -92,8 +94,9 @@ reading support access, consents and who looked (settings), the identity
 provider, read and changed (sso), the org's API keys (api_keys), webhook
 endpoints and deliveries (webhooks), role assignment, permission
 configuration, ownership transfer, deleting the organization, claiming or
-verifying its domain, consenting to support impersonation and turning
-standing support access on (Owner only).
+verifying its domain, consenting to support impersonation, turning
+standing support access on, and requiring single sign-on of the domain
+(Owner only).
 
 ## API keys and personal access tokens
 

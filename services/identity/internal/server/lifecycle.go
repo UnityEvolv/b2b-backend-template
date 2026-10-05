@@ -63,19 +63,32 @@ func textOf(t pgtype.Text) *string {
 }
 
 type exportedProvider struct {
-	Preset               string     `json:"preset"`
-	Issuer               string     `json:"issuer"`
-	TenantID             *string    `json:"tenant_id,omitempty"`
-	HostedDomain         *string    `json:"hosted_domain,omitempty"`
-	ClientID             string     `json:"client_id"`
-	ClientSecret         string     `json:"client_secret"`
-	Scopes               []string   `json:"scopes"`
-	EmailClaim           string     `json:"email_claim"`
-	NameClaim            string     `json:"name_claim"`
-	RequireEmailVerified bool       `json:"require_email_verified"`
-	Status               string     `json:"status"`
-	VerifiedAt           *time.Time `json:"verified_at,omitempty"`
-	CreatedAt            time.Time  `json:"created_at"`
+	Preset               string        `json:"preset"`
+	Issuer               string        `json:"issuer"`
+	TenantID             *string       `json:"tenant_id,omitempty"`
+	HostedDomain         *string       `json:"hosted_domain,omitempty"`
+	ClientID             string        `json:"client_id"`
+	ClientSecret         string        `json:"client_secret"`
+	Scopes               []string      `json:"scopes"`
+	EmailClaim           string        `json:"email_claim"`
+	NameClaim            string        `json:"name_claim"`
+	RequireEmailVerified bool          `json:"require_email_verified"`
+	Status               string        `json:"status"`
+	VerifiedAt           *time.Time    `json:"verified_at,omitempty"`
+	SSOEnforced          bool          `json:"sso_enforced"`
+	SAML                 *exportedSAML `json:"saml,omitempty"`
+	CreatedAt            time.Time     `json:"created_at"`
+}
+
+// exportedSAML is a SAML provider's settings: all public, certificates included.
+type exportedSAML struct {
+	SSOURL               string     `json:"sso_url"`
+	MetadataURL          *string    `json:"metadata_url,omitempty"`
+	Profile              string     `json:"profile"`
+	GivenNameAttribute   *string    `json:"given_name_attribute,omitempty"`
+	FamilyNameAttribute  *string    `json:"family_name_attribute,omitempty"`
+	Certificates         [][]byte   `json:"certificates"`
+	CertificatesExpireAt *time.Time `json:"certificates_expire_at,omitempty"`
 }
 
 type exportedPolicy struct {
@@ -119,6 +132,15 @@ func (s *Server) ExportOrgData(ctx context.Context, req api.ExportOrgDataRequest
 				Preset: idp.Preset, Issuer: idp.Issuer, TenantID: textPtr(idp.TenantID), HostedDomain: textPtr(idp.HostedDomain),
 				ClientID: idp.ClientID, ClientSecret: "not exported", Scopes: idp.Scopes, EmailClaim: idp.EmailClaim,
 				NameClaim: idp.NameClaim, RequireEmailVerified: idp.RequireEmailVerified, Status: idp.Status, VerifiedAt: timeOf(idp.VerifiedAt), CreatedAt: idp.CreatedAt.UTC(),
+				SSOEnforced: idp.SsoEnforced,
+			}
+			if idp.Preset == presetSAML {
+				out.IdentityProvider.ClientSecret = ""
+				out.IdentityProvider.SAML = &exportedSAML{
+					SSOURL: idp.SamlSsoUrl.String, MetadataURL: textPtr(idp.SamlMetadataUrl), Profile: idp.SamlProfile.String,
+					GivenNameAttribute: textPtr(idp.SamlGivenNameAttribute), FamilyNameAttribute: textPtr(idp.SamlFamilyNameAttribute),
+					Certificates: idp.SamlCertificates, CertificatesExpireAt: timeOf(idp.SamlCertificatesExpireAt),
+				}
 			}
 		case err != pgx.ErrNoRows:
 			return err
@@ -170,6 +192,7 @@ func (s *Server) PurgeOrgData(ctx context.Context, req api.PurgeOrgDataRequestOb
 			q.DeleteMfaChallengesOfOrg, q.DeleteSessionsOfOrg, q.DeleteEmailVerificationsOfOrg,
 			q.DeleteInvitesOfOrg, q.DeleteSignInAttemptsOfOrg, q.DeleteSessionPolicyOfOrg, q.DeleteIdentityProviderOfOrg,
 			q.DeleteAPIKeysOfOrg, q.DeleteSupportAccessOfOrg, q.DeleteImpersonationGrantsOfOrg, q.DeleteImpersonationsOfOrg,
+			q.DeleteSamlAssertionsOfOrg,
 		}
 		for _, step := range steps {
 			if _, err := step(ctx, org); err != nil {

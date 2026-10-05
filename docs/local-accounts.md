@@ -52,9 +52,11 @@ uniqueness and IdP-linked accounts make it more than a field edit.
   refused alike (`credentials.invalid`), and a missing account costs the
   same time as a wrong password. Once the password is right: an unverified
   address is `local_account.unverified`; no active membership is
-  `session.no_membership`. Where the person lands follows the sign-in
-  landing rule with no provider org: their one membership, the one used
-  most recently, or the chooser.
+  `session.no_membership`; an address in the domain of an org that requires
+  single sign-on is `sso.required` (403), unless the person is an Owner
+  of that org with a second factor ([sso.md](sso.md#requiring-single-sign-on)).
+  Where the person lands follows the sign-in landing rule with no provider
+  org: their one membership, the one used most recently, or the chooser.
 - **Throttling.** Failed attempts are counted per account and per client
   address through the rate limiting primitive (`FailedSignIn`: ten in
   fifteen minutes, failing closed). Only failures spend, so a person who

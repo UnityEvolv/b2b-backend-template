@@ -19,7 +19,7 @@ serves it.
 | id | label | href (admin app) | done when | asked of |
 | --- | --- | --- | --- | --- |
 | `verify_domain` | Verify your domain | `/settings` | the org has a proven domain: its signup mailbox, or a TXT record ([signup.md](signup.md)) | organization, from its own row |
-| `invite_teammates` | Invite your teammates | `/users/invite` | the org has sent at least one invite, whatever became of it, **or** has a second active member however they came (its provider, SCIM, an import) | identity |
+| `invite_teammates` | Invite your teammates | `/users/invite` | the org has sent at least one invite, whatever became of it (an invite as Owner does not count: it is how the platform hands a new org to its first Owner), **or** has a second active member however they came (its provider, SCIM, an import) | identity |
 | `set_up_sso` | Set up single sign-on | `/sso` | the org's identity provider is saved (which needs a passing test), active and verified: a SAML provider once someone has signed in through it ([sso.md](sso.md)) | identity |
 | `choose_plan` | Choose a plan | `/billing` | the org is on a band above the ladder's lowest **now**: a paid band, a contractual one, or a trial (a trial moves the org to the band it tries). Back on the lowest band, at the end of a trial or a downgrade, it is not done: an org that chooses the lowest band on purpose dismisses the step | organization, from its own row |
 

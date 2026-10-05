@@ -30,6 +30,15 @@ func TestOnboardingStepsAreDerivedFromInvitesAndTheProvider(t *testing.T) {
 		t.Errorf("a person asking: %d", status)
 	}
 
+	// The platform inviting the first Owner is not the org inviting a
+	// teammate: an org made by an operator starts with that invite.
+	if status, out := f.call(t, http.MethodPost, "/v1/organizations/"+acme.String()+"/invites", f.platform(), map[string]any{"email": "first@acme.com", "role": "owner", "app": "admin"}); status != http.StatusCreated {
+		t.Fatalf("the first Owner's invite: %d %v", status, out)
+	}
+	if _, out := step("invite_teammates"); out["done"] != false {
+		t.Errorf("after the first Owner's invite: %v", out)
+	}
+
 	// One invite sent is enough, whatever becomes of it.
 	if status, out := f.call(t, http.MethodPost, "/v1/organizations/"+acme.String()+"/invites", owner, map[string]any{"email": "new@acme.com"}); status != http.StatusCreated {
 		t.Fatalf("invite: %d %v", status, out)

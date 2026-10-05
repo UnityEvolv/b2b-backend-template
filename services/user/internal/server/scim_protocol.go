@@ -816,13 +816,19 @@ func listResponse(resources []any, total, start int) map[string]any {
 
 // scimPage is startIndex and count, bounded; startIndex counts from 1 and
 // stops at what a query offset can hold.
-func scimPage(r *http.Request) (start, count int) {
+func scimPage(r *http.Request) (start, count int32) {
 	start, count = 1, 100
-	if v, err := strconv.Atoi(r.URL.Query().Get("startIndex")); err == nil && v > 1 {
-		start = min(v, math.MaxInt32)
+	if v, err := strconv.ParseInt(r.URL.Query().Get("startIndex"), 10, 64); err == nil && v > 1 {
+		if v > math.MaxInt32 {
+			v = math.MaxInt32
+		}
+		start = int32(v)
 	}
-	if v, err := strconv.Atoi(r.URL.Query().Get("count")); err == nil && v >= 0 {
-		count = min(v, scimMaxPage)
+	if v, err := strconv.ParseInt(r.URL.Query().Get("count"), 10, 64); err == nil && v >= 0 {
+		if v > scimMaxPage {
+			v = scimMaxPage
+		}
+		count = int32(v)
 	}
 	return start, count
 }

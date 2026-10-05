@@ -13,7 +13,7 @@ import (
 func TestScimPageIsBounded(t *testing.T) {
 	for _, tc := range []struct {
 		query        string
-		start, count int
+		start, count int32
 	}{
 		{"", 1, 100},
 		{"?startIndex=0&count=-1", 1, 100},
@@ -25,7 +25,7 @@ func TestScimPageIsBounded(t *testing.T) {
 		if start != tc.start || count != tc.count {
 			t.Errorf("%q: got %d, %d; want %d, %d", tc.query, start, count, tc.start, tc.count)
 		}
-		if int32(start-1) < 0 {
+		if start-1 < 0 {
 			t.Errorf("%q: offset %d wraps", tc.query, start-1)
 		}
 	}

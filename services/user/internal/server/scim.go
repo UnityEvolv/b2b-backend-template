@@ -385,7 +385,7 @@ func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request, org uuid.
 		}
 	}
 	start, count := scimPage(r)
-	p.Skip, p.PageSize = int32(start-1), int32(count)
+	p.Skip, p.PageSize = start-1, count
 	var (
 		total int64
 		rows  []store.ListScimMembershipsRow
@@ -408,7 +408,7 @@ func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request, org uuid.
 	for _, row := range rows {
 		out = append(out, s.userResource(row.Membership, row.User))
 	}
-	writeSCIM(w, http.StatusOK, listResponse(out, int(total), start))
+	writeSCIM(w, http.StatusOK, listResponse(out, int(total), int(start)))
 	return nil
 }
 

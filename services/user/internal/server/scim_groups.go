@@ -94,7 +94,7 @@ func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request, org uuid
 		}
 	}
 	start, count := scimPage(r)
-	p.Skip, p.PageSize = int32(start-1), int32(count)
+	p.Skip, p.PageSize = start-1, count
 	withMembers := wantsMembers(r)
 	var (
 		total  int64
@@ -124,7 +124,7 @@ func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request, org uuid
 	for _, g := range groups {
 		out = append(out, s.groupResource(g, all[g.ID], withMembers))
 	}
-	writeSCIM(w, http.StatusOK, listResponse(out, int(total), start))
+	writeSCIM(w, http.StatusOK, listResponse(out, int(total), int(start)))
 	return nil
 }
 

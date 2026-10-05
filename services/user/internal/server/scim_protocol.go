@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -816,13 +815,15 @@ func listResponse(resources []any, total, start int) map[string]any {
 
 // scimPage is startIndex and count, bounded; startIndex counts from 1 and
 // stops at what a query offset can hold.
-func scimPage(r *http.Request) (start, count int) {
+func scimPage(r *http.Request) (start, count int32) {
 	start, count = 1, 100
-	if v, err := strconv.Atoi(r.URL.Query().Get("startIndex")); err == nil && v > 1 {
-		start = min(v, math.MaxInt32)
+	// Parsed at 32 bits: out of range, ParseInt answers the nearest bound
+	// with ErrRange, so a huge startIndex stops at math.MaxInt32.
+	if v, err := strconv.ParseInt(r.URL.Query().Get("startIndex"), 10, 32); (err == nil || errors.Is(err, strconv.ErrRange)) && v > 1 {
+		start = int32(v)
 	}
-	if v, err := strconv.Atoi(r.URL.Query().Get("count")); err == nil && v >= 0 {
-		count = min(v, scimMaxPage)
+	if v, err := strconv.ParseInt(r.URL.Query().Get("count"), 10, 32); (err == nil || errors.Is(err, strconv.ErrRange)) && v >= 0 {
+		count = int32(min(v, scimMaxPage))
 	}
 	return start, count
 }
